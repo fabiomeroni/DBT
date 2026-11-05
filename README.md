@@ -79,6 +79,6 @@ another set of names), that no secret is in the files, and that the first-run se
 
 ## Credits
 
-Proposed by [Fabio Meroni]([project/README.md](https://www.lattice.cnrs.fr/membres/fabio-meroni/)) - Lattice & HéLiCéO (CNRS, ENS-PSL, USN). 
+Proposed by [Fabio Meroni](https://www.lattice.cnrs.fr/membres/fabio-meroni/) - Lattice & HéLiCéO (CNRS, ENS-PSL, USN). 
 
 A way to cite the DBT code will come in the future, also with a DOI (Zenodo?), once the first release is out. 
