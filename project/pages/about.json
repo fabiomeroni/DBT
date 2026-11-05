@@ -77,8 +77,8 @@
     "num": {
       "badge": "~700 speakers",
       "meta": [
-        "Eastern Gaua",
-        "Villages: Nume, Losalava",
+        "North-Eastern Gaua",
+        "Villages: Namasari, Lebot, Tarasag",
         "Status: Vulnerable"
       ],
       "text": [
@@ -88,8 +88,8 @@
     "drg": {
       "badge": "~400 speakers",
       "meta": [
-        "North-eastern Gaua",
-        "Villages: Dorig, Vetuboso",
+        "Eastern Gaua",
+        "Villages: Dōrig, Atkor, Qētēon, Qtevut",
         "Status: Vulnerable"
       ],
       "text": [
@@ -99,8 +99,8 @@
     "kro": {
       "badge": "~550 speakers",
       "meta": [
-        "Central Gaua",
-        "Villages: Qéré, Lépvér",
+        "Centre-South Gaua",
+        "Villages: Kōrō, Biam",
         "Status: Vulnerable"
       ],
       "text": [
@@ -110,7 +110,7 @@
     "olr": {
       "badge": "~3 fluent speakers",
       "meta": [
-        "West-central Gaua · Jōlav enclave",
+        "Inland Western Gaua",
         "Status: <strong style=\"color:#922810;\">Critically Endangered</strong>"
       ],
       "text": [
@@ -121,7 +121,7 @@
       "badge": "~800 speakers",
       "meta": [
         "Western Gaua",
-        "Villages: Lakon, Pak, Vurè",
+        "Villages: Jōlap, Qētēgavēg, Ontar",
         "Status: Vulnerable"
       ],
       "text": [
