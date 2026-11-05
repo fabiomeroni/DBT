@@ -1,7 +1,7 @@
-# DBT regression tests (the "safety net")
+# DBT regression tests
 
 These tests check that the site still looks and behaves exactly as it did, after any change to the code.
-They run on a **private copy** of the repository with clean data: your dictionary edits, glosses, uploads and
+They run on a **private copy** of the repository with clean data. Your dictionary edits, glosses, uploads and
 settings on the server are never touched.
 
 ## What is checked
