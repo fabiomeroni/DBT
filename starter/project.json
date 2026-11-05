@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "example",
+  "name": "My DBT",
+  "titleSuffix": "My DBT",
+  "homeTitle": "Digital Boasian Trilogy: My DBT",
+  "nav": {
+    "home": "An example project",
+    "about": "An example project",
+    "dictionary": "Dictionary · {languages}",
+    "grammar": "Grammar · {languages}",
+    "texts": "Texts"
+  },
+  "languages": [
+    {"code": "ex", "name": "Example", "abbr": "Ex", "color": "#2e5c8a", "aliases": []}
+  ],
+  "headwordLanguage": "ex",
+  "recordings": {},
+  "latex": {"title": "Grammar of the Example language", "subtitle": "", "author": ""},
+  "footer": "An example project: replace this line in project/project.json",
+  "redirects": {}
+}

@@ -1,0 +1,12 @@
+{
+  "tabTitle": "About",
+  "title": "About this project",
+  "subtitle": "An example",
+  "sections": [
+    {"id": "about", "title": "About", "tocLabel": "About", "text": ["Write here about the place, the people and the language or languages you document. This page is generated from <code>project/pages/about.json</code>."]},
+    {"id": "languages", "title": "Languages", "tocLabel": "Languages", "text": [], "languageSections": true}
+  ],
+  "languages": {
+    "ex": {"badge": "", "meta": ["An invented language"], "text": ["A few words and sentences, invented for this example."]}
+  }
+}

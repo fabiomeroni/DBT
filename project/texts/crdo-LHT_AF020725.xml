@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TEXT SYSTEM "https://cocoon.huma-num.fr/schemas/Archive.dtd">
+<TEXT id="crdo-LHT_AF020725" xml:lang="olr">
+    <HEADER>
+        <TITLE xml:lang="fr">Chant du Cyclône</TITLE>
+        <SOUNDFILE href="http://cocoon.huma-num.fr/data/archi/masters/148461.wav"/>
+    </HEADER>
+    <S id="Wendi_01">
+        <FORM>Se rēra rēra la luk e</FORM>
+        <TRANSL xml:lang="fr">*Se réra réra la luk è*</TRANSL>
+        <TRANSL xml:lang="en">*Se rera rera la luk e*</TRANSL>
+        <AUDIO start="1.9259" end="5.8196"/>
+    </S>
+    <S id="Wendi_02">
+        <FORM>we lan̄vus gorotag we vōnō</FORM>
+        <TRANSL xml:lang="fr">Un ouragan ravage le pays</TRANSL>
+        <TRANSL xml:lang="en">A cyclone has ravaged our country</TRANSL>
+        <AUDIO start="6.2801" end="10.5925"/>
+    </S>
+    <S id="Wendi_03">
+        <FORM>na srēd e te gōlgōl</FORM>
+        <TRANSL xml:lang="fr">et nous sentons nos os trembler</TRANSL>
+        <TRANSL xml:lang="en">our bones are still shaking</TRANSL>
+        <AUDIO start="10.7600" end="13.9838"/>
+    </S>
+    <S id="Wendi_04">
+        <FORM>wō lōl wōnwōn</FORM>
+        <TRANSL xml:lang="fr">et la tristesse</TRANSL>
+        <TRANSL xml:lang="en">and the sorrow</TRANSL>
+        <AUDIO start="14.2768" end="15.8260"/>
+    </S>
+    <S id="Wendi_05">
+        <FORM>ve lē na sur ra nutuk</FORM>
+        <TRANSL xml:lang="fr">m'envahit pour mes enfants</TRANSL>
+        <TRANSL xml:lang="en">is taking hold of me for my offspring</TRANSL>
+        <AUDIO start="15.8260" end="18.8405"/>
+    </S>
+    <S id="Wendi_06">
+        <FORM>wa ni ve kal a make M̄ew</FORM>
+        <TRANSL xml:lang="fr">Le voici qui remonte depuis Maewo</TRANSL>
+        <TRANSL xml:lang="en">It rose up above Maewo</TRANSL>
+        <AUDIO start="19.0498" end="21.8550"/>
+    </S>
+    <S id="Wendi_07">
+        <FORM>ve kal vōl we tōw lav ē</FORM>
+        <TRANSL xml:lang="fr">remonte tout droit jusqu'au sommet du grand volcan de Gaua</TRANSL>
+        <TRANSL xml:lang="en">rose straight up to the top of our great volcano</TRANSL>
+        <AUDIO start="21.7974" end="24.8119"/>
+    </S>
+    <S id="Wendi_08">
+        <FORM>ni ve to le tan</FORM>
+        <TRANSL xml:lang="fr">puis il s'échappe du côté des terres</TRANSL>
+        <TRANSL xml:lang="en">and then it slipped down to the lands</TRANSL>
+        <AUDIO start="25.2515" end="27.4495"/>
+    </S>
+    <S id="Wendi_09">
+        <FORM>ve ran̄ e ris wē vōnō</FORM>
+        <TRANSL xml:lang="fr">tiraillant, renversant la contrée</TRANSL>
+        <TRANSL xml:lang="en">wreaking havoc and ripping our country</TRANSL>
+        <AUDIO start="27.4495" end="30.9350"/>
+    </S>
+    <S id="Wendi_10">
+        <FORM>wo ni m to kēlēkēlē melēg</FORM>
+        <TRANSL xml:lang="fr">Le voici qui dans sa fuite s'éparpille dans les nuées</TRANSL>
+        <TRANSL xml:lang="en">and off it fled, behind the clouds</TRANSL>
+        <AUDIO start="31.1234" end="34.9543"/>
+    </S>
+    <S id="Wendi_11">
+        <FORM>wa ni ve lig</FORM>
+        <TRANSL xml:lang="fr">puis s'accroche</TRANSL>
+        <TRANSL xml:lang="en">hooking on</TRANSL>
+        <AUDIO start="35.2055" end="36.5243"/>
+    </S>
+    <S id="Wendi_12">
+        <FORM>be n̄erē vat Totgan e a la</FORM>
+        <TRANSL xml:lang="fr">sur le Cap des Rocs, à Totgan, sur la côte [de Mota]</TRANSL>
+        <TRANSL xml:lang="en">to Rocky Cape at Totghan on that shore</TRANSL>
+        <AUDIO start="36.5243" end="39.8214"/>
+    </S>
+    <S id="Wendi_13">
+        <FORM>be suri tmat le Weresur</FORM>
+        <TRANSL xml:lang="fr">sur les squelettes des défunts dans les Enfers de Weresur</TRANSL>
+        <TRANSL xml:lang="en">to the bones o’ the Dead in the Weresur Hells</TRANSL>
+        <AUDIO start="40.0726" end="43.5581"/>
+    </S>
+    <S id="Wendi_14">
+        <FORM>ve siw le tas mal e i Garat e</FORM>
+        <TRANSL xml:lang="fr">puis redescend sur le lac au pied du mont Volcan</TRANSL>
+        <TRANSL xml:lang="en">drifted down to our Lake and to our Volcano</TRANSL>
+        <AUDIO start="43.8721" end="48.1112"/>
+    </S>
+    <S id="Wendi_15">
+        <FORM>wa ve sa rin̄rin̄ ōw</FORM>
+        <TRANSL xml:lang="fr">tout est bouleversé</TRANSL>
+        <TRANSL xml:lang="en">it’s all shaking</TRANSL>
+        <AUDIO start="48.4880" end="50.6861"/>
+    </S>
+    <S id="Wendi_16">
+        <FORM>ve rin̄ ōw we vōnō</FORM>
+        <TRANSL xml:lang="fr">tout est bouleversé à travers la contrée</TRANSL>
+        <TRANSL xml:lang="en">it’s all shaking in our country</TRANSL>
+        <AUDIO start="50.6861" end="53.8890"/>
+    </S>
+    <S id="Wendi_17">
+        <FORM>We man tōwda a</FORM>
+        <TRANSL xml:lang="fr">Là-haut les frégates</TRANSL>
+        <TRANSL xml:lang="en">See yonder frigate birds</TRANSL>
+        <AUDIO start="53.8890" end="56.6837"/>
+    </S>
+    <S id="Wendi_18">
+        <FORM>ve sal ma a Makenwēn e</FORM>
+        <TRANSL xml:lang="fr">s'en viennent planer au-dessus du mont Makenwên</TRANSL>
+        <TRANSL xml:lang="en">hovering above our Makenwēn mountain</TRANSL>
+        <AUDIO start="56.7779" end="60.5146"/>
+    </S>
+    <S id="Wendi_19">
+        <FORM>vē ēl sursur no vanad</FORM>
+        <TRANSL xml:lang="fr">de loin elles observent nos contrées</TRANSL>
+        <TRANSL xml:lang="en">they keep watch over our lands</TRANSL>
+        <AUDIO start="60.8600" end="63.5291"/>
+    </S>
+    <S id="Wendi_20">
+        <FORM>te mul ve telwur na.</FORM>
+        <TRANSL xml:lang="fr">avant de repartir loin de moi.</TRANSL>
+        <TRANSL xml:lang="en">and fly away from me.</TRANSL>
+        <AUDIO start="63.5291" end="68.0194"/>
+    </S>
+    <S id="Wendi_21">
+        <FORM>Meligō naslan̄</FORM>
+        <TRANSL xml:lang="fr">*Meligho naslang*</TRANSL>
+        <TRANSL xml:lang="en">*Meligho naslang*</TRANSL>
+        <AUDIO start="173.2411" end="175.8788"/>
+    </S>
+    <S id="Wendi_22">
+        <FORM>wō lōl wōnwōn ve le gēn ti maram</FORM>
+        <TRANSL xml:lang="fr">La tristesse nous envahit tous en ce monde</TRANSL>
+        <TRANSL xml:lang="en">Sorrow has overcome all of us in this world</TRANSL>
+        <AUDIO start="176.0044" end="180.0551"/>
+    </S>
+    <S id="Wendi_23">
+        <FORM>me worin̄ tar e</FORM>
+        <TRANSL xml:lang="fr">pour mille raisons</TRANSL>
+        <TRANSL xml:lang="en">in a thousand places</TRANSL>
+        <AUDIO start="180.4319" end="182.8183"/>
+    </S>
+    <S id="Wendi_24">
+        <FORM>no lan̄vus e</FORM>
+        <TRANSL xml:lang="fr">cet ouragan</TRANSL>
+        <TRANSL xml:lang="en">o Hurricane</TRANSL>
+        <AUDIO start="183.0695" end="185.6758"/>
+    </S>
+    <S id="Wendi_25">
+        <FORM>no wēn tur qōn̄ e</FORM>
+        <TRANSL xml:lang="fr">ce sont des pluies jusqu'à la nuit</TRANSL>
+        <TRANSL xml:lang="en">o Rain falling till night</TRANSL>
+        <AUDIO start="185.8956" end="188.6903"/>
+    </S>
+    <S id="Wendi_26">
+        <FORM>wo vēl ve rōw ve laqar le melēg</FORM>
+        <TRANSL xml:lang="fr">et la foudre soudain éclate dans les cieux</TRANSL>
+        <TRANSL xml:lang="en">Thunder dashing and bursting in the clouds</TRANSL>
+        <AUDIO start="188.7217" end="192.2700"/>
+    </S>
+    <S id="Wendi_27">
+        <FORM>ro naw dun̄dun̄ e ve arebat we vōnō</FORM>
+        <TRANSL xml:lang="fr">l'océan furieux résonne et se fracasse contre les terres</TRANSL>
+        <TRANSL xml:lang="en">the Ocean is roaring and crashing on the land</TRANSL>
+        <AUDIO start="192.2548" end="197.2476"/>
+    </S>
+    <S id="Wendi_28">
+        <FORM>wō tan te m̄ōgōlgōl</FORM>
+        <TRANSL xml:lang="fr">le sol est pris de tremblements</TRANSL>
+        <TRANSL xml:lang="en">and the ground keeps quaking</TRANSL>
+        <AUDIO start="197.2476" end="199.8225"/>
+    </S>
+    <S id="Wendi_29">
+        <FORM>wō rir e me dn̄ag gēd</FORM>
+        <TRANSL xml:lang="fr">ses secousses nous prennent tous par surprise</TRANSL>
+        <TRANSL xml:lang="en">we’re startled by its jolts</TRANSL>
+        <AUDIO start="199.9167" end="202.7114"/>
+    </S>
+    <S id="Wendi_30">
+        <FORM>no vanad te mōsō</FORM>
+        <TRANSL xml:lang="fr">c'est notre pays qui s'écroule</TRANSL>
+        <TRANSL xml:lang="en">our land’s collapsing all over</TRANSL>
+        <AUDIO start="202.9312" end="205.5061"/>
+    </S>
+    <S id="Wendi_31">
+        <FORM>ve mōsō ras nōk ma e</FORM>
+        <TRANSL xml:lang="fr">écroulements au loin qui déjà se rapprochent</TRANSL>
+        <TRANSL xml:lang="en">a faraway collapse that keeps coming closer</TRANSL>
+        <AUDIO start="205.4343" end="209.0454"/>
+    </S>
+    <S id="Wendi_32">
+        <FORM>A e we a</FORM>
+        <TRANSL xml:lang="fr">a é wé a</TRANSL>
+        <TRANSL xml:lang="en">*a e we a*</TRANSL>
+        <AUDIO start="229.5058" end="231.6097"/>
+    </S>
+    <S id="Wendi_33">
+        <FORM>na ve ron̄ wo den̄i naw a la</FORM>
+        <TRANSL xml:lang="fr">j'entends le fracas des vagues sur la côte</TRANSL>
+        <TRANSL xml:lang="en">I can hear the waves crashing on the shore</TRANSL>
+        <AUDIO start="231.6411" end="235.5976"/>
+    </S>
+    <S id="Wendi_34">
+        <FORM>ve dun̄dun̄ a n̄ere Ngōn</FORM>
+        <TRANSL xml:lang="fr">elles résonnent au Cap du Sud</TRANSL>
+        <TRANSL xml:lang="en">roaring away on the South Cape</TRANSL>
+        <AUDIO start="235.5976" end="239.3343"/>
+    </S>
+    <S id="Wendi_35">
+        <FORM>e Rastōw tan i Rertōw wō Mereqō e</FORM>
+        <TRANSL xml:lang="fr">ô Mer-souillée, Retient-la-barque, Anguille-de-Mer [trois divinités]</TRANSL>
+        <TRANSL xml:lang="en">o Seasoiler, Boatholder, Moray-Eel!</TRANSL>
+        <AUDIO start="239.3343" end="244.9865"/>
+    </S>
+    <S id="Wendi_36">
+        <FORM>ro naw ve dun̄dun̄ a maken.</FORM>
+        <TRANSL xml:lang="fr">et l'océan résonne à même les rochers</TRANSL>
+        <TRANSL xml:lang="en">the ocean keeps pounding and crashing on the rocks</TRANSL>
+        <AUDIO start="244.97" end="260"/>
+    </S>
+</TEXT>

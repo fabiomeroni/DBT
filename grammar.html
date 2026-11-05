@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparative Grammar — {{project.titleSuffix}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+
+/* ── Layout ── */
+.grammar-shell {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  min-height: calc(100vh - 52px);
+}
+
+/* ── Sidebar ── */
+.grammar-sidebar {
+  background: #faf6ef;
+  border-right: 1px solid var(--border);
+  padding: 1.4rem 0 3rem;
+  position: sticky; top: 52px;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
+}
+.sidebar-section-label {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.67rem; letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--ink-light); padding: 0 1rem 0.4rem; display: block;
+}
+.toc-list { list-style: none; padding: 0; margin: 0; }
+.toc-list a {
+  display: block; font-family: 'Crimson Pro', serif; font-size: 1rem;
+  color: var(--ink-mid); text-decoration: none;
+  padding: 3px 1rem 3px 1.1rem;
+  border-left: 3px solid transparent;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.toc-list a:hover  { background: #ede4d4; color: var(--ink); }
+.toc-list a.active { background: #e8d8b8; color: var(--ink); border-left-color: var(--gold); font-weight: 500; }
+.toc-list .toc-h3 a {
+  font-size: 0.9rem; padding-left: 1.9rem;
+  color: var(--ink-light); border-left-color: transparent;
+}
+.toc-list .toc-h3 a:hover { color: var(--ink); }
+.toc-list .toc-h3 a.active { color: var(--ink); border-left-color: var(--gold-lt); background: #f0e8d8; }
+
+/* ── TOC intro block ── */
+.toc-intro {
+  background: #faf6ef;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 6px 6px 0;
+  padding: 1.4rem 1.8rem 1.6rem;
+  margin-bottom: 3rem;
+  max-width: 560px;
+}
+.toc-intro h2 {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.1rem; font-weight: 500;
+  color: var(--ink-light);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: 0.75rem; margin-bottom: 0.9rem;
+  border-bottom: none !important;
+}
+.toc-intro ol {
+  list-style: none; padding: 0; margin: 0;
+  counter-reset: toc-counter;
+}
+.toc-intro ol li {
+  font-family: 'Crimson Pro', serif; font-size: 1.05rem;
+  line-height: 1.5; margin-bottom: 0.25rem;
+}
+.toc-intro ol li a {
+  color: var(--ink-mid); text-decoration: none;
+  border-bottom: 1px solid var(--border-lt);
+  transition: color 0.12s, border-color 0.12s;
+}
+.toc-intro ol li a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+.toc-intro ol li.intro-h3 {
+  font-size: 0.95rem; padding-left: 1.2rem; color: var(--ink-light);
+  margin-bottom: 0.15rem;
+}
+.toc-intro ol li.intro-h3 a { color: var(--ink-light); }
+
+.sidebar-lang-head { margin-top: 1.6rem; padding: 0 1rem 0.4rem; }
+.lang-pills-wrap { padding: 0 0.85rem 0.5rem; display: flex; flex-wrap: wrap; gap: 4px; }
+.lang-pill {
+  font-family: 'Crimson Pro', serif; font-variant: small-caps;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: 3px; border: 1.5px solid transparent;
+  cursor: pointer; color: white; line-height: 1.4;
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+.lang-pill.active { opacity: 1; box-shadow: 0 0 0 2px #faf6ef, 0 0 0 3.5px currentColor; }
+.lang-pill:not(.active) { opacity: 0.35; }
+.lang-pill:hover { opacity: 0.8; }
+
+/* ── Main content ── */
+.grammar-main { padding: 2.5rem 4rem 6rem; max-width: 860px; }
+
+/* ── Section wrapper ── */
+.grammar-section { margin-bottom: 3.5rem; scroll-margin-top: 1.5rem; position: relative; }
+.section-loading { font-family: 'Crimson Pro', serif; font-style: italic; color: var(--ink-light); font-size: 1rem; padding: 1rem 0; }
+.section-error   { color: #922810; font-style: normal; font-size: 0.9rem; }
+
+/* ── Markdown editor ── */
+.md-editor-wrap { display: none; flex-direction: column; gap: 0.6rem; }
+.md-editor-wrap.visible { display: flex; }
+.md-editor-wrap textarea {
+  font-family: 'Source Code Pro', monospace; font-size: 0.85rem;
+  line-height: 1.65; color: var(--ink); background: #fffef8;
+  border: 1.5px solid var(--border); border-radius: 4px;
+  padding: 1rem; resize: vertical; min-height: 340px; outline: none;
+  transition: border-color 0.15s;
+}
+.md-editor-wrap textarea:focus { border-color: var(--gold); }
+.shortcode-ref {
+  background: #f5f0e8; border: 1px solid var(--border);
+  border-radius: 4px; padding: 0.7rem 1rem;
+  font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink-light);
+}
+.shortcode-ref code { font-family: 'Source Code Pro', monospace; font-size: 0.78rem; background: #e8dfc8; border-radius: 2px; padding: 0 4px; color: var(--ink); }
+.shortcode-ref ul { margin: 0.3rem 0 0 1rem; padding: 0; }
+.shortcode-ref li { margin-bottom: 0.2rem; }
+
+/* ── Editor toolbar (image insert) ── */
+.editor-toolbar {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: #f0e8d8; border: 1px solid var(--border);
+  border-bottom: none; border-radius: 4px 4px 0 0;
+  padding: 0.35rem 0.7rem;
+}
+.editor-toolbar-btn {
+  font-family: 'Crimson Pro', serif; font-size: 0.8rem;
+  color: var(--ink-mid); background: white;
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 2px 10px 3px; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.editor-toolbar-btn:hover { background: #e8d8b8; border-color: var(--gold); }
+.editor-toolbar-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+
+/* ── Images rendered inside grammar sections ── */
+.grammar-section img {
+  max-width: 100%; height: auto;
+  border-radius: 4px; margin: 1rem 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,.1);
+  display: block;
+}
+.grammar-section img + em { /* caption: *italics* immediately after image */
+  display: block; font-size: 0.85rem; color: var(--ink-light);
+  text-align: center; margin-top: -0.5rem; margin-bottom: 1rem;
+}
+
+/* ── Add section button in sidebar ── */
+.sidebar-add-btn {
+  display: none; /* shown when logged in */
+  width: calc(100% - 2rem); margin: 1rem 1rem 0;
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem;
+  color: var(--gold); background: transparent;
+  border: 1px dashed var(--gold); border-radius: 3px;
+  padding: 5px 10px 6px; cursor: pointer;
+  transition: background 0.12s;
+  box-sizing: border-box;
+}
+.sidebar-add-btn.visible { display: block; }
+.sidebar-add-btn:hover { background: #f5edd8; }
+
+/* ── Per-section delete button ── */
+.delete-tab {
+  display: none; /* shown when logged in */
+  font-family: 'Crimson Pro', serif; font-size: 0.72rem;
+  color: #922810; background: var(--bg);
+  border: 1px solid #f0c0b0; border-radius: 3px;
+  padding: 2px 10px 3px; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  position: absolute; top: 0.15rem; right: 5.5rem;
+}
+.delete-tab.visible { display: inline-block; }
+.delete-tab:hover { background: #fef0ee; border-color: #922810; }
+
+/* ── Server-rendered grammar content ── */
+.grammar-section h2 { font-family: 'EB Garamond', serif; font-size: 1.75rem; font-weight: 500; color: var(--ink); border-bottom: 2px solid var(--gold); padding-bottom: 0.3rem; margin: 0 0 1.2rem; }
+.grammar-section h3 { font-family: 'EB Garamond', serif; font-size: 1.25rem; font-weight: 500; color: var(--ink); margin: 1.8rem 0 0.6rem; }
+.grammar-section p  { font-family: 'Crimson Pro', serif; font-size: 1.08rem; line-height: 1.78; color: var(--ink-mid); margin-bottom: 0.9rem; }
+.grammar-section strong { font-weight: 600; color: var(--ink); }
+.grammar-section em     { font-style: italic; }
+.grammar-section table  { border-collapse: collapse; margin: 1rem 0; font-family: 'Crimson Pro', serif; font-size: 0.98rem; }
+.grammar-section table th { font-variant: small-caps; letter-spacing: 0.05em; background: #f0e8d8; border: 1px solid var(--border); padding: 4px 14px 5px; text-align: left; }
+.grammar-section table td { border: 1px solid var(--border-lt); padding: 4px 14px 5px; }
+
+/* Entry chip */
+.entry-chip { display: inline-flex; align-items: baseline; gap: 4px; font-family: 'EB Garamond', serif; font-size: 1.02rem; text-decoration: none; color: var(--ink); border-bottom: 1.5px dotted var(--gold); border-radius: 2px; padding: 0 2px; transition: color 0.12s, background 0.12s; }
+.entry-chip:hover { color: #b84c10; background: #fff5e8; }
+.chip-forms { font-size: 1rem; }
+.chip-gloss { font-family: 'Crimson Pro', serif; font-size: 0.88rem; font-style: italic; color: var(--ink-light); }
+
+/* Example block */
+.example-block { margin: 1.4rem 0; }
+.example-wrap  { background: #faf6ef; border-left: 3px solid var(--gold); border-radius: 0 4px 4px 0; padding: 0.75rem 1.2rem 0.9rem; overflow-x: auto; display: inline-block; min-width: 240px; max-width: 100%; }
+.ex-table      { border-collapse: collapse; white-space: nowrap; }
+.ex-abbr       { font-family: 'Crimson Pro', serif; font-variant: small-caps; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.05em; padding: 2px 14px 2px 0; vertical-align: baseline; border: none; }
+.ex-cell       { padding: 2px 16px 2px 0; vertical-align: baseline; border: none; }
+.ex-cell.ex-dash { font-family: 'EB Garamond', serif; font-size: 1.1rem; color: #ccc; }
+.ex-cell a.lexlink { font-family: 'EB Garamond', serif; font-size: 1.1rem; color: var(--ink); text-decoration: none; border-bottom: 1.5px dotted var(--gold); padding: 0 2px; border-radius: 2px; transition: color 0.12s, background 0.12s; }
+.ex-cell a.lexlink:hover { color: #b84c10; background: #fff5e8; }
+.ex-sep td     { border-top: 1px solid var(--border); padding: 0; height: 0; border-bottom: none; }
+.ex-gloss-empty { border: none; padding: 5px 14px 3px 0; vertical-align: baseline; }
+.ex-gloss      { font-family: 'Source Code Pro', monospace; font-size: 0.63rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-light); padding: 5px 16px 3px 0; vertical-align: baseline; border: none; }
+.ex-transl     { font-family: 'Crimson Pro', serif; font-style: italic; font-size: 1rem; color: var(--ink-mid); margin-top: 6px; }
+.corpus-ref    { display: inline-flex; align-items: center; gap: 5px; font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: #2a4a6a; border: 1px solid #a0bcd0; border-radius: 3px; padding: 2px 10px 3px; text-decoration: none; margin-top: 7px; transition: background 0.12s, color 0.12s; }
+.corpus-ref:hover { background: #2a4a6a; color: white; }
+tr[data-lang].lang-hidden { display: none; }
+.shortcode-error { font-family: 'Source Code Pro', monospace; font-size: 0.8rem; color: #922810; background: #fef0ee; border: 1px solid #f0c0b8; border-radius: 3px; padding: 2px 8px; display: inline-block; }
+
+</style>
+</head>
+<body>
+
+<!-- ── New section modal ── -->
+<div class="dbt-modal-backdrop" id="new-section-modal">
+  <div class="dbt-modal">
+    <h3>Add grammar section</h3>
+    <p class="modal-desc">Enter a title for the new section. A section ID will be generated automatically.</p>
+    <input type="text" id="new-section-title" placeholder="e.g. §2 Pronouns"
+           style="width:100%;font-family:'Crimson Pro',serif;font-size:1rem;
+                  padding:6px 10px;border:1px solid var(--border);border-radius:3px;
+                  outline:none;box-sizing:border-box;margin-bottom:0.75rem;">
+    <div class="dbt-modal-msg" id="new-section-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="new-section-cancel">Cancel</button>
+      <button class="modal-btn primary" id="new-section-submit">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Login modal ── -->
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="grammar.html" class="active">Grammar</a></li>
+    <li><a href="texts.html">Texts</a></li>
+    <li><a href="dictionary.html">Dictionary</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.grammar}}</div>
+</nav>
+
+<div class="grammar-shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="grammar-sidebar">
+    <span class="sidebar-section-label">Contents</span>
+    <ul class="toc-list" id="toc-list">
+      <!-- populated dynamically after sections load -->
+    </ul>
+    <button class="sidebar-add-btn" id="add-section-btn">＋ Add section</button>
+
+    <a href="/api/grammar/export/latex" download="grammar.tex"
+       style="display:block;margin:0.6rem 1rem 0;
+              font-family:'Crimson Pro',serif;font-size:0.78rem;
+              color:var(--ink-light);text-align:center;
+              border:1px solid var(--border);border-radius:3px;
+              padding:4px 0 5px;text-decoration:none;
+              transition:color 0.12s,border-color 0.12s,background 0.12s;"
+       onmouseover="this.style.color='var(--gold)';this.style.borderColor='var(--gold)'"
+       onmouseout="this.style.color='';this.style.borderColor=''">
+      ⬇ Export LaTeX
+    </a>
+
+    <div class="sidebar-lang-head">
+      <span class="sidebar-section-label">Show languages</span>
+    </div>
+    <div class="lang-pills-wrap" id="lang-pills"></div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="grammar-main">
+    <!-- TOC overview — shown before grammar sections, built dynamically -->
+    <div class="toc-intro" id="toc-intro" style="display:none;">
+      <h2>Contents</h2>
+      <ol id="toc-intro-list"></ol>
+    </div>
+
+    <div id="sections-container"></div>
+  </main>
+
+</div>
+
+<script src="auth.js"></script>
+<script>
+'use strict';
+
+// The languages come from the project (project/project.json, through /project.js)
+const LANGS  = DBT.names;
+const COLORS = DBT.colorByName;
+
+let activeLangs = new Set(LANGS);
+
+function onAuthChange(loggedIn) {
+  // Add-section sidebar button
+  const addBtn = document.getElementById('add-section-btn');
+  if (addBtn) addBtn.classList.toggle('visible', loggedIn);
+  // Per-section delete buttons
+  document.querySelectorAll('.delete-tab').forEach(b =>
+    b.classList.toggle('visible', loggedIn)
+  );
+}
+
+// ── Language toggle pills ──────────────────────────────────────
+function buildLangPills() {
+  const wrap = document.getElementById('lang-pills');
+  if (!wrap) return;
+  LANGS.forEach(lang => {
+    const btn = document.createElement('button');
+    btn.className = 'lang-pill active';
+    btn.textContent = lang;
+    btn.style.background = COLORS[lang];
+    btn.dataset.lang = lang;
+    btn.addEventListener('click', () => {
+      if (activeLangs.has(lang)) {
+        if (activeLangs.size === 1) return;
+        activeLangs.delete(lang);
+        btn.classList.remove('active');
+      } else {
+        activeLangs.add(lang);
+        btn.classList.add('active');
+      }
+      applyLangFilter();
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function applyLangFilter() {
+  document.querySelectorAll('tr[data-lang]').forEach(row => {
+    row.classList.toggle('lang-hidden', !activeLangs.has(row.dataset.lang));
+  });
+}
+
+// ── TOC builder ────────────────────────────────────────────────
+// Called after all sections have loaded. Scans every h2/h3 that has
+// an id (added by Python-Markdown's toc extension) and builds:
+//   • the sidebar .toc-list  (compact, scrollspy-linked)
+//   • the .toc-intro block   (shown at top of main content)
+function buildTOC() {
+  const sideList  = document.getElementById('toc-list');
+  const introList = document.getElementById('toc-intro-list');
+  const intro     = document.getElementById('toc-intro');
+  sideList.innerHTML  = '';
+  introList.innerHTML = '';
+
+  const headings = document.querySelectorAll(
+    '#sections-container h2[id], #sections-container h3[id]'
+  );
+
+  if (!headings.length) return;
+
+  headings.forEach(h => {
+    const level  = h.tagName.toLowerCase(); // 'h2' or 'h3'
+    const anchor = h.id;
+    const text   = h.textContent.trim();
+
+    // ── Sidebar entry ──
+    const li = document.createElement('li');
+    li.className = level === 'h3' ? 'toc-h3' : '';
+    const a = document.createElement('a');
+    a.href = '#' + anchor;
+    a.textContent = text;
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    li.appendChild(a);
+    sideList.appendChild(li);
+
+    // ── Intro block entry ──
+    const li2 = document.createElement('li');
+    li2.className = level === 'h3' ? 'intro-h3' : '';
+    const a2 = document.createElement('a');
+    a2.href = '#' + anchor;
+    a2.textContent = text;
+    a2.addEventListener('click', e => {
+      e.preventDefault();
+      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    li2.appendChild(a2);
+    introList.appendChild(li2);
+  });
+
+  intro.style.display = '';
+}
+
+// ── Section loading ────────────────────────────────────────────
+async function loadSection(id) {
+  const container = document.getElementById('sections-container');
+  const wrap = document.createElement('div');
+  wrap.className = 'grammar-section';
+  wrap.id = id;
+  wrap.innerHTML = `
+    <button class="delete-tab${isLoggedIn ? ' visible' : ''}"
+            onclick="deleteSection('${id}')"
+            title="Delete this section">🗑 Delete</button>
+    <button class="edit-tab section-edit${isLoggedIn ? ' visible' : ''}" onclick="enterEditMode('${id}')"
+            title="Edit this section">✏ Edit</button>
+    <div class="section-content" id="content-${id}">
+      <p class="section-loading">Loading…</p>
+    </div>
+    <div class="md-editor-wrap" id="editor-${id}">
+      <div class="editor-toolbar">
+        <span style="font-family:'Crimson Pro',serif;font-size:0.75rem;
+                     letter-spacing:0.08em;text-transform:uppercase;
+                     color:var(--ink-light);margin-right:0.3rem;">Insert</span>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','bold')"
+                title="Bold"><b>B</b></button>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','italic')"
+                title="Italic"><i>I</i></button>
+        <div class="editor-toolbar-sep"></div>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','h3')"
+                title="Subheading">H3</button>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','table')"
+                title="Table skeleton">⊞ Table</button>
+        <div class="editor-toolbar-sep"></div>
+        <label class="editor-toolbar-btn" title="Upload and insert image" style="cursor:pointer;">
+          📷 Image
+          <input type="file" accept="image/*" style="display:none;"
+                 onchange="uploadAndInsertImage('${id}', this)">
+        </label>
+        <div class="editor-toolbar-sep"></div>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','example')"
+                title="Example shortcode">{{example}}</button>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','entry')"
+                title="Entry shortcode">{{entry}}</button>
+      </div>
+      <textarea id="textarea-${id}" spellcheck="false"
+                style="border-radius:0 0 4px 4px;"></textarea>
+      <div class="shortcode-ref">
+        <strong>Shortcodes:</strong>
+        <ul>
+          <li><code>{{example: ID}}</code> — numbered example from "Examples from papers"</li>
+          <li><code>{{entry: ID}}</code> — inline word chip from dictionary XML</li>
+          <li><code>![caption](images/file.jpg)</code> — uploaded image</li>
+        </ul>
+        <li><code>{{cite: file.xml#sentId}}</code> — numbered example from a transcribed narrative</li>
+          <li><code>{{cite: fieldnotes#0#d01.Road:01}}</code> — numbered example from fieldnotes</li>
+          <li><code>{{cite: papers#negation_example_01}}</code> — numbered example from "Examples from papers"</li>
+        </ul>
+        Markdown: <code>**bold**</code>, <code>*italic*</code>,
+        <code>### heading</code>, <code>| col | col |</code> tables.
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+        <button class="modal-btn" onclick="cancelEdit('${id}')">Cancel</button>
+        <button class="modal-btn primary" onclick="saveSection('${id}')">Save &amp; render</button>
+      </div>
+    </div>`;
+  container.appendChild(wrap);
+
+  try {
+    const resp = await fetch('/api/grammar/' + id);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    document.getElementById('content-' + id).innerHTML = data.html;
+    applyLangFilter();
+    bindDictLinksInSection(document.getElementById('content-' + id));
+    bindDictLinksInSection(document.getElementById('content-' + id));
+  } catch(e) {
+    document.getElementById('content-' + id).innerHTML =
+      '<p class="section-error">Could not load section ' + id + ': ' + e.message + '</p>';
+  }
+}
+
+// ── Edit mode ──────────────────────────────────────────────────
+async function enterEditMode(id) {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  try {
+    const resp = await fetch('/api/grammar/' + id + '/source');
+    if (resp.status === 401) { showLoginModal(); return; }
+    const data = await resp.json();
+    document.getElementById('textarea-' + id).value = data.source;
+    document.getElementById('content-' + id).style.display = 'none';
+    document.getElementById('editor-' + id).classList.add('visible');
+  } catch(e) { alert('Could not load source: ' + e.message); }
+}
+
+async function saveSection(id) {
+  const source = document.getElementById('textarea-' + id).value;
+  try {
+    const resp = await fetch('/api/grammar/' + id, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({source})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('content-' + id).innerHTML = data.html;
+      applyLangFilter();
+      cancelEdit(id);
+      buildTOC(); // headings may have changed
+    }
+  } catch(e) { alert('Save failed: ' + e.message); }
+}
+
+function cancelEdit(id) {
+  document.getElementById('content-' + id).style.display = '';
+  document.getElementById('editor-' + id).classList.remove('visible');
+}
+
+// ── Editor helpers ─────────────────────────────────────────────
+
+function insertAtCursor(textarea, text, selectLen) {
+  const s = textarea.selectionStart, e = textarea.selectionEnd;
+  textarea.value = textarea.value.slice(0, s) + text + textarea.value.slice(e);
+  const pos = s + (selectLen !== undefined ? selectLen : text.length);
+  textarea.selectionStart = textarea.selectionEnd = pos;
+  textarea.focus();
+}
+
+const MARKUP = {
+  bold:    (sel) => `**${sel || 'bold text'}**`,
+  italic:  (sel) => `*${sel || 'italic text'}*`,
+  h3:      ()    => '\n### Heading\n',
+  table:   ()    => '\n| Column 1 | Column 2 | Column 3 |\n|---|---|---|\n| Cell | Cell | Cell |\n',
+  example: ()    => '{{example: negation_example_01}}',
+  entry:   ()    => '{{entry: speech}}',
+};
+
+function insertMarkup(id, type) {
+  const ta  = document.getElementById('textarea-' + id);
+  const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+  const fn  = MARKUP[type];
+  if (!fn) return;
+  insertAtCursor(ta, fn(sel));
+}
+
+async function uploadAndInsertImage(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData(); form.append('file', file);
+  try {
+    const r = await fetch('/api/upload/image', { method: 'POST', body: form });
+    const d = await r.json();
+    if (d.ok) {
+      const ta  = document.getElementById('textarea-' + id);
+      const md  = `\n![${file.name}](${d.url})\n`;
+      insertAtCursor(ta, md);
+    } else {
+      alert('Image upload failed: ' + (d.error || 'Unknown error'));
+    }
+  } catch(e) { alert('Upload error: ' + e.message); }
+  input.value = ''; // reset so same file can be re-selected
+}
+
+// ── Delete section ─────────────────────────────────────────────
+async function deleteSection(id) {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  // Get the section heading text for the confirmation message
+  const heading = document.querySelector(`#${id} h2, #${id} h3`);
+  const label   = heading ? heading.textContent.trim() : id;
+  if (!confirm(`Delete section "${label}"?\n\nThis cannot be undone.`)) return;
+  try {
+    const resp = await fetch(`/api/grammar/${id}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // Remove from DOM and rebuild TOC
+    document.getElementById(id)?.remove();
+    buildTOC();
+  } catch(e) { alert('Delete failed: ' + e.message); }
+}
+
+// ── Add new section ────────────────────────────────────────────
+function bindAddSection() {
+  const btn    = document.getElementById('add-section-btn');
+  const modal  = document.getElementById('new-section-modal');
+  const input  = document.getElementById('new-section-title');
+  const msg    = document.getElementById('new-section-msg');
+  const cancel = document.getElementById('new-section-cancel');
+  const submit = document.getElementById('new-section-submit');
+
+  btn.addEventListener('click', () => {
+    if (!isLoggedIn) { showLoginModal(); return; }
+    input.value = ''; msg.textContent = '';
+    modal.classList.add('visible');
+    setTimeout(() => input.focus(), 60);
+  });
+  cancel.addEventListener('click', () => modal.classList.remove('visible'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
+
+  async function doCreate() {
+    const title = input.value.trim();
+    if (!title) { msg.textContent = 'Please enter a title.'; msg.className='dbt-modal-msg error'; return; }
+    msg.textContent = ''; msg.className = 'dbt-modal-msg';
+    try {
+      const r = await fetch('/api/grammar', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        modal.classList.remove('visible');
+        await loadSection(d.id);
+        buildTOC();
+      } else {
+        msg.textContent = d.error || 'Failed to create section.';
+        msg.className = 'dbt-modal-msg error';
+      }
+    } catch(e) {
+      msg.textContent = 'Error: ' + e.message;
+      msg.className = 'dbt-modal-msg error';
+    }
+  }
+
+  submit.addEventListener('click', doCreate);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
+}
+
+// ── Scrollspy — tracks headings, not just sections ─────────────
+function bindScrollspy() {
+  window.addEventListener('scroll', () => {
+    const headings = document.querySelectorAll(
+      '#sections-container h2[id], #sections-container h3[id]'
+    );
+    let activeId = null;
+    headings.forEach(h => {
+      if (h.getBoundingClientRect().top < 130) activeId = h.id;
+    });
+    document.querySelectorAll('.toc-list a').forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + activeId);
+    });
+  }, {passive: true});
+}
+
+// ── Init ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  buildLangPills();
+  bindLoginModal();
+  await Promise.all([checkAuth(), loadGrammarDict()]);
+
+  const secResp = await fetch('/api/grammar')
+    .then(r => r.json())
+    .catch(() => ({ sections: [{ id: 's1' }] }));
+
+  for (const sec of secResp.sections) await loadSection(sec.id);
+
+  // Re-apply auth visibility now that section buttons exist in the DOM
+  updateAuthUI();
+
+  buildTOC();
+  bindScrollspy();
+  bindAddSection();
+});
+
+// ── Dictionary lookup for cited examples ─────────────────────
+const G_LANG_COLORS = DBT.colorByName;
+const G_ABBRS = DBT.abbrByName;
+const G_CODE2LANG = DBT.nameFromFileCode;
+const G_LANGS = DBT.names;
+const G_CODES = DBT.codeByName;
+let gDictById = {}, gDictByForm = {}, gHideTimer = null;
+
+async function loadGrammarDict() {
+  try {
+    const r = await fetch('/api/dictionary/entries');
+    if (!r.ok) return;
+    const d = await r.json();
+    (d.entries||[]).forEach(e => {
+      gDictById[e.id] = e;
+      Object.entries(e.forms||{}).forEach(([lang, form]) => {
+        if (!form || form==='—') return;
+        gDictByForm[`${lang}:${form.toLowerCase()}`] = e;
+        const clean = form.replace(/^[-=]+|[-=.,;]+$/g,'').toLowerCase();
+        if (clean !== form.toLowerCase()) gDictByForm[`${lang}:${clean}`] = e;
+      });
+    });
+  } catch(e) {}
+}
+
+function showGrammarTooltip(anchor, entry) {
+  if (!entry) return;
+  const tt = document.getElementById('grammar-tooltip');
+  const senses = entry.senses || [];
+  const line = senses.length > 1 ? senses.map(s => `${s.n}. ${s.gloss}`).join('   ') : (entry.gloss || entry.id);
+  document.getElementById('gtt-hw').textContent  = line;
+  document.getElementById('gtt-def').textContent =
+    (senses.length === 1 && senses[0].definition && senses[0].definition !== line) ? senses[0].definition : '';
+  document.getElementById('gtt-equivs').innerHTML = G_LANGS.map(lang => {
+    const col = G_LANG_COLORS[lang]||'#888', form = entry.forms?.[G_CODES[lang]]||'—';
+    return `<span style="font-family:'Source Code Pro',monospace;font-size:.7rem;
+      background:rgba(255,255,255,.09);border-radius:2px;padding:1px 5px;">
+      <b style="color:${col};">${G_ABBRS[lang]}</b> ${form}</span>`;
+  }).join('');
+  tt.style.opacity = '1';
+  const rect = anchor.getBoundingClientRect(), tw = 280;
+  let left = rect.left + rect.width/2 - 20;
+  if (left + tw > window.innerWidth-8) left = window.innerWidth-tw-8;
+  if (left < 8) left = 8;
+  const ttH = tt.offsetHeight||90;
+  tt.style.left = left + 'px';
+  tt.style.top  = (rect.top-ttH-8 < 8)
+    ? (rect.bottom+8+window.scrollY)+'px'
+    : (rect.top-ttH-8+window.scrollY)+'px';
+}
+function hideGrammarTooltip() {
+  clearTimeout(gHideTimer);
+  gHideTimer = setTimeout(() => {
+    const tt = document.getElementById('grammar-tooltip');
+    if (tt) tt.style.opacity = '0';
+  }, 80);
+}
+
+function bindDictLinksInSection(container) {
+  if (!container) return;
+  // lexlinks from {{example:}} already have href — just add hover preview
+  container.querySelectorAll('a.lexlink[data-dict-id]').forEach(el => {
+    const entry = gDictById[el.dataset.dictId];
+    if (!entry) return;
+    el.addEventListener('mouseenter', () => { clearTimeout(gHideTimer); showGrammarTooltip(el, entry); });
+    el.addEventListener('mouseleave', hideGrammarTooltip);
+  });
+  // Cited words that carry an explicit dictionary entry (data-dict-id): link them directly,
+  // whatever orthography the dictionary happens to be written in.
+  container.querySelectorAll('td[data-dict-id]').forEach(el => {
+    const entry = gDictById[el.dataset.dictId];
+    if (!entry) return;
+    el.style.cursor = 'pointer';
+    el.style.textDecorationLine = 'underline';
+    el.style.textDecorationStyle = 'dotted';
+    el.addEventListener('mouseenter', () => { clearTimeout(gHideTimer); showGrammarTooltip(el, entry); });
+    el.addEventListener('mouseleave', hideGrammarTooltip);
+    el.addEventListener('click', () => {
+      const langName = G_CODE2LANG[el.dataset.lang] || el.dataset.lang;
+      window.location.href = `dictionary.html?lang=${encodeURIComponent(langName)}#${entry.id}`;
+    });
+  });
+
+  // Form cells from {{cite:}} — data-lang + data-form
+  container.querySelectorAll('[data-lang][data-form]').forEach(el => {
+    if (el.dataset.dictId) return;            // already linked explicitly above
+    const lang = el.dataset.lang, form = el.dataset.form;
+    if (!form || form==='—' || form==='—') return;
+    const clean = form.replace(/^[-=]+|[-=.,;]+$/g,'').toLowerCase();
+    const entry = gDictByForm[`${lang}:${form.toLowerCase()}`]||gDictByForm[`${lang}:${clean}`];
+    if (!entry) return;
+    // Cited words carry their column's gloss. Link by form only when that gloss agrees with the
+    // entry's gloss, so a homophone (same form, different gloss) is never tied to the wrong
+    // entry; an unglossed word is not linked until it has been glossed.
+    if (el.hasAttribute('data-gloss')) {
+      const gl = (el.dataset.gloss || '').trim().toLowerCase();
+      const gs = (entry.glosses && entry.glosses.length ? entry.glosses : [entry.gloss || '']).map(x => x.trim().toLowerCase());
+      if (!gl || !gs.includes(gl)) return;      // the gloss must be one of the entry's senses
+    }
+    el.style.cursor = 'pointer';
+    el.style.textDecorationLine = 'underline';
+    el.style.textDecorationStyle = 'dotted';
+    el.addEventListener('mouseenter', () => { clearTimeout(gHideTimer); showGrammarTooltip(el, entry); });
+    el.addEventListener('mouseleave', hideGrammarTooltip);
+    el.addEventListener('click', () => {
+      const langName = G_CODE2LANG[lang]||lang;
+      window.location.href = `dictionary.html?lang=${encodeURIComponent(langName)}#${entry.id}`;
+    });
+  });
+}
+
+</script>
+
+<!-- ── Dictionary hover tooltip (for cited examples) ── -->
+<div id="grammar-tooltip" role="tooltip" aria-hidden="true" style="
+  position:fixed;z-index:9999;pointer-events:none;
+  opacity:0;transition:opacity 0.08s ease;max-width:300px;">
+  <div style="background:#1c0f06;color:#f0dfc0;border-radius:5px;
+              padding:9px 14px 10px;
+              box-shadow:0 4px 18px rgba(0,0,0,.38),0 0 0 1px rgba(201,164,88,.25);
+              font-family:'Crimson Pro',serif;font-size:0.9rem;line-height:1.5;">
+    <div id="gtt-hw"     style="font-family:'EB Garamond',serif;font-size:1.1rem;font-weight:500;color:#fdeec8;"></div>
+    <div id="gtt-def"    style="color:#e8d0a8;margin-top:3px;font-size:0.86rem;"></div>
+    <div id="gtt-equivs" style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;"></div>
+  </div>
+</div>
+</body>
+</html>

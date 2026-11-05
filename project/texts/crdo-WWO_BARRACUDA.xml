@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TEXT SYSTEM "https://cocoon.huma-num.fr/schemas/Archive.dtd">
+<TEXT id="crdo-LHT_AF020911" xml:lang="wwo">
+    <HEADER>
+        <TITLE xml:lang="fr">L’enfant Barracuda</TITLE>
+        <SOUNDFILE href="http://cocoon.huma-num.fr/data/archi/masters/148477.wav"/>
+    </HEADER>
+    <S id="Drg_Barracuda_01">
+        <FORM>Na, i Selwyn Wēsur. Na va-mrōs na susrēg o susrēg tmagēn vatgin o liwat m-daw sag nen̄ a Qētēon, gin o wasn̄in gin o Rogawol o bō aē ni m-van dēn̄ ror a Lōlōwrig.</FORM>
+        <TRANSL xml:lang="fr">Je m’appelle Selwyn Wesur. Je souhaite raconter une histoire de chez nous, à propos d’un barracuda. Cette histoire se passe du côté de Qetéon, entre la forêt de bambous à Rogawol, et Lolowrig sur la côte.</TRANSL>
+        <TRANSL xml:lang="en">My name is Selwyn Wēsur. I would like to tell a traditional story about a barracuda. It takes place over there in Kpweteon, somewhere between the Rogawol bamboo forest and Lolowrig on the coast.</TRANSL>
+        <AUDIO start="25.0732" end="39.3005"/>
+    </S>
+    <S id="Drg_Barracuda_02">
+        <FORM>Susrēg tmagēn sa m-van tm̄e sa.</FORM>
+        <TRANSL xml:lang="fr">Ce conte se déroule ainsi.</TRANSL>
+        <TRANSL xml:lang="en">So here’s how the story goes.</TRANSL>
+        <AUDIO start="39.3005" end="41.4059"/>
+    </S>
+    <S id="Drg_Barracuda_03">
+        <FORM>O rqa tan namon o m̄erat, i ntirār s-rō; nēr m-sagsag sag nen̄ a–van: m̄erm̄er s-rō sa, vālqōn̄ rār s-van llos ror gin tuar wasn̄in kma t-var ti kak a Lōlōwrig.</FORM>
+        <TRANSL xml:lang="fr">Il était une fois une femme, son mari et leurs deux enfants. Au fil du temps, ces deux enfants avaient pris l’habitude d’aller tous les jours se baigner en mer, dans un endroit que nous appelons Lolowrig.</TRANSL>
+        <TRANSL xml:lang="en">Once upon a time there was a woman, with her husband and their two children. For years, the two children would regularly go bathing in the sea, at that place we call Lolowrig.</TRANSL>
+        <AUDIO start="42.8733" end="54.8676"/>
+    </S>
+    <S id="Drg_Barracuda_04">
+        <FORM>Rār so lolos a–van, rār s-tek wor sē: tōlnēr nok s-tōl.</FORM>
+        <TRANSL xml:lang="fr">Mais un jour que tous les deux sont allés se baigner, ils ont la surprise de constater qu’ils sont trois.</TRANSL>
+        <TRANSL xml:lang="en">One day, as they were bathing, they realised they were not two, but three.</TRANSL>
+        <AUDIO start="54.8676" end="59.4612"/>
+    </S>
+    <S id="Drg_Barracuda_05">
+        <FORM>Tōlnēr so llos a–van dēn̄ o rāvrēv, rār so mōl kal kēl.</FORM>
+        <TRANSL xml:lang="fr">Ils se baignent donc à trois jusqu’au soir, puis les deux frères prennent le chemin du retour.</TRANSL>
+        <TRANSL xml:lang="en">So the three of them bathed till night, and eventually the two brothers walked back home.</TRANSL>
+        <AUDIO start="59.4612" end="64.3099"/>
+    </S>
+    <S id="Drg_Barracuda_06">
+        <FORM>Mōl kal kēl tm̄e sa, m̄erm̄er nen̄ me-tger nok.</FORM>
+        <TRANSL xml:lang="fr">Mais au moment de rentrer, le troisième enfant avait disparu.</TRANSL>
+        <TRANSL xml:lang="en">As soon as they left, they realised the third child had disappeared.</TRANSL>
+        <AUDIO start="64.3099" end="66.4153"/>
+    </S>
+    <S id="Drg_Barracuda_07">
+        <FORM>Le tuar rorwor, mlē vatm̄e.</FORM>
+        <TRANSL xml:lang="fr">Le lendemain matin, même chose.</TRANSL>
+        <TRANSL xml:lang="en">The next morning, the same thing happened again.</TRANSL>
+        <AUDIO start="67.1809" end="70.0518"/>
+    </S>
+    <S id="Drg_Barracuda_08">
+        <FORM>Tōlnēr sagsag a–van, tare m̄erm̄er s-rō sa so sēw kēl mlē ror sur so-llos, dēn̄ o wasn̄in sa Lōlōwrig.</FORM>
+        <TRANSL xml:lang="fr">Ils se retrouvent tous les trois / Donc, nos deux enfants redescendent se baigner en mer, au même endroit Lolowrig.</TRANSL>
+        <TRANSL xml:lang="en">The three of them were together / So, the two children went back down to the coast for a swim, at that place called Lōlōwrig.</TRANSL>
+        <AUDIO start="70.0518" end="76.4955"/>
+    </S>
+    <S id="Drg_Barracuda_09">
+        <FORM>Tōlnēr so-llos a–van wa o rāvrēv, rār so mōl kal kēl o brinti m̄erm̄er sa so tger kēl le gatgis.</FORM>
+        <TRANSL xml:lang="fr">Ils se baignent à nouveau tous les trois, mais le soir venu, au moment de remonter au sec, ils s’aperçoivent que le petit garçon a disparu à nouveau dans les flots.</TRANSL>
+        <TRANSL xml:lang="en">And then they bathed again, the three of them, the whole day. When evening fell, as the two brothers prepared to go back home, they realised the small boy had vanished again in the water.</TRANSL>
+        <AUDIO start="76.9421" end="84.7256"/>
+    </S>
+    <S id="Drg_Barracuda_10">
+        <FORM>Vnōs vālqōn̄ gēn tm̄e sa le. Vāl mrān, rār sēw ror so-llos. Rār wor bul rō. Tek sē tm̄e sa, tōlnēr nok bul tōl.</FORM>
+        <TRANSL xml:lang="fr">Et tous les jours, il leur arrive la même chose. Chaque matin, ils descendent à deux pour se baigner; mais alors qu’ils ne sont que deux, ils découvrent soudain qu’ils sont devenus trois.</TRANSL>
+        <TRANSL xml:lang="en">And so it went on every day like this. Every morning, the two brothers would walk down to go swimming, just the two of them. And then after a while, they’d realise they were three.</TRANSL>
+        <AUDIO start="86.0016" end="94.5507"/>
+    </S>
+    <S id="Drg_Barracuda_11">
+        <FORM>Wa vatgin s-mōl, rār wor bul rō.</FORM>
+        <TRANSL xml:lang="fr">Et au moment de rentrer, ils se retrouvent de nouveau à deux.</TRANSL>
+        <TRANSL xml:lang="en">Yet when it was time to return home, they would always be back to just two.</TRANSL>
+        <AUDIO start="94.5507" end="97.3578"/>
+    </S>
+    <S id="Drg_Barracuda_12">
+        <FORM>Vnōs vnōs a–van, rār so dōm āmēm nok o tuar o sal ti kak rār s-gal kal m̄erm̄er sa.</FORM>
+        <TRANSL xml:lang="fr">Au bout de plusieurs jours, les deux frères tentèrent d’imaginer un moyen d’attirer le garçon en question vers la côte.</TRANSL>
+        <TRANSL xml:lang="en">This went on for some time, until one day the two brothers plotted a way to lure the boy up inland.</TRANSL>
+        <AUDIO start="98.2662" end="103.9133"/>
+    </S>
+    <S id="Drg_Barracuda_13">
+        <FORM>Rār m-van sa, so vit min i vverār, i tmarār, ron̄ “Vālqōn̄, kmār sēwsēw ror sa, kmār s-tektek tuar brinti m̄erm̄er so lolos ma kmār, la kmār vatgin s-mōl kal kēl ma, ni obek nok. Kmār wor sa, kmār s-mōl kēl ma la – kmār va-mrōs kak gēn kak s-la kal o m̄erm̄er nen̄ ma.”</FORM>
+        <TRANSL xml:lang="fr">Ils se rendirent alors auprès de leurs deux parents, et leur dirent: "Tous les jours, alors que nous descendons nous baigner, mon frère et moi nous voyons un petit garçon qui vient s’amuser avec nous; mais dès que nous prenons le chemin du retour, il a disparu. Nous nous retrouvons juste à deux — en fait, nous aimerions faire en sorte que cet enfant nous suive jusqu’ici."</TRANSL>
+        <TRANSL xml:lang="en">First they went home to talk to their parents: “Every day, as we both go down to the coast, we see a small boy playing with us in the sea. But then as we set out to come back up, he’s nowhere to be found, and we’re back to being just two. We wish we could get this boy to follow us here.”</TRANSL>
+        <AUDIO start="103.5814" end="124.5349"/>
+    </S>
+    <S id="Drg_Barracuda_14">
+        <FORM>Bas, o tamin tan o vēvin nen̄ so vit ron̄: “Bek, gēn s-daw wor tm̄e sa i.”</FORM>
+        <TRANSL xml:lang="fr">Alors le père et la mère leur répondirent: "Pas de problème, nous n’aurons qu’à faire comme je vais vous montrer."</TRANSL>
+        <TRANSL xml:lang="en">Then the parents replied: “Alright. I’ll show you what to do.”</TRANSL>
+        <AUDIO start="124.5349" end="130.7120"/>
+    </S>
+    <S id="Drg_Barracuda_15">
+        <FORM>Nēr me-srig o rga, me-qtēg tgin gāvrinēr, me-srig dēn̄ ror le gatgis; nēr m-vatka t’aē wa o vtāl ve-beg, o tlēs, o wtag, o n̄a – van dēn̄ āt gēn ror nen̄ le.</FORM>
+        <TRANSL xml:lang="fr">Ils se mirent alors à planter des perches, en les alignant depuis leur maison en haut jusqu’à l’océan; ensuite, ils y accrochèrent des bananes mûres, des badames [Terminalia], des vèles [Barringtonia], des amandes [Canarium]… tout au long jusqu’à la mer.</TRANSL>
+        <TRANSL xml:lang="en">They went on to put up stakes, starting from their home all the way down to the sea. Then they hung up on them all sorts of fruits: sweet bananas, sea almonds, cutnuts, canarium almonds… And so on all the way down.</TRANSL>
+        <AUDIO start="130.7120" end="144.6785"/>
+    </S>
+    <S id="Drg_Barracuda_16">
+        <FORM>Me-mmat mlē ror le rorwor, rār so sēw kēl mlē ror sur so-llos. Rār to-lolos ti m-tek ēs: i at sa so van kēl mlē ma.</FORM>
+        <TRANSL xml:lang="fr">Lorsqu’ils se réveillèrent le lendemain matin, ils redescendirent se baigner à nouveau en mer. Puis, en jouant dans l’eau, ils virent réapparaître le garçon en question.</TRANSL>
+        <TRANSL xml:lang="en">As they woke up the next morning, the two brothers walked again to the beach to have a swim. As they were playing in the water, they realised the boy was there again with them.</TRANSL>
+        <AUDIO start="144.6785" end="154.1059"/>
+    </S>
+    <S id="Drg_Barracuda_17">
+        <FORM>Tōlnēr nok mlē bul tōl. (Tōlnēr) me-lolos va–van, tuar gēn sa ka m̄rag o mtatē, so vit ron̄: “Dār gēn s-daw tm̄e sa le!”</FORM>
+        <TRANSL xml:lang="fr">Ils se retrouvaient donc de nouveau à trois. Après avoir joué dans l’eau quelque temps, l’un des deux frères, l’aîné, murmura (à l’autre): "Voilà comment nous allons faire!"</TRANSL>
+        <TRANSL xml:lang="en">So they were three again. They played together for a while, until one whispered to his brother: “Alright, let’s do as we planned!”</TRANSL>
+        <AUDIO start="154.1059" end="162.5369"/>
+    </S>
+    <S id="Drg_Barracuda_18">
+        <FORM>Ron̄ “Tek mē o va sag nen̄!”</FORM>
+        <TRANSL xml:lang="fr">"Tiens", dit-il alors, "tu as vu tous ces trucs suspendus?"</TRANSL>
+        <TRANSL xml:lang="en">And then he shouted: “Good heavens, what is this fruit hanging up there?”</TRANSL>
+        <AUDIO start="162.5369" end="163.8399"/>
+    </S>
+    <S id="Drg_Barracuda_19">
+        <FORM>Tōlnēr me-lolos a–van, o mtatē nen̄ so vit ron̄: “Ar tek kal ka nen̄ sag nen̄! Ar tek o vtāl ve-beg to-tka t’ sag nen̄ i!”</FORM>
+        <TRANSL xml:lang="fr">Ils se baignent encore, lorsque l’aîné revient à la charge: "Dites donc, regardez-moi tout ça là-haut! Mais ma parole, ce sont des bananes mûres qu’on a accrochées là?!"</TRANSL>
+        <TRANSL xml:lang="en">After a while, the elder brother went on to say “Hey, look what’s up there! Looks like sweet bananas hanging up from that tree!”</TRANSL>
+        <AUDIO start="164.4530" end="171.9643"/>
+    </S>
+    <S id="Drg_Barracuda_20">
+        <FORM>Tōlnēr m-row sag sur o vtāl ve-beg nen̄, so vit mlē ron̄: “Tek sag o tlēs to-tka gēn t’ sag o!” Wa tōlnēr so van sag sur o tlēs, so vit ron̄: “Tek sag o suak to-tka gēn t’ sag o!”. Wa tōlnēr so van sag sur.</FORM>
+        <TRANSL xml:lang="fr">À peine ont-ils bondi sur ces bananes mûres, qu’il intervient à nouveau: "Hé mais, ne serait-ce pas des badames qu’on a accrochées là-haut?" Tous trois avancent un peu plus vers l’intérieur des terres, pour attraper ces badames, et lui de reprendre: "Hé, regardez-moi ces autres bananes (fehi) par là-haut!"</TRANSL>
+        <TRANSL xml:lang="en">The three boys leapt out of the water and rushed to the sweet bananas. One of them soon exclaimed “Oh my god, aren’t these sea almonds hanging up from that branch?!” No sooner had they dashed to eat these almonds, that one exclaimed again “Hey look up this way, isn’t that a bunch of fehi bananas hanging there?!” Again the three boys dashed to pick them.</TRANSL>
+        <AUDIO start="172.5391" end="185.3006"/>
+    </S>
+    <S id="Drg_Barracuda_21">
+        <FORM>Van van a–van, van dēn̄ atwal sag nen̄, gin vara nēr nen̄ nēr so sagsag.</FORM>
+        <TRANSL xml:lang="fr">Et ainsi de suite, jusqu’à atteindre carrément là-haut; c’est là, dans leur village, qu’ils s’installent.</TRANSL>
+        <TRANSL xml:lang="en">And so it went on and on, all the way up inland. Once they reached their hamlet, they settled there together.</TRANSL>
+        <AUDIO start="185.5305" end="190.8191"/>
+    </S>
+    <S id="Drg_Barracuda_22">
+        <FORM>Nēr sagsag nen̄ a–van, i tma i rōrqa sa me-tsōn̄ o vus s-tōl, ma wātqēn̄ (s-tōl) vatgin s-ven o mān.</FORM>
+        <TRANSL xml:lang="fr">Le temps passe. Un jour, le père des deux enfants leur taille trois arcs, avec des flèches pour assommer les oiseaux.</TRANSL>
+        <TRANSL xml:lang="en">Time went by. One day, the father of the two brothers made three bows, together with blunt arrows, so the three of them could go and shoot birds.</TRANSL>
+        <AUDIO start="192.0071" end="201.8177"/>
+    </S>
+    <S id="Drg_Barracuda_23">
+        <FORM>Vāl mrān tm̄e sa, tōlnēr t-van gētgēt ti.</FORM>
+        <TRANSL xml:lang="fr">Et chaque matin, les trois enfants prennent ainsi l’habitude de partir à la chasse.</TRANSL>
+        <TRANSL xml:lang="en">From then on, they made the habit of going hunting every day together.</TRANSL>
+        <AUDIO start="204.5003" end="207.3745"/>
+    </S>
+    <S id="Drg_Barracuda_24">
+        <FORM>S-van gētgēt atwal nen̄, tōlnēr t-ven o mān ti wa i rōrqa ka sa m̄rag o tdun vēwē rār s-ven lala tēmē, la o brinti m̄erm̄er ka o liwat sa, nē t-ven ti, nē t-ven lala atwal ti.</FORM>
+        <TRANSL xml:lang="fr">Or, lors de leurs parties de chasse, chaque fois qu’ils tiraient sur un oiseau, les deux enfants — ceux qui étaient de vrais humains — rataient toujours leur cible, alors que l’autre petit garçon — qui était en fait un barracuda — réussissait à tous les coups.</TRANSL>
+        <TRANSL xml:lang="en">Every time the three of them were out hunting, they would shoot some birds. The two boys who were real humans would always miss their target, whereas the other boy, who was in fact a Barracuda, would always shoot right on target.</TRANSL>
+        <AUDIO start="207.3745" end="219.5228"/>
+    </S>
+    <S id="Drg_Barracuda_25">
+        <FORM>Vnōs vālqōn̄ gēn tm̄e nen̄ le.</FORM>
+        <TRANSL xml:lang="fr">Et tous les jours c’était la même chose.</TRANSL>
+        <TRANSL xml:lang="en">And it was every day the same story.</TRANSL>
+        <AUDIO start="219.8677" end="221.5922"/>
+    </S>
+    <S id="Drg_Barracuda_26">
+        <FORM>So-mmat ror le rorwor, tōlnēr so van gētgēt.</FORM>
+        <TRANSL xml:lang="fr">Un matin, au réveil, tous trois partent à la chasse.</TRANSL>
+        <TRANSL xml:lang="en">They woke up one morning and went hunting.</TRANSL>
+        <AUDIO start="221.6305" end="224.2748"/>
+    </S>
+    <S id="Drg_Barracuda_27">
+        <FORM>Van gētgēt wa, o m̄erm̄er s-rō sa s-ven lala tēmē o mān, m̄erm̄er liwat sa t-ven lala o mān ti.</FORM>
+        <TRANSL xml:lang="fr">Une fois de plus, lors de cette chasse, nos deux frères ratent à chaque fois leur proie, tandis que l’enfant-poisson, lui, réussit tous ses coups.</TRANSL>
+        <TRANSL xml:lang="en">As they were hunting, once again the two brothers would always miss the birds, while the Barracuda boy was always successful.</TRANSL>
+        <AUDIO start="224.6963" end="233.4339"/>
+    </S>
+    <S id="Drg_Barracuda_28">
+        <FORM>Bas, tare m̄erm̄er sa m-tektek vatm̄e: rār t-daw nok ni ti, ron̄: “Nēk wa – kmār m-la wor nēk ma, la tōlgēn s-van gētgēt tm̄e sa ti nēk t-ven lala dēn kmār ti.”</FORM>
+        <TRANSL xml:lang="fr">Voyant cela, les deux frères commencèrent à le détester: “Hé ho, toi, tu n’es qu’un enfant adopté, et à chaque fois que nous partons à la chasse, tu te permets de réussir mieux que nous!”</TRANSL>
+        <TRANSL xml:lang="en">At this sight, the two boys decided they had had enough. “Hey you!” they exclaimed, “you were nothing but an adopted child! But then whenever we go hunting together, you keep shooting better than us!”</TRANSL>
+        <AUDIO start="233.8171" end="243.3978"/>
+    </S>
+    <S id="Drg_Barracuda_29">
+        <FORM>Brinti m̄erm̄er m̄erat sa m-ron̄, ni so ron̄ va-ttās sur.</FORM>
+        <TRANSL xml:lang="fr">Dès qu’il entendit ces mots, le petit garçon fut envahi par la tristesse.</TRANSL>
+        <TRANSL xml:lang="en">As he heard these words, the little boy suddenly felt terrible.</TRANSL>
+        <AUDIO start="243.8193" end="246.6935"/>
+    </S>
+    <S id="Drg_Barracuda_30">
+        <FORM>Nēr m-sagsag tal mlē nen̄ va–van, so vit ron̄: “Tōlgēn sēw kēl mlē le gatgis tōlgēn so lolos aē!”</FORM>
+        <TRANSL xml:lang="fr">Le temps s’écoula. Un jour, l’un dit "Ça vous dit de redescendre en mer pour nous baigner?"</TRANSL>
+        <TRANSL xml:lang="en">Days went by. One day, one of them said “Let’s go down to the sea and have fun the three of us again!”</TRANSL>
+        <AUDIO start="247.5366" end="253.8982"/>
+    </S>
+    <S id="Drg_Barracuda_31">
+        <FORM>Tōlnēr m-sasēw ror nen̄, me-lolos va–van, wa vatgin kak s-mōl kal kēl, ti o brinti m̄erm̄er liwat sa ron̄: “Na wōdek vte mōl tētēg late kmur. Kmur wa kmur m-la wor na āt, la tōlgēn s-van gētgēt tm̄e sa wa kmur s-ven lala tēmē o mān wa na t-ven lala o mān ti, ti kmur t-vit ron̄ kak kmur m-la wor na āt, la kmur gēn s-mōl kēl wor sur i vvekmur dek tan i tmakmur, la na na me-mōl kēl.”</FORM>
+        <TRANSL xml:lang="fr">Ils se rendent donc à la plage, vont jouer dans l’eau — mais au moment de repartir, le petit enfant-poisson dit: "Je ne suis pas sûr de pouvoir vous suivre. Moi je ne suis qu’un enfant étranger que vous avez bien voulu adopter, et pourtant, lorsque nous partons à la chasse, vous, vous manquez toujours vos proies, alors que moi je les atteins sans difficultés. C’est pour cela que vous m’avez rappelé que je n’étais qu’un étranger. Je crois qu’il vaut mieux que je vous laisse rentrer tous les deux chez vos parents, et que je m’en reparte de mon côté."</TRANSL>
+        <TRANSL xml:lang="en">So down they went, they played in the water for a while. Right as it was time to go back home, the little Barracuda boy said: “I’m not sure I can follow the two of you. You know, I was just an adopted child after all. Every time we go hunting, you keep missing the birds and I always hit them right on target; and that’s why you told me I had just been adopted into your family. Alright, you two just go back to your parents; as for me, let me just go away.”</TRANSL>
+        <AUDIO start="254.4347" end="281.6822"/>
+    </S>
+    <S id="Drg_Barracuda_32">
+        <FORM>Ni to-vavgat tm̄e sa ti – tuar m̄erm̄er m-sagsag gor ni, sutwal so vrisa kal.</FORM>
+        <TRANSL xml:lang="fr">Pendant qu’il parle ainsi, l’un des deux frères décide de rester avec lui pour le retenir, tandis que l’autre remonte en courant vers la maison.</TRANSL>
+        <TRANSL xml:lang="en">As he was speaking, one of the two brothers chose to stay beside him while the other ran back inland.</TRANSL>
+        <AUDIO start="283.2151" end="288.5803"/>
+    </S>
+    <S id="Drg_Barracuda_33">
+        <FORM>Van sag, m-vit min i vverār i tmarār, m-la o sōm tmagēn, o wde, so sēw sēwēl kēl ma – kak t-la min ni ti wa nēr to-vōr ni ti, na glon nok o mās!</FORM>
+        <TRANSL xml:lang="fr">Après avoir annoncé la nouvelle aux parents, il alla chercher de la monnaie de coquillages et un cochon, et puis ils redescendirent tous sur la plage. Mais alors qu’ils allaient lui offrir tout cela pour lui demander de revenir, ils virent qu’il avait déjà une queue de poisson!</TRANSL>
+        <TRANSL xml:lang="en">He ran back inland, where he explained everything to his parents. Then he seized some shellmoney and a swine, and brought it all back down, hoping he’d get the boy to follow him; but he suddenly saw that he had already grown a fish tail!</TRANSL>
+        <AUDIO start="288.6569" end="300.0388"/>
+    </S>
+    <S id="Drg_Barracuda_34">
+        <FORM>Nēr ron̄: “Kal kēl ma sur nablan̄ o wde ne, o sōm ne, ngan̄ o gāngēn ne!”</FORM>
+        <TRANSL xml:lang="fr">"Reviens-nous", dirent-ils, "viens donc chercher tes cadeaux, ce cochon, cette monnaie de coquillages, cette nourriture qui est pour toi!"</TRANSL>
+        <TRANSL xml:lang="en">“Come back!” they exclaimed, “Here’s a swine for you, here’s your shellmoney, here’s food for you!”</TRANSL>
+        <AUDIO start="300.4790" end="304.4263"/>
+    </S>
+    <S id="Drg_Barracuda_35">
+        <FORM>Titi o mās nen̄ m-van dēn̄ nok gin mamn̄an.</FORM>
+        <TRANSL xml:lang="fr">Mais lui était déjà en train de se transformer en poisson, jusqu’à hauteur de sa poitrine.</TRANSL>
+        <TRANSL xml:lang="en">But he had already become a fish all the way up to his chest.</TRANSL>
+        <AUDIO start="304.6945" end="307.2622"/>
+    </S>
+    <S id="Drg_Barracuda_36">
+        <FORM>Nēr t-tān̄ ma naminēr o vrin̄rin̄ nen̄ ti wa o sōm tmagēn, o wde, o gāngēn, o vrin̄rin̄ ka ges kak vatgin s-la min ni.</FORM>
+        <TRANSL xml:lang="fr">Tout en pleurant, ils lui tendaient ces offrandes, la monnaie traditionnelle, le cochon, la nourriture, tous ces objets qu’ils avaient apportés pour les lui offrir.</TRANSL>
+        <TRANSL xml:lang="en">They were in tears, as they handed him all those presents, traditional money, a swine, some food – all those presents they had brought for him.</TRANSL>
+        <AUDIO start="307.8753" end="315.7315"/>
+    </S>
+    <S id="Drg_Barracuda_37">
+        <FORM>Titi ni so ris bas atwal wor o mās ni so sēw tger atwal.</FORM>
+        <TRANSL xml:lang="fr">Mais déjà, il était devenu entièrement poisson, et avait disparu sous les flots.</TRANSL>
+        <TRANSL xml:lang="en">But it was too late: the boy had finished his metamorphosis into a fish, and had already disappeared into the sea.</TRANSL>
+        <AUDIO start="315.8848" end="319.4871"/>
+    </S>
+    <S id="Drg_Barracuda_38">
+        <FORM>La gin o wasn̄in nen̄ ka t-sag gēn dek o rqa / ka m̄rag / o rqa, namon o m̄erat ma ra nōntōn, o vāt t’aē t-sag gēn mlē t’ dek me-dēn̄ gēn dek le.</FORM>
+        <TRANSL xml:lang="fr">À cet endroit-là, là où habitait cette femme avec son mari et ses deux enfants, il existe encore aujourd’hui un rocher.</TRANSL>
+        <TRANSL xml:lang="en">In the spot where that woman lived with her husband and children, there is a rock which has survived to this very day.</TRANSL>
+        <AUDIO start="319.6788" end="329.7576"/>
+    </S>
+    <S id="Drg_Barracuda_39">
+        <FORM>Ti o ssa wasn̄in nen̄, nēr t-var ti kak Lōlōwrig, nēk s-van ma aē, nēk s-van ma kak to-rrēv galāg ti nēk s-tek ror o tuar vāt nēr s-tek atal wor m̄rag wa o liwat.</FORM>
+        <TRANSL xml:lang="fr">Ce lieu-là, nous l’appelons Lolowrig. Si un jour vous vous y rendez, pour peu que vous veniez à marée montante, vous y verrez là, dans l’eau, un rocher, qui ressemble à s’y méprendre à un barracuda.</TRANSL>
+        <TRANSL xml:lang="en">That place is called Lōlōwrig. If one day you go there at high tide, you’ll notice a rock in the sea, a rock that looks exactly like a barracuda.</TRANSL>
+        <AUDIO start="330.2222" end="339.2222"/>
+    </S>
+    <S id="Drg_Barracuda_40">
+        <FORM>Sag gēn dek gēn wor o susrēg tmagēn le.</FORM>
+        <TRANSL xml:lang="fr">Et c’est ainsi que se termine mon histoire.</TRANSL>
+        <TRANSL xml:lang="en">And this is the end of my story.</TRANSL>
+        <AUDIO start="339.2222" end="342.2222"/>
+    </S>
+</TEXT>

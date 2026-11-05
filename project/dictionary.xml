@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Digital Boasian Trilogy — Gaua Languages (Banks Islands, Vanuatu)
+  Comparative Dictionary · LEXICA XML format (B. Galliot)
+  Adapted for 5 source languages: ReprésentationDeForme carries a langue= attribute.
+  Documentation: Alexandre François & Fabio Meroni · HéLiCéO
+-->
+<RessourceLexicale>
+
+  <InformationsGlobales>
+    <Titre>Dictionnaire comparatif des langues de Gaua / Comparative dictionary of the Gaua languages</Titre>
+    <Auteurs>Alexandre François; Fabio Meroni</Auteurs>
+    <Institution>HéLiCéO — CNRS/Sorbonne Université</Institution>
+    <Date>2024</Date>
+    <Langues>
+      <!-- Source languages — all 5 Gaua varieties -->
+      <Langue rôle="source" code="num">Nume</Langue>
+      <Langue rôle="source" code="drg">Dorig</Langue>
+      <Langue rôle="source" code="kro">Koro</Langue>
+      <Langue rôle="source" code="olr">Olrat</Langue>
+      <Langue rôle="source" code="lkn">Lakon</Langue>
+      <!-- Target / metalanguage -->
+      <Langue rôle="cible" code="eng">English</Langue>
+    </Langues>
+  </InformationsGlobales>
+
+  <Dictionnaire>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 1 — 3PL
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="3pl">
+      <Lemme>
+        <ReprésentationDeForme langue="num">nir</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">nɪr</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">nɪr</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">nɪj</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">ɣɪː</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Sens identifiant="3plⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">3PL — third person plural subject</Glose>
+        <gloss>3PL</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">3PL — third person plural subject</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">Free subject pronoun referring to a plural group not including the speaker. The form varies considerably across the dialect chain, with Lakon showing the most divergent reflex.</ReprésentationDeTexte>
+        </Notes>
+        <RelationSémantique>
+          <Type>exemple</Type>
+          <Cible cible="nondum1">NONDUM₁</Cible>
+        </RelationSémantique>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 2 — NONDUM₁
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="nondum1">
+      <Lemme>
+        <ReprésentationDeForme langue="num">βitis</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">sɔwsɛ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">tɪ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">tɪ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">atɪ</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>part.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Sens identifiant="nondum1ⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">NONDUM₁ — pre-verbal negator ('not yet')</Glose>
+        <gloss>NONDUM₁</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">NONDUM₁ — pre-verbal negator &lt;em&gt;('not yet')&lt;/em&gt;</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">The pre-verbal component of the discontinuous negation construction. Occupies the position immediately before the subject–verb complex. Forms diverge across the chain: Dorig retains an older bisyllabic shape, while central and western varieties show reduction.</ReprésentationDeTexte>
+        </Notes>
+        <RelationSémantique>
+          <Type>renvoi</Type>
+          <Cible cible="nondum2">NONDUM₂</Cible>
+          <GloseRelation langue="eng">post-verbal counterpart</GloseRelation>
+        </RelationSémantique>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 3 — know
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="know">
+      <Lemme>
+        <ReprésentationDeForme langue="num">ɣil</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">βrɪɣɪl</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">rɔŋ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">rɔŋ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">rɔŋ</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>v.tr.</ClasseGrammaticale>
+      <DomaineSémantique>Cognition</DomaineSémantique>
+      <Sens identifiant="knowⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">know, be familiar with</Glose>
+        <gloss>know</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">know, be familiar with</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">Transitive verb of knowledge. The eastern languages (Nume, Dorig) retain fuller forms with more syllables, while central and western varieties show convergence on a monosyllabic root.</ReprésentationDeTexte>
+        </Notes>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 4 — properly
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="properly">
+      <Lemme>
+        <ReprésentationDeForme langue="num">liŋliŋi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">taβul</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">taβul</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">βɪlɪː</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">kɛrɛ</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>adv.</ClasseGrammaticale>
+      <DomaineSémantique>Manner</DomaineSémantique>
+      <Sens identifiant="properlyⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">properly, well, thoroughly</Glose>
+        <gloss>properly</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">properly, well, thoroughly</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">Manner adverb expressing the thoroughness or quality of an action. Placed after the verb and before the post-verbal negator. Exhibits significant cross-linguistic variation across the five varieties.</ReprésentationDeTexte>
+        </Notes>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 5 — NONDUM₂
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="nondum2">
+      <Lemme>
+        <ReprésentationDeForme langue="num">mi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">tɛ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">wʊsmɛlɛ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">wʊsmɛlɛ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">aβʊh.malɛ</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>part.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Sens identifiant="nondum2ⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">NONDUM₂ — post-verbal negator (bound, discontinuous)</Glose>
+        <gloss>NONDUM₂</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">NONDUM₂ — post-verbal negator &lt;em&gt;(bound, discontinuous)&lt;/em&gt;</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">The post-verbal component of the discontinuous negation construction. May be suffixed to the final verb or to a post-verbal particle. Can be omitted in casual registers. Together with NONDUM₁ it forms a split-negation pattern typologically parallel to the Jespersen cycle.</ReprésentationDeTexte>
+        </Notes>
+        <RelationSémantique>
+          <Type>renvoi</Type>
+          <Cible cible="nondum1">NONDUM₁</Cible>
+          <GloseRelation langue="eng">pre-verbal counterpart</GloseRelation>
+        </RelationSémantique>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 6 — ART
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="art">
+      <Lemme>
+        <ReprésentationDeForme langue="num">u</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">na</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">ɔ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">—</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">—</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>det.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Sens identifiant="artⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">ART — article (nominal determiner)</Glose>
+        <gloss>ART</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">ART — article (nominal determiner)</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">Nominal article preceding the head noun. Absent in Olrat and Lakon in this construction, either due to grammatical differences or ellipsis in context.</ReprésentationDeTexte>
+        </Notes>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 7 — speech  [with etymology]
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="speech">
+      <Lemme>
+        <ReprésentationDeForme langue="num">luwluw</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">lŋa</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">βalβalaw</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">ususraː</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">ɛlŋa</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>n.</ClasseGrammaticale>
+      <DomaineSémantique>Language</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*[qa]liŋa-</Forme>
+          <Glose langue="eng">voice</Glose>
+        <gloss>speech</gloss>
+          <LienTLOPO>https://tlopo.clld.org/parameters/5-3-4-14-138-POc-qalia-a#6/-5.859/152.761</LienTLOPO>
+          <LienEtymograph>https://evosem.huma-num.fr/etymograph.html?etym=Oceanic/qali%C5%8Ba-&amp;node1=voice</LienEtymograph>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="speechⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">speech, language, word</Glose>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">speech, language, word</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">Noun denoting spoken language or speech in general. All five languages show distinct forms, reflecting the high rate of lexical differentiation across the Gaua dialect chain.</ReprésentationDeTexte>
+        </Notes>
+        <RelationSémantique>
+          <Type>renvoi</Type>
+          <Cible cible="poss">POSS:1INCL.PL</Cible>
+          <GloseRelation langue="eng">possessive in example</GloseRelation>
+        </RelationSémantique>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ENTRY 8 — POSS:1INCL.PL
+    ══════════════════════════════════════════════════════════ -->
+    <EntréeLexicale identifiant="poss">
+      <Lemme>
+        <ReprésentationDeForme langue="num">namɣin</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">‑ɣɪn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">namɪɣɪn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">mʊʧ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">‑nɣɪʧ</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>poss.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Sens identifiant="possⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">POSS:1INCL.PL — 1st person inclusive plural possessive</Glose>
+        <gloss>POSS:1INCL.PL</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">POSS:1INCL.PL — 1st person inclusive plural possessive</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">Possessive marker encoding the 1st person inclusive plural possessor (speaker + addressee + others). Appears as a suffix or clitic on the possessed noun. The inclusive/exclusive distinction in possessives is a well-preserved Oceanic feature across all five languages.</ReprésentationDeTexte>
+        </Notes>
+      </Sens>
+    </EntréeLexicale>
+
+  </Dictionnaire>
+
+</RessourceLexicale>

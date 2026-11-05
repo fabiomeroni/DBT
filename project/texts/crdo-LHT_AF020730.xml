@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TEXT SYSTEM "https://cocoon.huma-num.fr/schemas/Archive.dtd">
+<TEXT id="crdo-LHT_AF020730" xml:lang="tgs">
+    <HEADER>
+        <TITLE xml:lang="fr">The story of Wenagon</TITLE>
+        <SOUNDFILE href="http://cocoon.huma-num.fr/data/archi/masters/148465.wav"/>
+    </HEADER>
+    <S id="Num_Wenawon2_01">
+        <FORM>Kekkeom.</FORM>
+        <TRANSL xml:lang="en">A story.</TRANSL>
+        <AUDIO start="11.6652" end="14.0892"/>
+    </S>
+    <S id="Num_Wenawon2_02">
+        <FORM>Tuar qōn̄ nen, Wenagon mēlē vaten iasan vaten ra nutnutun.</FORM>
+        <TRANSL xml:lang="en">Once upon a time, Wenagon was with his wife and his children.</TRANSL>
+        <AUDIO start="14.0892" end="23.1790"/>
+    </S>
+    <S id="Num_Wenawon2_03">
+        <FORM>Nir me sasa vavvan nen, nir tov van be dēdē n̄a.</FORM>
+        <TRANSL xml:lang="en">They were living like that, until one day they went to gather canarium almonds.</TRANSL>
+        <AUDIO start="23.1790" end="27.4966"/>
+    </S>
+    <S id="Num_Wenawon2_04">
+        <FORM>Nēr me an sa, Wenagon tov dē.</FORM>
+        <TRANSL xml:lang="en">So they walked up there, and Wenagon began to climb.</TRANSL>
+        <AUDIO start="27.4966" end="31.9278"/>
+    </S>
+    <S id="Num_Wenawon2_05">
+        <FORM>Wenagon me dē sa, ni ti vus ti u n̄a vavan, ma ni me tēr mēstēm tuar kariv n̄a ni tov so.</FORM>
+        <TRANSL xml:lang="en">He climbed up the tree, knocking down bundles of almonds as he went up. Suddenly, as he tried to grab a branch, he missed, and fell.</TRANSL>
+        <AUDIO start="31.9278" end="43.1763"/>
+    </S>
+    <S id="Num_Wenawon2_06">
+        <FORM>Ni me so ror nen ma, ni tov mat.</FORM>
+        <TRANSL xml:lang="en">He fell down on the ground, and died.</TRANSL>
+        <AUDIO start="43.1763" end="48.9710"/>
+    </S>
+    <S id="Num_Wenawon2_07">
+        <FORM>Ni me mat, nir tov le ni, sesen̄ ni a vere, gil mataqen nir tov tuvun ni.</FORM>
+        <TRANSL xml:lang="en">When they realised he was dead, they lifted him up, carried him to the village, dug a grave and buried him.</TRANSL>
+        <AUDIO start="48.9710" end="57.8335"/>
+    </S>
+    <S id="Num_Wenawon2_08">
+        <FORM>Tuvun ni, a le qōn̄, ma ni tov tavraket a le mataqen nen,</FORM>
+        <TRANSL xml:lang="en">But after they buried him that night, suddenly he rose again from his grave,</TRANSL>
+        <AUDIO start="57.7580" end="66.7342"/>
+    </S>
+    <S id="Num_Wenawon2_09">
+        <FORM>ni tov van abe vuvur nam-nēr, vus mamētē tuar wutve, tov sivtē ni ale mataqen nen sa nir me tuvun ni allon, wa –</FORM>
+        <TRANSL xml:lang="en">he walked to their property, killed a pig, and threw it in the grave he had been buried in.</TRANSL>
+        <AUDIO start="66.7342" end="79.6871"/>
+    </S>
+    <S id="Num_Wenawon2_10">
+        <FORM>Sivtē ror wutve en allon, ni tov to den abe na-veran nen, ni tov to ti ale tuar vere. Ni tov sasa aben.</FORM>
+        <TRANSL xml:lang="en">So he left the pig down in the grave, and walked away from his place – until he reached another village where he decided to stay.</TRANSL>
+        <AUDIO start="79.4599" end="91.9583"/>
+    </S>
+    <S id="Num_Wenawon2_11">
+        <FORM>Sa ti abe vere nen wa nir mēlē abe u tuar vere en, nir ve mōrōs te da tuar telvun̄.</FORM>
+        <TRANSL xml:lang="en">One day, the people from that village, together with those of the other village, decided to organise a big celebration.</TRANSL>
+        <AUDIO start="91.8447" end="99.3438"/>
+    </S>
+    <S id="Num_Wenawon2_12">
+        <FORM>Ma nir tov da telvun̄ en, ni tov / tawa namun mēlē tov van ma.</FORM>
+        <TRANSL xml:lang="en">So there was going to be a big party, where his wife was going to come.</TRANSL>
+        <AUDIO start="99.2302" end="107.9791"/>
+    </S>
+    <S id="Num_Wenawon2_13">
+        <FORM>Wa tawa namun en, ni te sa ti, ni te kere gor ti u wutve nen a le u mataqen; ni ve dōm si Wenagon nen wa – wa Wenagon ve to vata.</FORM>
+        <TRANSL xml:lang="en">Meanwhile, his wife in her village had seen the pig in the grave, yet she thought it was Wenagon himself. She had no idea Wenagon had in fact gone.</TRANSL>
+        <AUDIO start="107.6382" end="119.3413"/>
+    </S>
+    <S id="Num_Wenawon2_14">
+        <FORM>Ni te kere gor ti u wutve en va–van, wutve en me dar, ni ve dōm si Wenagon wa, ni tov le qut wutve en, sun̄un ale get. Tov vatoko gor wev.</FORM>
+        <TRANSL xml:lang="en">She kept an eye on the pig for a while, and once the body was decomposed, she took the pig’s skull – convinced it was Wenagon’s head. She put it in a basket, which she hung over her fireplace.</TRANSL>
+        <AUDIO start="119.3413" end="132.4079"/>
+    </S>
+    <S id="Num_Wenawon2_15">
+        <FORM>Vatoko gor wev tan̄ nen wa nir tov sasa vavan, din̄ ave u wasin̄in nen tabe nir ve-da telvun̄ aben nen, nir tov lak.</FORM>
+        <TRANSL xml:lang="en">After she hung the basket like that, a few days went by, until that moment when people organised that celebration in the village, with dances.</TRANSL>
+        <AUDIO start="132.2943" end="145.4745"/>
+    </S>
+    <S id="Num_Wenawon2_16">
+        <FORM>Nir te lak ti a le qōn̄. Nir te lak ti a le qōn̄ ma tov nir te lak ti u mavto.</FORM>
+        <TRANSL xml:lang="en">There were going to be dances at night – of those merry dances we called mavto, which villagers dance all night long.</TRANSL>
+        <AUDIO start="145.3609" end="154.3370"/>
+    </S>
+    <S id="Num_Wenawon2_17">
+        <FORM>Ma nir te lak ti, tawa namun en tov lak ma. Lak ran ma tan̄ nen, ma Wenagon mēlē tov lak ma.</FORM>
+        <TRANSL xml:lang="en">As the dance fired up, the man’s wife joined in. She joined in the dance, and so did Wenagon!</TRANSL>
+        <AUDIO start="153.9961" end="161.9497"/>
+    </S>
+    <S id="Num_Wenawon2_18">
+        <FORM>Lak ma tan̄ nen, taem ruru ve rivrivtē ruru, Wenagon wa: “Qut wuruk ve sun̄un ale get!”</FORM>
+        <TRANSL xml:lang="en">In the middle of the dance, when they stepped closer to each other, Wenagon exclaimed “It’s just a sow’s head in your basket!”</TRANSL>
+        <AUDIO start="161.9497" end="170.3578"/>
+    </S>
+    <S id="Num_Wenawon2_19">
+        <FORM>Ma nir tov lak mēlē.</FORM>
+        <TRANSL xml:lang="en">And on they danced.</TRANSL>
+        <AUDIO start="170.1305" end="172.1757"/>
+    </S>
+    <S id="Num_Wenawon2_20">
+        <FORM>Lak mēlē va–van ma ni tov vit mēlē min tawa namun wa “Qut wuruk ve sun̄un ale get!”</FORM>
+        <TRANSL xml:lang="en">They danced on and on, until he exclaimed again to his wife “It’s just a sow’s head in your basket!”</TRANSL>
+        <AUDIO start="171.9485" end="177.4024"/>
+    </S>
+    <S id="Num_Wenawon2_21">
+        <FORM>Tawa namun nen te ron̄ote gor ti.</FORM>
+        <TRANSL xml:lang="en">The woman suddenly strained her ears.</TRANSL>
+        <AUDIO start="177.2887" end="180.1293"/>
+    </S>
+    <S id="Num_Wenawon2_22">
+        <FORM>Ni te ron̄ote gor ti, ale namun dōdōmi, ni wa “Sē wun te luwluw ti min na tan̄ ne? Mēstēm Wenagon wun e!”</FORM>
+        <TRANSL xml:lang="en">She heard his call, and thought “Who could be talking to me like that? It sounds like my Wenagon!?”</TRANSL>
+        <AUDIO start="180.4702" end="188.5373"/>
+    </S>
+    <S id="Num_Wenawon2_23">
+        <FORM>Nir tov lak mēlē ma tan̄ ne, taem ni me vit ran mēlē si “Qut wuruk ve sun̄un ale get!”,</FORM>
+        <TRANSL xml:lang="en">The dance started again and went on, until she heard once again “It’s just a sow’s head in your basket!”</TRANSL>
+        <AUDIO start="188.5373" end="195.6956"/>
+    </S>
+    <S id="Num_Wenawon2_24">
+        <FORM>ma tawa namun tov waw ran ameken; ma ni tov vit min ni wa “Wenagon, nik te karan̄ke ti!”</FORM>
+        <TRANSL xml:lang="en">This time, the woman called back in reply; and then she added “Wenagon! You really are a crazy man!”</TRANSL>
+        <AUDIO start="195.5819" end="202.3993"/>
+    </S>
+    <S id="Num_Wenawon2_25">
+        <FORM>Ma kekeom en me bas aben ne wa.</FORM>
+        <TRANSL xml:lang="en">And this is how my story ends.</TRANSL>
+        <AUDIO start="202.3993" end="206.9442"/>
+    </S>
+</TEXT>

@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Texts — {{project.titleSuffix}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+
+/* ── Tab switcher ── */
+.texts-tabs {
+  display: flex; align-items: stretch;
+  background: var(--nav-bg);
+  border-bottom: 2px solid #3a2010;
+  padding: 0 2rem;
+  gap: 0;
+}
+.tab-btn {
+  font-family: 'Crimson Pro', serif; font-size: 1rem; font-weight: 500;
+  color: rgba(240,223,192,0.5);
+  background: none; border: none; border-bottom: 3px solid transparent;
+  padding: 0.85rem 1.6rem 0.7rem; cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -2px; white-space: nowrap;
+}
+.tab-btn:hover { color: #c9a458; }
+.tab-btn.active { color: #f0dfc0; border-bottom-color: var(--gold); }
+
+/* Tab panels */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Recordings panel ── */
+.texts-main {
+  padding: 2rem 4rem 5rem;
+  max-width: 1100px; margin: 0 auto;
+}
+.texts-hdr {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.5rem;
+}
+.texts-hdr h2 {
+  font-family: 'EB Garamond', serif; font-size: 1.6rem; font-weight: 500;
+  color: var(--ink); margin: 0;
+}
+.filter-row {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.filter-row label {
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-light);
+}
+.filter-row select {
+  font-family: 'Crimson Pro', serif; font-size: 0.95rem;
+  padding: 3px 8px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; color: var(--ink); outline: none;
+  cursor: pointer;
+}
+.filter-row select:focus { border-color: var(--gold); }
+
+.stats-bar {
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem;
+  color: var(--ink-light); margin-bottom: 1.2rem;
+}
+.texts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+.text-card {
+  background: white; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1rem 1.2rem 1.1rem;
+  border-left: 4px solid;
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+.text-card:hover { box-shadow: 0 4px 14px rgba(80,40,0,.09); transform: translateY(-1px); }
+.text-card .tc-lang {
+  font-family: 'Crimson Pro', serif; font-variant: small-caps;
+  font-size: 0.72rem; letter-spacing: 0.1em; font-weight: 700;
+  margin-bottom: 0.3rem; display: block;
+}
+.text-card .tc-title {
+  font-family: 'EB Garamond', serif; font-size: 1.12rem; font-weight: 500;
+  color: var(--ink); margin-bottom: 0.4rem; display: block;
+}
+.text-card .tc-meta {
+  font-family: 'Crimson Pro', serif; font-size: 0.8rem;
+  color: var(--ink-light); margin-bottom: 0.7rem; display: flex; gap: 0.8rem;
+}
+.text-card .tc-link {
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem;
+  font-weight: 600; letter-spacing: 0.05em; text-decoration: none;
+  color: var(--gold); border-bottom: 1px solid var(--border-lt);
+  transition: color 0.12s, border-color 0.12s;
+}
+.text-card .tc-link:hover { color: #b84c10; border-color: #b84c10; }
+.no-results {
+  font-family: 'Crimson Pro', serif; font-style: italic;
+  color: var(--ink-light); font-size: 1rem; padding: 1rem 0;
+}
+
+/* ── Fieldnotes panel ── */
+.fn-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: calc(100vh - 52px - 46px); /* minus nav and tabs */
+}
+
+.fn-sidebar {
+  background: #faf6ef; border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 0.8rem 0 2rem;
+}
+.fn-sidebar-head {
+  padding: 0.5rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;
+}
+.fn-sidebar-label {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.67rem; letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--ink-light);
+}
+.fn-group-list { list-style: none; padding: 0; margin: 0; }
+.fn-group-item a {
+  display: block; font-family: 'Crimson Pro', serif; font-size: 0.95rem;
+  color: var(--ink-mid); text-decoration: none;
+  padding: 5px 1rem 5px 1.1rem;
+  border-left: 3px solid transparent;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  line-height: 1.4;
+}
+.fn-group-item a:hover  { background: #ede4d4; color: var(--ink); }
+.fn-group-item a.active {
+  background: #e8d8b8; color: var(--ink);
+  border-left-color: var(--gold); font-weight: 500;
+}
+.fn-group-item .fn-ref {
+  font-family: 'Source Code Pro', monospace; font-size: 0.72rem;
+  color: var(--ink-light); display: block; margin-bottom: 1px;
+}
+
+.fn-main {
+  overflow-y: auto; padding: 1.5rem 2.5rem 3rem;
+  background: var(--bg);
+}
+.fn-title {
+  font-family: 'EB Garamond', serif; font-size: 1.6rem; font-weight: 500;
+  color: var(--ink); margin-bottom: 0.3rem;
+}
+.fn-title-sub {
+  font-family: 'Crimson Pro', serif; font-size: 0.78rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-light); margin-bottom: 1.2rem; display: block;
+}
+.fn-loading {
+  font-family: 'Crimson Pro', serif; font-style: italic;
+  color: var(--ink-light); padding: 2rem 0;
+}
+
+/* Comparative table */
+.fn-table-wrap { overflow-x: auto; }
+.fn-table {
+  border-collapse: collapse; width: 100%;
+  font-family: 'Crimson Pro', serif;
+}
+.fn-table thead th {
+  font-variant: small-caps; font-size: 0.78rem; font-weight: 700;
+  letter-spacing: 0.08em; text-align: left;
+  padding: 5px 12px 6px 0; border-bottom: 2px solid var(--border);
+  white-space: nowrap; position: sticky; top: 0; background: var(--bg);
+  z-index: 2;
+}
+.fn-table thead th.th-ref    { color: var(--ink-light); width: 90px; }
+.fn-table thead th.th-prompt { color: var(--ink-light); min-width: 160px; }
+.fn-table tbody tr { border-bottom: 1px solid var(--border-lt); }
+.fn-table tbody tr:hover { background: #faf6ef; }
+.fn-table td {
+  padding: 5px 14px 5px 0; vertical-align: top;
+  font-size: 1rem; line-height: 1.55;
+}
+.fn-table td.td-ref {
+  font-family: 'Source Code Pro', monospace; font-size: 0.68rem;
+  color: var(--ink-light); white-space: nowrap;
+  padding-top: 7px;
+}
+.fn-table td.td-prompt {
+  font-style: italic; color: var(--ink-light); font-size: 0.93rem;
+  max-width: 200px;
+}
+.fn-table td.td-lang { font-family: 'EB Garamond', serif; font-size: 1.08rem; }
+.fn-table td.td-empty { color: #ccc; font-size: 0.85rem; }
+
+/* Edit bar above table */
+.fn-edit-bar {
+  display: flex; align-items: center;
+  justify-content: flex-end; margin-bottom: 0.6rem;
+}
+.rec-edit-bar {
+  display: flex; align-items: center;
+  justify-content: flex-end; margin-bottom: 0.5rem;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ── Login modal ── -->
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- ── Upload modal: fieldnotes ── -->
+<div class="dbt-modal-backdrop" id="upload-fn-modal">
+  <div class="dbt-modal">
+    <h3>Upload Fieldnotes XML</h3>
+    <p class="modal-desc">Replace the current fieldnotes XML (Toolbox database format). The page reloads after upload.</p>
+    <input type="file" id="fn-file" accept=".xml">
+    <div class="dbt-modal-msg" id="upload-fn-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="upload-fn-cancel">Cancel</button>
+      <button class="modal-btn primary" id="upload-fn-submit">Upload</button>
+    </div>
+  </div>
+</div>
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="grammar.html">Grammar</a></li>
+    <li><a href="texts.html" class="active">Texts</a></li>
+    <li><a href="dictionary.html">Dictionary</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.texts}}</div>
+</nav>
+
+<!-- ── Tab switcher ── -->
+<div class="texts-tabs">
+  <button class="tab-btn active" data-tab="recordings">🎧 Texts from recordings</button>
+  <button class="tab-btn" data-tab="fieldnotes">📋 Texts from fieldnotes</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 1 — Texts from recordings
+══════════════════════════════════════════════════════════ -->
+<div id="panel-recordings" class="tab-panel active">
+  <div class="texts-main">
+    <div class="texts-hdr">
+      <h2>Texts from recordings</h2>
+    </div>
+
+    <div class="rec-edit-bar" style="gap:0.5rem;">
+      <button class="edit-tab" id="tx-upload-tab" title="Upload transcription XML">📜 Upload transcription</button>
+    </div>
+
+    <div class="filter-row filter-row-lang">
+      <label>Language</label>
+      <select id="filter-lang">
+        <option value="">All languages</option>
+      </select>
+    </div>
+
+    <div id="stats-bar" class="stats-bar"></div>
+    <div class="texts-grid" id="texts-grid">
+      <p class="no-results" style="font-style:italic;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 2 — Texts from fieldnotes
+══════════════════════════════════════════════════════════ -->
+<div id="panel-fieldnotes" class="tab-panel">
+  <div class="texts-main">
+    <div class="texts-hdr">
+      <h2>Texts from fieldnotes</h2>
+    </div>
+    <div class="rec-edit-bar">
+      <button class="edit-tab" id="fn-edit-tab" title="Upload new fieldnotes XML">✏ Edit</button>
+    </div>
+    <div id="fn-stats" class="stats-bar"></div>
+    <div class="texts-grid" id="fn-grid">
+      <p class="no-results" style="font-style:italic;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Upload transcription modal ── -->
+<div class="dbt-modal-backdrop" id="upload-tx-modal">
+  <div class="dbt-modal">
+    <h3>Upload transcription XML</h3>
+    <p class="modal-desc">Select a Pangloss/COCOON XML transcription file. The title and language are
+    read from the XML automatically — the text will appear immediately in the recordings list.</p>
+    <input type="file" id="tx-file" accept=".xml" multiple>
+    <div class="dbt-modal-msg" id="upload-tx-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="upload-tx-cancel">Cancel</button>
+      <button class="modal-btn primary" id="upload-tx-submit">Upload</button>
+    </div>
+  </div>
+
+<script src="auth.js"></script>
+<script>
+'use strict';
+
+// The language colours come from the Settings (served by /colors.js, loaded first); these are the defaults
+const LANG_COLORS = DBT.colorByName;
+// the language filter lists the project's languages
+document.getElementById('filter-lang').insertAdjacentHTML('beforeend', DBT.names.map(n => `<option>${n}</option>`).join(''));
+
+// Extract oai_secondary from a Pangloss URL
+function getTextKey(url) {
+  const m = (url || '').match(/oai_secondary=([^&]+)/);
+  return m ? m[1] : null;
+}
+
+// Which texts have transcriptions: oai_secondary → XML filename
+let txIndex = {};
+async function loadTxIndex() {
+  try {
+    const r = await fetch('/api/transcriptions/index');
+    txIndex = await r.json();
+  } catch(e) { txIndex = {}; }
+}
+
+// LANG_CODES is texts.html-specific: pairs code with language name
+const LANG_CODES = DBT.langs.map(l => ({code: l.code, lang: l.name}));
+
+// ── Tabs ──────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p =>
+      p.classList.toggle('active', p.id === 'panel-' + tab)
+    );
+    if (tab === 'fieldnotes' && !fnLoaded) renderFieldnotesCards();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  RECORDINGS TAB
+// ══════════════════════════════════════════════════════════════
+
+// Map ISO 639-3 / Pangloss codes (the project's language aliases) → language names
+const LANG_FROM_CODE = DBT.nameFromFileCode;
+function langFromCode(code) {
+  return LANG_FROM_CODE[code] || code;
+}
+
+async function renderRecordings() {
+  const langFilter = document.getElementById('filter-lang').value;
+  const grid = document.getElementById('texts-grid');
+  const statsBar = document.getElementById('stats-bar');
+  grid.innerHTML = '<p class="no-results" style="font-style:italic;">Loading…</p>';
+  try {
+    const resp = await fetch('/api/transcriptions/list');
+    const data = await resp.json();
+    let items = data.transcriptions || [];
+    if (langFilter) {
+      items = items.filter(tx => langFromCode(tx.lang) === langFilter);
+    }
+    statsBar.textContent = `${items.length} text${items.length !== 1 ? 's' : ''}`;
+    if (!items.length) {
+      grid.innerHTML = langFilter
+        ? '<p class="no-results">No transcriptions for this language yet.</p>'
+        : '<p class="no-results">No transcriptions uploaded yet.<br>Log in as author and use the Upload button to add texts.</p>';
+      return;
+    }
+    const color = c => LANG_COLORS[langFromCode(c)] || '#888';
+    grid.innerHTML = items.map(tx => {
+      const langName = langFromCode(tx.lang);
+      const col = color(tx.lang);
+      const txUrl = `transcription.html?key=${encodeURIComponent(tx.filename)}&title=${encodeURIComponent(tx.title)}&lang=${encodeURIComponent(tx.lang)}`;
+      return `<div class="text-card" style="border-left-color:${col};">
+        <span class="tc-lang" style="color:${col};">${langName}</span>
+        <span class="tc-title">${tx.title}</span>
+        <div class="tc-meta">
+          <span>${tx.n_sentences} phrases</span>
+          ${(DBT.project.recordings || {}).year ? `<span>${DBT.project.recordings.year}</span>` : ''}
+          ${(DBT.project.recordings || {}).author ? `<span>${DBT.project.recordings.author}</span>` : ''}
+        </div>
+        <a class="tc-link" href="${txUrl}">📜 View transcription →</a>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = `<p class="no-results" style="color:#922810;">Error loading transcriptions: ${e.message}</p>`;
+  }
+}
+
+document.getElementById('filter-lang').addEventListener('change', renderRecordings);
+
+// ══════════════════════════════════════════════════════════════
+//  FIELDNOTES TAB
+// ══════════════════════════════════════════════════════════════
+// ── Fieldnotes tab: card grid ────────────────────────────────
+let fnLoaded = false;
+
+async function renderFieldnotesCards() {
+  fnLoaded = true;
+  const grid  = document.getElementById('fn-grid');
+  const stats = document.getElementById('fn-stats');
+  try {
+    const [fnResp, ppResp] = await Promise.all([fetch('/api/fieldnotes/groups'), fetch('/api/papers/groups')]);
+    const groups = (await fnResp.json()).groups || [];
+    const papers = ppResp.ok ? ((await ppResp.json()).groups || []) : [];
+
+    // "Examples from papers": published examples, opened in the same viewer as the fieldwork texts
+    const paperCards = papers.map(g => {
+      const url = `transcription.html?papers=1&index=${g.index}&title=${encodeURIComponent(g.title)}`;
+      return `<div class="text-card" style="border-left-color:#2a4a6a;">
+        <span class="tc-lang" style="color:#2a4a6a;">Published examples</span>
+        <span class="tc-title">${g.title}</span>
+        <div class="tc-meta"><span>${g.count} example${g.count !== 1 ? 's' : ''}</span></div>
+        <a class="tc-link" href="${url}">📜 View transcription →</a>
+      </div>`;
+    });
+    const fnCards = groups.map(g => {
+      const txUrl = `transcription.html?fieldnotes=1&index=${g.index}&title=${encodeURIComponent(g.title)}`;
+      return `<div class="text-card" style="border-left-color:var(--gold);">
+        <span class="tc-lang" style="color:var(--gold);">All languages</span>
+        <span class="tc-title">${g.title}</span>
+        <a class="tc-link" href="${txUrl}">📜 View transcription →</a>
+      </div>`;
+    });
+
+    stats.textContent = `${groups.length} topic${groups.length !== 1 ? 's' : ''}` +
+                        (papers.length ? ' · plus examples from papers' : '');
+    if (!fnCards.length && !paperCards.length) {
+      grid.innerHTML = '<p class="no-results">No fieldnotes XML loaded. Log in and use ✏ Edit to upload one.</p>';
+      return;
+    }
+    grid.innerHTML = paperCards.concat(fnCards).join('');
+  } catch(e) {
+    grid.innerHTML = `<p class="no-results" style="color:#922810;">Error: ${e.message}</p>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  UPLOAD HANDLERS// ══════════════════════════════════════════════════════════════
+//  UPLOAD HANDLERS
+// ══════════════════════════════════════════════════════════════
+function bindUploadModal(editTabId, modalId, fileInputId, msgId, cancelId, submitId, endpoint, reload) {
+  const editTab = document.getElementById(editTabId);
+  const modal   = document.getElementById(modalId);
+  const msg     = document.getElementById(msgId);
+
+  if (editTab) editTab.addEventListener('click', () => {
+    msg.textContent = ''; msg.className = 'dbt-modal-msg';
+    modal.classList.add('visible');
+  });
+  document.getElementById(cancelId).addEventListener('click', () => modal.classList.remove('visible'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
+  document.getElementById(submitId).addEventListener('click', async () => {
+    const f = document.getElementById(fileInputId).files[0];
+    if (!f) { msg.textContent = 'Please choose a file.'; msg.className='dbt-modal-msg error'; return; }
+    const form = new FormData(); form.append('file', f);
+    try {
+      const r = await fetch(endpoint, { method:'POST', body:form });
+      const d = await r.json();
+      if (d.ok) {
+        msg.textContent = 'Upload successful — reloading…';
+        msg.className = 'dbt-modal-msg success';
+        setTimeout(() => { modal.classList.remove('visible'); if (reload) location.reload(); }, 900);
+      } else {
+        msg.textContent = d.error || 'Upload failed.';
+        msg.className = 'dbt-modal-msg error';
+      }
+    } catch(e) {
+      msg.textContent = 'Network error.'; msg.className = 'dbt-modal-msg error';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════
+bindLoginModal();
+checkAuth();
+
+renderRecordings();
+
+
+// ── Upload transcription XML ──────────────────────────────────
+const txUploadTab = document.getElementById('tx-upload-tab');
+const txModal     = document.getElementById('upload-tx-modal');
+const txMsg       = document.getElementById('upload-tx-msg');
+const txSelect    = document.getElementById('tx-text-select');
+
+if (txUploadTab) txUploadTab.addEventListener('click', () => {
+  txMsg.textContent = ''; txMsg.className = 'dbt-modal-msg';
+  txModal.classList.add('visible');
+});
+document.getElementById('upload-tx-cancel').addEventListener('click', () =>
+  txModal.classList.remove('visible')
+);
+txModal.addEventListener('click', e => {
+  if (e.target === txModal) txModal.classList.remove('visible');
+});
+document.getElementById('upload-tx-submit').addEventListener('click', async () => {
+  const files = document.getElementById('tx-file').files;
+  if (!files.length) { txMsg.textContent = 'Please choose at least one file.'; txMsg.className='dbt-modal-msg error'; return; }
+  txMsg.textContent = `Uploading ${files.length} file(s)…`;
+  txMsg.className = 'dbt-modal-msg';
+  let errors = [];
+  for (const file of files) {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const r = await fetch('/api/upload/transcription', { method:'POST', body:form });
+      const d = await r.json();
+      if (!d.ok) errors.push(`${file.name}: ${d.error || 'failed'}`);
+    } catch(e) {
+      errors.push(`${file.name}: network error`);
+    }
+  }
+  if (errors.length) {
+    txMsg.textContent = errors.join(' · ');
+    txMsg.className = 'dbt-modal-msg error';
+  } else {
+    txMsg.textContent = `${files.length} file(s) uploaded — reloading texts…`;
+    txMsg.className = 'dbt-modal-msg success';
+    setTimeout(() => { txModal.classList.remove('visible'); renderRecordings(); }, 800);
+  }
+});
+bindUploadModal('fn-edit-tab','upload-fn-modal','fn-file','upload-fn-msg',
+  'upload-fn-cancel','upload-fn-submit','/api/upload/fieldnotes', true);
+</script>
+</div>
+</body>
+</html>

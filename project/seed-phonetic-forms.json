@@ -1,0 +1,56 @@
+{
+ "3pl": {
+  "num": "nir",
+  "drg": "nɪr",
+  "kro": "nɪr",
+  "olr": "nɪj",
+  "lkn": "ɣɪː"
+ },
+ "nondum1": {
+  "num": "βitis",
+  "drg": "sɔwsɛ",
+  "kro": "tɪ",
+  "olr": "tɪ",
+  "lkn": "atɪ"
+ },
+ "know": {
+  "num": "ɣil",
+  "drg": "βrɪɣɪl",
+  "kro": "rɔŋ",
+  "olr": "rɔŋ",
+  "lkn": "rɔŋ"
+ },
+ "properly": {
+  "num": "liŋliŋi",
+  "drg": "taβul",
+  "kro": "taβul",
+  "olr": "βɪlɪː",
+  "lkn": "kɛrɛ"
+ },
+ "nondum2": {
+  "num": "mi",
+  "drg": "tɛ",
+  "kro": "wʊsmɛlɛ",
+  "olr": "wʊsmɛlɛ",
+  "lkn": "aβʊh.malɛ"
+ },
+ "art": {
+  "num": "u",
+  "drg": "na",
+  "kro": "ɔ"
+ },
+ "speech": {
+  "num": "luwluw",
+  "drg": "lŋa",
+  "kro": "βalβalaw",
+  "olr": "ususraː",
+  "lkn": "ɛlŋa"
+ },
+ "poss": {
+  "num": "namɣin",
+  "drg": "-ɣɪn",
+  "kro": "namɪɣɪn",
+  "olr": "mʊt͡ʃ",
+  "lkn": "-nɣɪt͡ʃ"
+ }
+}

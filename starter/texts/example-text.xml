@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TEXT xml:lang="ex" id="example-text">
+<HEADER>
+<TITLE xml:lang="en">A first example text</TITLE>
+</HEADER>
+<S id="ex-s1">
+<FORM>Tamo neme.</FORM>
+<TRANSL xml:lang="en">The house is good.</TRANSL>
+</S>
+<S id="ex-s2">
+<FORM>Sira neme.</FORM>
+<TRANSL xml:lang="en">The water is good.</TRANSL>
+</S>
+<S id="ex-s3">
+<FORM>Kolu tamo.</FORM>
+<TRANSL xml:lang="en">(He) goes to the house.</TRANSL>
+</S>
+<S id="ex-s4">
+<FORM>Sira kolu.</FORM>
+<TRANSL xml:lang="en">The water flows.</TRANSL>
+</S>
+</TEXT>

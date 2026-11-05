@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{project.homeTitle}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+
+.hero {
+  display: grid;
+  grid-template-columns: 1fr 440px;
+  gap: 3.5rem;
+  align-items: center;
+  padding: 4rem 5vw 4rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.hero-text h1 {
+  font-family: 'EB Garamond', serif;
+  font-size: 3rem;
+  font-weight: 500;
+  line-height: 1.12;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+.hero-text .byline {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 1.5rem;
+}
+.hero-text p {
+  font-family: 'Crimson Pro', serif;
+  font-size: 1.08rem;
+  line-height: 1.82;
+  color: var(--ink-mid);
+  max-width: 54ch;
+}
+.hero-triangle { display: flex; justify-content: center; align-items: center; }
+
+.tri-node { cursor: pointer; transition: opacity 0.2s; }
+.tri-node:hover { opacity: 0.88; }
+
+.cards-strip {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 5vw 3rem;
+}
+.dbt-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.6rem 1.8rem;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.dbt-card:hover {
+  box-shadow: 0 6px 20px rgba(80,40,0,.1);
+  transform: translateY(-2px);
+}
+.dbt-card .card-icon { font-size: 1.8rem; margin-bottom: 0.7rem; display: block; }
+.dbt-card h3 {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+.dbt-card p {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.97rem;
+  line-height: 1.7;
+  color: var(--ink-mid);
+  margin-bottom: 1.2rem;
+}
+.btn-link {
+  display: inline-block;
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  text-decoration: none;
+  border-bottom: 1.5px solid var(--gold-lt);
+  padding-bottom: 1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btn-link:hover { color: #b84c10; border-color: #b84c10; }
+
+.lang-strip {
+  background: var(--nav-bg);
+  display: flex;
+  flex-wrap: wrap;                 /* many languages: the strip wraps instead of overflowing */
+  border-top: 1px solid #3a2010;
+}
+.lang-cell {
+  flex: 1;
+  min-width: 6.5rem;               /* narrower than this, a cell goes to the next line */
+  padding: 1.3rem 1rem;
+  text-align: center;
+  border-right: 1px solid #3a2010;
+  transition: background 0.2s;
+}
+.lang-cell:last-child { border-right: none; }
+.lang-cell:hover { background: #281408; }
+.lang-cell .lname {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+  display: block;
+  color: #f0dfc0;
+}
+.lang-cell .ldot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-bottom: 6px;
+}
+
+.map-section {
+  background: #1c0f06;
+  border-top: 2px solid #3a2010;
+  padding: 3.5rem 5vw 3rem;
+}
+.map-inner {
+  display: grid;
+  grid-template-columns: 1fr 480px;
+  gap: 3.5rem;
+  align-items: start;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.map-title {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.9rem;
+  font-weight: 500;
+  color: #f0dfc0;
+  margin-bottom: 1rem;
+  line-height: 1.15;
+}
+.map-desc {
+  font-family: 'Crimson Pro', serif;
+  font-size: 1.05rem;
+  line-height: 1.82;
+  color: #c0a880;
+  margin-bottom: 1rem;
+  max-width: 58ch;
+}
+.map-desc strong { color: #e8d0a0; font-weight: 600; }
+.map-credit {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.78rem;
+  color: #6a5540;
+  letter-spacing: 0.04em;
+  margin-top: 1.5rem;
+}
+.map-img-wrap {
+  border: 1.5px solid #3a2010;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+.map-img { display: block; width: 100%; height: auto; }
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 0 5vw; }
+</style>
+</head>
+<body id="top">
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html" class="active">Home</a></li>
+    <li><a href="grammar.html">Grammar</a></li>
+    <li><a href="texts.html">Texts</a></li>
+    <li><a href="dictionary.html">Dictionary</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.home}}</div>
+</nav>
+
+<section class="hero">
+  <div class="hero-text">
+    <h1>Digital Boasian<br>Trilogy</h1>
+    <div class="byline">{{block:home.byline}}</div>
+    <p>Named after the American anthropologist <strong>Franz Boas</strong>, the <em>Boasian Trilogy</em>
+    holds that a comprehensive language documentation should comprise three main components:
+    a <strong>grammar</strong>, a <strong>dictionary</strong>, and a <strong>corpus of texts</strong>.
+    Rather than producing three separate outputs, this project reconceives the trilogy as an
+    interactive, persistently interconnected resource — one in which every grammatical claim is
+    traceable to its textual evidence, every lexical item is linked to its morphosyntactic
+    properties, and every archived text is navigable through the grammatical and lexical
+    apparatus that describes it.</p>
+    {{block:home.intro}}
+  </div>
+
+  <div class="hero-triangle">
+    <svg viewBox="0 0 400 360" width="400" xmlns="http://www.w3.org/2000/svg"
+         role="img" aria-label="The Boasian Trilogy triangle linking Grammar, Dictionary, and Texts">
+      <defs>
+        <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="#c9a458" opacity="0.7"/>
+        </marker>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+          <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <line x1="200" y1="68" x2="68" y2="290" stroke="#c9a458" stroke-width="1.5" opacity="0.5"
+            marker-end="url(#arr)" marker-start="url(#arr)"/>
+      <line x1="200" y1="68" x2="332" y2="290" stroke="#c9a458" stroke-width="1.5" opacity="0.5"
+            marker-end="url(#arr)" marker-start="url(#arr)"/>
+      <line x1="82"  y1="302" x2="318" y2="302" stroke="#c9a458" stroke-width="1.5" opacity="0.5"
+            marker-end="url(#arr)" marker-start="url(#arr)"/>
+
+      <a href="grammar.html" class="tri-node">
+        <circle cx="200" cy="58" r="56" fill="#1c0f06" filter="url(#glow)"/>
+        <circle cx="200" cy="58" r="56" fill="none" stroke="#8a5f18" stroke-width="1.5"/>
+        <text x="200" y="58" text-anchor="middle" dominant-baseline="central"
+              font-family="'EB Garamond',serif" font-size="19" font-weight="500" fill="#f0dfc0">Grammar</text>
+      </a>
+
+      <a href="dictionary.html" class="tri-node">
+        <circle cx="60" cy="302" r="56" fill="#1a0828" filter="url(#glow)"/>
+        <circle cx="60" cy="302" r="56" fill="none" stroke="#8a5f18" stroke-width="1.5"/>
+        <text x="60" y="302" text-anchor="middle" dominant-baseline="central"
+              font-family="'EB Garamond',serif" font-size="15" font-weight="500" fill="#f0dfc0">Dictionary</text>
+      </a>
+
+      <a href="texts.html" class="tri-node">
+        <circle cx="340" cy="302" r="56" fill="#3a0808" filter="url(#glow)"/>
+        <circle cx="340" cy="302" r="56" fill="none" stroke="#8a5f18" stroke-width="1.5"/>
+        <text x="340" y="302" text-anchor="middle" dominant-baseline="central"
+              font-family="'EB Garamond',serif" font-size="19" font-weight="500" fill="#f0dfc0">Texts</text>
+      </a>
+
+      <text x="200" y="192" text-anchor="middle" dominant-baseline="central"
+            font-family="'EB Garamond',serif" font-size="11" fill="#c9a458" font-style="italic" opacity="0.6">
+        Digital Boasian Trilogy
+      </text>
+    </svg>
+  </div>
+</section>
+
+<hr class="divider">
+
+<section class="cards-strip" style="margin-top:2.5rem;">
+  <div class="dbt-card" style="border-top:3px solid #1c0f06;">
+    <h3>Comparative Grammar</h3>
+    <p>{{block:home.card.grammar}}</p>
+    <a class="btn-link" href="grammar.html">Open Grammar →</a>
+  </div>
+  <div class="dbt-card" style="border-top:3px solid #3a0808;">
+    <h3>Archived Texts</h3>
+    <p>{{block:home.card.texts}}</p>
+    <a class="btn-link" href="texts.html">Open Texts →</a>
+  </div>
+  <div class="dbt-card" style="border-top:3px solid #1a0828;">
+    <h3>Dictionary</h3>
+    <p>{{block:home.card.dictionary}}</p>
+    <a class="btn-link" href="dictionary.html">Open Dictionary →</a>
+  </div>
+</section>
+
+<div class="lang-strip">
+{{block:home.langstrip}}
+</div>
+
+{{block:home.map}}
+
+{{block:footer}}
+<!-- ── Login modal ── -->
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+<script src="auth.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    bindLoginModal();
+    checkAuth();
+  });
+</script>
+</body>
+</html>

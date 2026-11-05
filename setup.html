@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up your Digital Boasian Trilogy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=EB+Garamond:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#1c0f06; --ink-light:#6b5640; --paper:#f5f0e6; --card:#faf6ef; --gold:#8a5f18; --border:#d8cbb4; --error:#922810; --ok:#267040; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:'Crimson Pro',serif; font-size:1.08rem; line-height:1.55; }
+  header { background:#1c0f06; color:#f0dfc0; padding:1rem 2rem; font-family:'EB Garamond',serif; font-size:1.2rem; }
+  main { max-width:760px; margin:2rem auto 4rem; padding:0 1.2rem; }
+  h1 { font-family:'EB Garamond',serif; font-weight:500; font-size:2rem; margin:0 0 0.3rem; }
+  .lead { color:var(--ink-light); margin:0 0 1.6rem; }
+  fieldset { border:1px solid var(--border); background:var(--card); border-radius:5px; margin:0 0 1.2rem; padding:1rem 1.2rem 1.2rem; }
+  legend { font-family:'EB Garamond',serif; font-size:1.15rem; padding:0 0.5rem; }
+  label { display:block; font-size:0.9rem; color:var(--ink-light); margin-top:0.7rem; }
+  input[type=text], input[type=password] { width:100%; font:inherit; padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:3px; background:#fff; }
+  input[type=color] { width:44px; height:34px; padding:0; border:1px solid var(--border); border-radius:3px; background:none; }
+  .choice { display:flex; gap:0.6rem; align-items:flex-start; margin:0.5rem 0; color:var(--ink); font-size:1rem; }
+  .choice small { display:block; color:var(--ink-light); font-size:0.88rem; }
+  table { width:100%; border-collapse:collapse; margin-top:0.4rem; }
+  th { text-align:left; font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-light); padding:0 0.4rem 0.2rem 0; }
+  td { padding:0.15rem 0.4rem 0.15rem 0; }
+  td input[type=text] { padding:0.3rem 0.4rem; }
+  .x { background:none; border:none; color:var(--error); cursor:pointer; font-size:1rem; }
+  button.add { background:#fff; border:1px solid var(--border); border-radius:3px; padding:0.3rem 0.8rem; font:inherit; font-size:0.92rem; cursor:pointer; margin-top:0.5rem; }
+  button.go { background:var(--ink); color:#f0dfc0; border:none; border-radius:4px; padding:0.6rem 1.6rem; font:inherit; font-size:1.05rem; cursor:pointer; }
+  button.go:disabled { opacity:0.5; cursor:default; }
+  .msg { margin:0.8rem 0 0; min-height:1.4rem; font-size:0.98rem; }
+  .msg.error { color:var(--error); } .msg.ok { color:var(--ok); }
+  .hint { font-size:0.88rem; color:var(--ink-light); margin:0.3rem 0 0; }
+  code { background:#efe6d3; padding:0 0.3rem; border-radius:2px; font-size:0.92em; }
+</style>
+</head>
+<body>
+<header>◬ Digital Boasian Trilogy</header>
+<main>
+  <h1>Set up your Digital Boasian Trilogy</h1>
+  <p class="lead">A grammar, a dictionary and a corpus of texts, connected, for your language or group of languages.
+    This takes a minute; everything can be changed later.</p>
+
+  <form id="setup" autocomplete="off">
+    <fieldset>
+      <legend>1 · Your project</legend>
+      <label for="name">Name of the project (shown in the top bar)</label>
+      <input type="text" id="name" value="My DBT" maxlength="80">
+    </fieldset>
+
+    <fieldset>
+      <legend>2 · Your languages</legend>
+      <div class="choice"><input type="radio" name="mode" id="mode-own" value="own" checked>
+        <label for="mode-own" style="margin:0;color:inherit;font-size:inherit;">My own languages
+          <small>You add them here, one line per language. Start with an empty dictionary, grammar and corpus.</small></label></div>
+      <div class="choice"><input type="radio" name="mode" id="mode-starter" value="starter">
+        <label for="mode-starter" style="margin:0;color:inherit;font-size:inherit;">A small example to explore first
+          <small>One invented language, with a few dictionary entries, a short text and a grammar section, so that you can see how the three parts connect. You replace it later.</small></label></div>
+      <div id="langs-box">
+        <table>
+          <thead><tr><th>Name</th><th style="width:6.5rem;">Abbreviation</th><th style="width:6rem;">Code</th><th style="width:3.4rem;">Colour</th><th style="width:1.6rem;"></th></tr></thead>
+          <tbody id="langs"></tbody>
+        </table>
+        <button type="button" class="add" id="add-lang">＋ Add a language</button>
+        <p class="hint">List them in the order you want them shown (for example geographically). The <b>abbreviation</b> labels the lines of
+          interlinear glosses; the <b>code</b> is what the dictionary XML writes (<code>langue="…"</code>): lower case letters and digits.</p>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>3 · The author's password</legend>
+      <label for="pw">Password (at least 8 characters)</label>
+      <input type="password" id="pw" autocomplete="new-password">
+      <label for="pw2">Repeat it</label>
+      <input type="password" id="pw2" autocomplete="new-password">
+      <p class="hint">Only a hash of it is stored on the server (in <code>instance/</code>), never the password itself and never in the code.
+        With it you log in as the author to edit.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>4 · The setup code</legend>
+      <label for="code">The code printed in the server's console when it started</label>
+      <input type="text" id="code" spellcheck="false">
+      <p class="hint">It proves that you are the person running the server: nobody else can set up this site first.</p>
+    </fieldset>
+
+    <button type="submit" class="go" id="go">Create my DBT</button>
+    <p class="msg" id="msg"></p>
+  </form>
+</main>
+<script>
+const PALETTE = ['#2e5c8a', '#c07820', '#922810', '#267040', '#5c2878', '#0e7c86', '#a0407a', '#6b6b1a', '#b04a2a', '#3a5f3a'];
+const rows = [];                                    // {name, abbr, code, color, abbrEdited, codeEdited}
+const $ = id => document.getElementById(id);
+const ascii = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function suggest(row) {
+  if (!row.abbrEdited) row.abbr = row.name.trim().slice(0, 3).replace(/^./, c => c.toUpperCase());
+  if (!row.codeEdited) row.code = ascii(row.name).slice(0, 3) || '';
+}
+function render() {
+  $('langs').innerHTML = rows.map((r, i) => `<tr data-i="${i}">
+    <td><input type="text" data-f="name" value="${esc(r.name)}" placeholder="e.g. Mwotlap"></td>
+    <td><input type="text" data-f="abbr" value="${esc(r.abbr)}" maxlength="8"></td>
+    <td><input type="text" data-f="code" value="${esc(r.code)}" maxlength="12"></td>
+    <td><input type="color" data-f="color" value="${r.color}"></td>
+    <td>${rows.length > 1 ? '<button type="button" class="x" data-del="1" title="Remove">✕</button>' : ''}</td></tr>`).join('');
+}
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+function addRow(name = '') {
+  const r = { name, abbr: '', code: '', color: PALETTE[rows.length % PALETTE.length], abbrEdited: false, codeEdited: false };
+  suggest(r); rows.push(r); render();
+}
+$('langs').addEventListener('input', e => {
+  const tr = e.target.closest('tr'), f = e.target.dataset.f; if (!tr || !f) return;
+  const r = rows[+tr.dataset.i]; r[f] = e.target.value;
+  if (f === 'abbr') r.abbrEdited = true;
+  if (f === 'code') r.codeEdited = true;
+  if (f === 'name') { suggest(r); tr.querySelector('[data-f=abbr]').value = r.abbr; tr.querySelector('[data-f=code]').value = r.code; }
+});
+$('langs').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { rows.splice(+b.closest('tr').dataset.i, 1); render(); } });
+$('add-lang').addEventListener('click', () => addRow());
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => {
+  $('langs-box').style.display = document.querySelector('input[name=mode]:checked').value === 'own' ? '' : 'none';
+}));
+
+function say(text, cls) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (cls || ''); }
+$('setup').addEventListener('submit', async e => {
+  e.preventDefault();
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  if ($('pw').value !== $('pw2').value) return say('The two passwords differ.', 'error');
+  say('Creating your DBT…'); $('go').disabled = true;
+  try {
+    const r = await fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      name: $('name').value.trim(), mode, password: $('pw').value, setupCode: $('code').value.trim(),
+      languages: mode === 'own' ? rows.map(x => ({ name: x.name.trim(), abbr: x.abbr.trim(), code: x.code.trim(), color: x.color })) : [] }) });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    if (d.restart === 'manual') { say('Done. Now restart the server (stop it and start it again), then reload this page.', 'ok'); return; }
+    say('Done. The server is restarting…', 'ok');
+    for (let i = 0; i < 60; i++) {                           // wait for it to come back, then open the site
+      await new Promise(res => setTimeout(res, 1000));
+      try { const s = await fetch('/api/auth/status'); if (s.ok) { location.href = '/'; return; } } catch (err) { /* still restarting */ }
+    }
+    say('The server is taking long to restart. Reload this page in a moment.', 'error');
+  } catch (err) { say(err.message, 'error'); $('go').disabled = false; }
+});
+addRow('');
+</script>
+</body>
+</html>

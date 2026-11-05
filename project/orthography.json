@@ -1,0 +1,522 @@
+{
+ "name": "François (2003-)",
+ "longVowelDoubling": true,
+ "rows": [
+  {
+   "orth": "b",
+   "ipa": "mb",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "d",
+   "ipa": "nd",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "g",
+   "ipa": "ɣ",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "h",
+   "ipa": "h",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "j",
+   "ipa": "t͡ʃ",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "k",
+   "ipa": "k",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "l",
+   "ipa": "l",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "m",
+   "ipa": "m",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "m̄",
+   "ipa": "ŋʷ",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "n",
+   "ipa": "n",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "n̄",
+   "ipa": "ŋ",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "p",
+   "ipa": "p",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "q",
+   "ipa": "k͡pʷ",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "r",
+   "ipa": "r",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "s",
+   "ipa": "s",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "t",
+   "ipa": "t",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "v",
+   "ipa": "β",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "w",
+   "ipa": "w",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "y",
+   "ipa": "j",
+   "type": "consonant",
+   "default": true
+  },
+  {
+   "orth": "a",
+   "ipa": "a",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "e",
+   "ipa": "ɛ",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "i",
+   "ipa": "i",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "o",
+   "ipa": "ɔ",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "u",
+   "ipa": "u",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "ē",
+   "ipa": "ɪ",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "ō",
+   "ipa": "ʊ",
+   "type": "vowel",
+   "default": true
+  },
+  {
+   "orth": "ä",
+   "ipa": "æ",
+   "type": "vowel",
+   "default": true
+  }
+ ],
+ "previousDefaults": [
+  [
+   {
+    "orth": "b",
+    "ipa": "mb",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "d",
+    "ipa": "nd",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "g",
+    "ipa": "ɣ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "h",
+    "ipa": "h",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "j",
+    "ipa": "t͡ʃ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "k",
+    "ipa": "k",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "l",
+    "ipa": "l",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "m",
+    "ipa": "m",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "n",
+    "ipa": "n",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "n̄",
+    "ipa": "ŋ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "p",
+    "ipa": "p",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "r",
+    "ipa": "r",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "s",
+    "ipa": "s",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "t",
+    "ipa": "t",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "v",
+    "ipa": "β",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "w",
+    "ipa": "w",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "y",
+    "ipa": "j",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "a",
+    "ipa": "a",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "e",
+    "ipa": "ɛ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "i",
+    "ipa": "i",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "o",
+    "ipa": "ɔ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "u",
+    "ipa": "u",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "ē",
+    "ipa": "ɪ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "ō",
+    "ipa": "ʊ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "ä",
+    "ipa": "æ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "q",
+    "ipa": "kʷ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "q",
+    "ipa": "k͡pʷ",
+    "type": "consonant",
+    "default": false
+   },
+   {
+    "orth": "m̄",
+    "ipa": "ŋ͡mʷ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "m̄",
+    "ipa": "ŋʷ",
+    "type": "consonant",
+    "default": false
+   }
+  ],
+  [
+   {
+    "orth": "b",
+    "ipa": "mb",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "d",
+    "ipa": "nd",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "g",
+    "ipa": "ɣ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "h",
+    "ipa": "h",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "j",
+    "ipa": "t͡ʃ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "k",
+    "ipa": "k",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "l",
+    "ipa": "l",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "m",
+    "ipa": "m",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "n",
+    "ipa": "n",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "n̄",
+    "ipa": "ŋ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "p",
+    "ipa": "p",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "r",
+    "ipa": "r",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "s",
+    "ipa": "s",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "t",
+    "ipa": "t",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "v",
+    "ipa": "β",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "w",
+    "ipa": "w",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "y",
+    "ipa": "j",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "a",
+    "ipa": "a",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "e",
+    "ipa": "ɛ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "i",
+    "ipa": "i",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "o",
+    "ipa": "ɔ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "u",
+    "ipa": "u",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "ē",
+    "ipa": "ɪ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "ō",
+    "ipa": "ʊ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "ä",
+    "ipa": "æ",
+    "type": "vowel",
+    "default": true
+   },
+   {
+    "orth": "q",
+    "ipa": "k͡pʷ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "q",
+    "ipa": "kʷ",
+    "type": "consonant",
+    "default": false
+   },
+   {
+    "orth": "m̄",
+    "ipa": "ŋ͡mʷ",
+    "type": "consonant",
+    "default": true
+   },
+   {
+    "orth": "m̄",
+    "ipa": "ŋʷ",
+    "type": "consonant",
+    "default": false
+   }
+  ]
+ ]
+}

@@ -1,0 +1,15 @@
+# Runtime data (never committed)
+uploads/
+
+# Secrets: the author password (hashed) and the key that signs login cookies
+instance/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+
+# Test output (rebuilt at every run)
+tests/output/

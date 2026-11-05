@@ -1,0 +1,22 @@
+{
+  "byline": "Gaua Languages &nbsp;·&nbsp; Oceanic · Austronesian &nbsp;·&nbsp; Vanuatu",
+  "intro": [
+    "The {languages.count} languages documented here — {languages.list} — are spoken on Gaua Island (Banks Islands, Vanuatu), distributed from east to west."
+  ],
+  "cards": {
+    "grammar": "A systematic comparative description of grammatical structures across all {languages.count} Gaua languages. Every claim is illustrated with interlinear glossed examples; every morpheme links to the dictionary.",
+    "texts": "A curated index of natural language texts — myths, procedural texts, narratives, and ritual speech — each linking directly to its archived item in the LACITO Pangloss Collection.",
+    "dictionary": "A comparative lexicon giving each form across all {languages.count} languages, with part of speech, semantic gloss, usage notes, and bidirectional links to the glossed grammatical examples."
+  },
+  "map": {
+    "title": "The Island of Gaua",
+    "text": [
+      "Gaua (once charted as Santa Maria) is a volcanic island in the Banks Islands group of northern Vanuatu, in the south-western Pacific. It rises to 797 m at Mt Garet, whose crater contains Lake Letas, the largest lake in Vanuatu. The island's population of roughly 2,500 people is distributed across coastal villages speaking six distinct languages. Five of them — <strong>Nume</strong>, <strong>Dorig</strong>, <strong>Koro</strong>, <strong>Olrat</strong>, and <strong>Lakon</strong> — are documented in this Digital Boasian Trilogy. A sixth language, <strong>Mwerlap</strong>, is spoken in the south-east of the island and is not included here.",
+      "The five DBT languages form a genealogically and geographically coherent dialect chain, distributed from east (Nume, ~700 speakers) to west (Lakon, ~800 speakers), with Olrat occupying a small enclave near Jōlav with only ~3 remaining fluent speakers — making it one of the most critically endangered languages of the Pacific."
+    ],
+    "credit": "Map © Alexandre François",
+    "image": "images/gaua_map.png",
+    "imageAlt": "Map of Gaua Island showing the six language areas",
+    "moreLabel": "More about Gaua →"
+  }
+}

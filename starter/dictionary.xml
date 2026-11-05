@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RessourceLexicale>
+  <InformationsGlobales>
+    <Titre>Example dictionary</Titre>
+    <Auteurs></Auteurs>
+    <Langues>
+      <Langue rôle="source" code="ex">Example</Langue>
+      <Langue rôle="cible" code="eng">English</Langue>
+    </Langues>
+  </InformationsGlobales>
+  <Dictionnaire>
+    <EntréeLexicale identifiant="house">
+      <Lemme>
+        <ReprésentationDeForme langue="ex">tamo</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>n.</ClasseGrammaticale>
+      <DomaineSémantique>Dwelling</DomaineSémantique>
+      <Sens identifiant="houseⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">house, dwelling</Glose>
+        <gloss>house</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">house, dwelling</ReprésentationDeTexte>
+        </Définition>
+        <Notes>
+          <ReprésentationDeTexte langue="eng">An invented word. Replace this example with your own entries: log in as the author and use "Add entry".</ReprésentationDeTexte>
+        </Notes>
+      </Sens>
+    </EntréeLexicale>
+    <EntréeLexicale identifiant="water">
+      <Lemme>
+        <ReprésentationDeForme langue="ex">sira</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>n.</ClasseGrammaticale>
+      <DomaineSémantique>Nature</DomaineSémantique>
+      <Sens identifiant="waterⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">water</Glose>
+        <gloss>water</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">water</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+    <EntréeLexicale identifiant="go">
+      <Lemme>
+        <ReprésentationDeForme langue="ex">kolu</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>v.i.</ClasseGrammaticale>
+      <DomaineSémantique>Motion</DomaineSémantique>
+      <Sens identifiant="goⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">go, move</Glose>
+        <gloss>go</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">go, move</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+    <EntréeLexicale identifiant="good">
+      <Lemme>
+        <ReprésentationDeForme langue="ex">neme</ReprésentationDeForme>
+      </Lemme>
+      <ClasseGrammaticale>adj.</ClasseGrammaticale>
+      <DomaineSémantique>Quality</DomaineSémantique>
+      <Sens identifiant="goodⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">good</Glose>
+        <gloss>good</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">good</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+  </Dictionnaire>
+</RessourceLexicale>

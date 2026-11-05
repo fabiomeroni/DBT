@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Examples from papers
+  Published examples, shown on the Texts page as the text "Examples from papers" and
+  citable from the grammar with {{cite: papers#ID}}.
+
+  Orthography: François (2003-).  One <Example> per example:
+    <Label>        the source, e.g. François (2011a, p. 178)
+    <Tier lang=…>  the sentence in each of the five languages, space-separated tokens
+                   ('—' = no word in that language); every tier has as many tokens as <Glosses>
+    <Glosses>      one gloss per column
+    <Translation>  English translation
+    <TokenLinks>   optional: column index -> dictionary entry id
+
+  Any other XML dropped in transcribed_narratives/ with an <Examples> root is read the same way.
+-->
+<Examples>
+
+  <Example id="negation_example_01" topic="negation">
+    <Label>François (2011a, p. 178)</Label>
+    <Tier lang="num">nir vitis gil lin̄lin̄i mi u luwluw namgin</Tier>
+    <Tier lang="drg">nēr sowse vrēgēl tavul te na ln̄a -gēn</Tier>
+    <Tier lang="kro">nēr tē ron̄ tavul wōs.mele o valvalaw namēgēn</Tier>
+    <Tier lang="olr">nēy tē ron̄ vēlēē wōs.mele — ususraa mōj</Tier>
+    <Tier lang="lkn">gēē atē ron̄ kere avōh.male — eln̄a -ngēj</Tier>
+    <Glosses>3PL NONDUM₁ know properly NONDUM₂ ART speech POSS:1INCL.PL</Glosses>
+    <Translation lang="eng">They don’t know our language very well yet</Translation>
+    <TokenLinks>
+      <Token index="0" dictId="3pl"/>
+      <Token index="1" dictId="nondum1"/>
+      <Token index="2" dictId="know"/>
+      <Token index="3" dictId="properly"/>
+      <Token index="4" dictId="nondum2"/>
+      <Token index="5" dictId="art"/>
+      <Token index="6" dictId="speech"/>
+      <Token index="7" dictId="poss"/>
+    </TokenLinks>
+    <Source>
+      <PanglossURL>https://pangloss.cnrs.fr/corpus/Nume?lang=en</PanglossURL>
+    </Source>
+  </Example>
+
+</Examples>

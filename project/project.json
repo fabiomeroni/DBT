@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "id": "gaua",
+  "name": "DBT Gaua",
+  "titleSuffix": "DBT Gaua Languages",
+  "homeTitle": "Digital Boasian Trilogy — Gaua Languages",
+  "nav": {
+    "home": "Gaua Island · Banks Islands · Vanuatu",
+    "about": "Gaua Island · Banks Islands · Vanuatu",
+    "dictionary": "Comparative Lexicon · {n} Languages",
+    "grammar": "Comparative Grammar · {n} Languages",
+    "texts": "Corpus · Gaua Languages"
+  },
+  "languages": [
+    {
+      "code": "num",
+      "name": "Nume",
+      "abbr": "Num",
+      "color": "#2e5c8a",
+      "aliases": [
+        "tgs"
+      ]
+    },
+    {
+      "code": "drg",
+      "name": "Dorig",
+      "abbr": "Drg",
+      "color": "#c07820",
+      "aliases": [
+        "wwo"
+      ]
+    },
+    {
+      "code": "kro",
+      "name": "Koro",
+      "abbr": "Kro",
+      "color": "#922810",
+      "aliases": [
+        "krf"
+      ]
+    },
+    {
+      "code": "olr",
+      "name": "Olrat",
+      "abbr": "Olr",
+      "color": "#267040",
+      "aliases": []
+    },
+    {
+      "code": "lkn",
+      "name": "Lakon",
+      "abbr": "Lkn",
+      "color": "#5c2878",
+      "aliases": []
+    }
+  ],
+  "headwordLanguage": "kro",
+  "recordings": {
+    "author": "A. François",
+    "year": "2003"
+  },
+  "latex": {
+    "title": "Comparative Grammar of the Gaua Languages",
+    "subtitle": "Banks Islands, Vanuatu",
+    "author": "Alexandre Fran\\c{c}ois \\& Fabio Meroni"
+  },
+  "footer": "Documentation: Alexandre François &amp; Fabio Meroni &nbsp;·&nbsp; Gaua Island, Banks Islands, Vanuatu &nbsp;·&nbsp; <a href=\"https://heliceo.huma-num.fr/\" target=\"_blank\">HéLiCéO</a>",
+  "redirects": {
+    "gaua.html": "about.html"
+  },
+  "legacyFiles": {
+    "dictionary": "dbt_dictionary.xml",
+    "fieldnotes": "AlexFrancois_Questionnaire_Gaua-languages.xml",
+    "grammarDir": "grammar_content",
+    "recordingsDir": "transcribed_narratives",
+    "imagesDir": "images"
+  }
+}

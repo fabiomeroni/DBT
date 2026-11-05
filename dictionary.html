@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparative Dictionary — {{project.titleSuffix}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT
+═══════════════════════════════════════════════════════════════ */
+body { overflow: hidden; }
+
+.dict-shell {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  height: calc(100vh - 52px);
+}
+
+/* ── Sidebar ── */
+.dict-sidebar {
+  background: #faf6ef;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
+}
+.sidebar-head {
+  padding: 0.9rem 0.85rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-head-label {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.68rem; letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--ink-light); display: block; margin-bottom: 0.55rem;
+}
+.hw-lang-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.hw-lang-pill {
+  font-family: 'Crimson Pro', serif; font-variant: small-caps;
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em;
+  padding: 2px 9px 3px; border-radius: 3px;
+  border: 1.5px solid transparent; cursor: pointer;
+  color: white; opacity: 0.4;
+  transition: opacity 0.15s, box-shadow 0.15s; line-height: 1.4;
+}
+.hw-lang-pill.active { opacity: 1; box-shadow: 0 0 0 2px #faf6ef, 0 0 0 3.5px currentColor; }
+.hw-lang-pill:hover  { opacity: 0.8; }
+
+.sidebar-search {
+  padding: 0.5rem 0.85rem 0.6rem;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.sidebar-search input {
+  width: 100%; font-family: 'EB Garamond', serif; font-size: 0.95rem;
+  padding: 4px 8px; border: 1px solid var(--border); border-radius: 3px;
+  background: white; color: var(--ink); outline: none;
+  transition: border-color 0.15s; box-sizing: border-box;
+}
+.sidebar-search input:focus       { border-color: var(--gold); }
+.sidebar-search input::placeholder{ color: #c0b090; font-style: italic; }
+
+.hw-index { overflow-y: auto; flex: 1; padding: 0.3rem 0 1rem; }
+.hw-index a {
+  display: block; font-family: 'EB Garamond', serif; font-size: 1.05rem;
+  color: var(--ink-mid); text-decoration: none;
+  padding: 1px 0.85rem 1px 1rem;
+  border-left: 3px solid transparent;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hw-index a:hover  { background: #ede4d4; color: var(--ink); }
+.hw-index a.active { background: #e8d8b8; color: var(--ink); font-weight: 500; border-left-color: var(--gold); }
+.hw-letter-divider {
+  font-family: 'Crimson Pro', serif; font-size: 0.68rem;
+  letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--ink-light); padding: 0.55rem 0.85rem 0.15rem;
+}
+
+/* ── Main ── */
+.dict-main   { overflow-y: scroll; height: 100%; }
+.dict-content{ padding: 0 3.5rem 5rem; max-width: 900px; }
+
+.result-bar {
+  position: sticky; top: 0; z-index: 10;
+  background: #f0e8d8; border-bottom: 1px solid var(--border);
+  padding: 0.38rem 3.5rem;
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem; color: var(--ink-light);
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.result-bar .rbar-lang { font-weight: 600; color: var(--ink-mid); }
+
+/* ── Loading / error ── */
+.dict-status {
+  font-family: 'Crimson Pro', serif; font-style: italic;
+  font-size: 1.05rem; color: var(--ink-light);
+  padding: 3rem 0 1rem;
+}
+.dict-status.error { color: #922810; font-style: normal; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ENTRY STRUCTURE
+═══════════════════════════════════════════════════════════════ */
+.letter-section { padding-top: 2rem; scroll-margin-top: 0; }
+.letter-heading {
+  font-family: 'EB Garamond', serif; font-size: 1.9rem; font-weight: 500;
+  color: var(--ink); display: inline-block;
+  border-bottom: 2.5px solid var(--gold);
+  padding-bottom: 0.1rem; margin-bottom: 0.6rem; min-width: 1.8rem;
+}
+
+.entry {
+  border-bottom: 1px solid var(--border-lt);
+  padding: 1.2rem 0 1.4rem; scroll-margin-top: 4px;
+  transition: background 0.12s;
+}
+.entry:hover       { background: #fffdf7; }
+.entry:last-child  { border-bottom: none; }
+
+.entry-header {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 0.45rem; margin-bottom: 0.5rem;
+}
+.entry-headword {
+  font-family: 'EB Garamond', serif; font-size: 2rem;
+  font-weight: 500; letter-spacing: -0.01em; line-height: 1.1;
+}
+.entry-pos {
+  font-family: 'Crimson Pro', serif; font-style: italic;
+  font-variant: small-caps; font-size: 0.88rem; color: var(--ink-light);
+  border: 1px solid var(--border); border-radius: 2px; padding: 0 5px; line-height: 1.45;
+}
+.entry-domain {
+  font-family: 'Crimson Pro', serif; font-size: 0.73rem;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: white; background: var(--gold); border-radius: 2px; padding: 1px 7px 2px;
+}
+
+/* Etymology */
+.etym-badge { display: inline-flex; align-items: center; gap: 4px; }
+.etym-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'Crimson Pro', serif; font-size: 0.8rem;
+  color: #4a2a6a; background: #f2eaf8; border: 1px solid #c8a8e0;
+  border-radius: 3px; padding: 1px 8px 2px; text-decoration: none;
+  transition: background 0.12s, color 0.12s; white-space: nowrap;
+}
+.etym-tag:hover { background: #4a2a6a; color: white; border-color: #4a2a6a; }
+.etym-tag .etym-pre  { font-size: 0.67rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; }
+.etym-tag .etym-form { font-family: 'EB Garamond', serif; font-size: 0.98rem; font-style: italic; }
+.etymograph-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 21px; height: 21px; border-radius: 3px;
+  border: 1px solid #c8a8e0; background: #f2eaf8; text-decoration: none; overflow: hidden;
+  transition: background 0.12s, border-color 0.12s;
+}
+.etymograph-link:hover { background: #4a2a6a; border-color: #4a2a6a; }
+.etymograph-link img { width: 13px; height: 13px; object-fit: contain; opacity: 0.6; transition: opacity 0.12s, filter 0.12s; }
+.etymograph-link:hover img { opacity: 1; filter: brightness(10); }
+
+
+/* Entry modal form */
+.em-label { font-family:'Crimson Pro',serif; font-size:0.8rem; color:var(--ink-light); align-self:center; }
+.em-input {
+  font-family:'EB Garamond',serif; font-size:1rem;
+  border:none; border-bottom:1.5px solid var(--border);
+  background:transparent; outline:none; padding:2px 0;
+  color:var(--ink); transition:border-color 0.15s; width:100%;
+}
+.em-input:focus { border-bottom-color:var(--gold); }
+/* Edit / Delete per-entry buttons */
+.entry-actions { display:none; gap:0.4rem; margin-top:0.4rem; }
+.entry-actions.visible { display:flex; }
+.entry-action-btn {
+  font-family:'Crimson Pro',serif; font-size:0.75rem;
+  padding:2px 10px 3px; border-radius:3px; cursor:pointer;
+  border:1px solid var(--border); background:white; color:var(--ink-mid);
+  transition:background 0.12s, border-color 0.12s;
+}
+.entry-action-btn:hover { background:#f0e8d8; border-color:var(--gold); }
+.entry-action-btn.danger { border-color:#f0c0b0; color:#922810; }
+.entry-action-btn.danger:hover { background:#922810; color:white; }
+
+/* ── Teanu-style language equivalents ── */
+.entry-equivs {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 0.1rem 0; margin-bottom: 0.75rem; line-height: 2;
+}
+
+/* The clickable language-abbreviation badge */
+.étiquette_lang {
+  display: inline-block;
+  border-radius: 3px;
+  padding: 1px 6px 2px;
+  margin-right: 4px;
+  position: relative;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.étiquette_lang a.lang-badge-link {
+  font-family: 'Crimson Pro', serif;
+  font-variant: small-caps;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: white;
+  text-decoration: none;
+  line-height: 1;
+}
+/* CSS tooltip on hover */
+.étiquette_lang::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(100% + 5px);
+  background: #1c0f06;
+  color: #f0dfc0;
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  padding: 3px 9px 4px;
+  border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 50;
+}
+.étiquette_lang:hover::after { opacity: 1; }
+
+/* The form in the other language */
+.idiome_lang {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.1rem;
+  margin-right: 1.1rem;
+  vertical-align: baseline;
+}
+.idiome_lang.missing { color: #ccc; font-size: 0.95rem; }
+
+/* Gloss & notes */
+.entry-gloss  { font-family: 'Crimson Pro', serif; font-size: 1.08rem; color: var(--ink-mid); line-height: 1.72; margin-bottom: 0.5rem; }
+.entry-gloss em { font-style: italic; }
+.entry-notes  { font-family: 'Crimson Pro', serif; font-size: 0.95rem; font-style: italic; color: var(--ink-light); line-height: 1.68; margin-bottom: 0.9rem; max-width: 68ch; }
+
+/* Example block */
+.entry-example-block { margin-top: 0.2rem; }
+.example-label { font-family: 'Crimson Pro', serif; font-size: 0.67rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-light); margin-bottom: 0.35rem; }
+.example-wrap  { background: #faf6ef; border-left: 3px solid var(--gold); border-radius: 0 4px 4px 0; padding: 0.65rem 1.1rem 0.8rem; overflow-x: auto; display: inline-block; min-width: 240px; max-width: 100%; }
+.ex-table      { border-collapse: collapse; white-space: nowrap; }
+.ex-table .ex-abbr  { font-family: 'Crimson Pro', serif; font-variant: small-caps; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.05em; padding: 2px 14px 2px 0; vertical-align: baseline; border: none; }
+.ex-table .ex-cell  { padding: 2px 16px 2px 0; vertical-align: baseline; border: none; }
+.ex-table .ex-cell.ex-dash { font-family: 'EB Garamond', serif; font-size: 1.12rem; color: #ccc; }
+.ex-table .ex-cell.ex-own strong { font-family: 'EB Garamond', serif; font-size: 1.18rem; font-weight: 700; border-bottom: 2px solid currentColor; padding: 0 2px; }
+.ex-table .ex-cell a.lexlink { font-family: 'EB Garamond', serif; font-size: 1.12rem; color: var(--ink); text-decoration: none; border-bottom: 1.5px dotted var(--gold); border-radius: 2px; padding: 0 2px; transition: color 0.12s, border-color 0.12s, background 0.12s; }
+.ex-table .ex-cell a.lexlink:hover { color: #b84c10; border-bottom-color: #b84c10; background: #fff5e8; }
+.ex-table .ex-sep td    { border-top: 1px solid var(--border); padding: 0; height: 0; border-bottom: none; }
+.ex-table .ex-gloss-empty { border: none; padding: 5px 14px 3px 0; vertical-align: baseline; }
+.ex-table .ex-gloss { font-family: 'Source Code Pro', monospace; font-size: 0.64rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-light); padding: 5px 16px 3px 0; vertical-align: baseline; border: none; white-space: nowrap; }
+.ex-transl  { font-family: 'Crimson Pro', serif; font-style: italic; font-size: 1rem; color: var(--ink-mid); margin-top: 5px; }
+
+/* ── Example expand button ── */
+.ex-expand-btn {
+  font-family: 'Crimson Pro', serif; font-size: 0.78rem;
+  color: var(--gold); background: none; border: none;
+  cursor: pointer; padding: 4px 0 2px; display: block;
+  transition: color 0.12s; letter-spacing: 0.04em;
+}
+.ex-expand-btn:hover { color: #b84c10; }
+
+
+/* Tooltip */
+#lex-tooltip { position: fixed; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 0.08s ease; max-width: 310px; }
+#lex-tooltip.visible { opacity: 1; }
+#lex-tooltip .tt-inner { background: #1c0f06; color: #f0dfc0; border-radius: 5px; padding: 9px 14px 10px; box-shadow: 0 4px 18px rgba(0,0,0,.38), 0 0 0 1px rgba(201,164,88,.25); font-family: 'Crimson Pro', serif; font-size: 0.9rem; line-height: 1.5; }
+#lex-tooltip .tt-hw  { font-family: 'EB Garamond', serif; font-size: 1.12rem; font-weight: 500; color: #fdeec8; margin-right: 6px; }
+#lex-tooltip .tt-pos { font-style: italic; font-size: 0.76rem; color: #c9a458; }
+#lex-tooltip .tt-gloss  { color: #e8d0a8; margin-top: 3px; font-size: 0.86rem; }
+#lex-tooltip .tt-equivs { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+#lex-tooltip .tt-eq { font-family: 'Source Code Pro', monospace; font-size: 0.7rem; background: rgba(255,255,255,.09); border-radius: 2px; padding: 1px 5px; }
+#lex-tooltip .tt-eq b { color: #c9a458; font-weight: 500; }
+#lex-tooltip .tt-eq.tt-eq-hl { background: rgba(255,255,255,.22); outline: 1px solid rgba(255,255,255,.18); }
+#lex-tooltip .tt-eq.tt-eq-hl b { color: #fdeec8; }
+
+
+
+/* ── Text-derived examples (confirmed sentences) ── */
+.ex-table tr.ex-other { display: none; }
+.ex-table.ex-expanded tr.ex-other { display: table-row; }
+.ex-table .ex-gloss.txt { text-transform: none; font-size: 0.72rem; letter-spacing: 0.02em; }
+.ex-ref { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink-light); margin-top: 4px; }
+.ex-ref a { color: var(--ink-light); text-decoration: none; border-bottom: 1px solid var(--border-lt); }
+.ex-ref a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+.ex-more-btn { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--gold);
+  background: none; border: none; cursor: pointer; padding: 6px 0 0; }
+.ex-more-btn:hover { color: #b84c10; }
+
+
+
+/* ── Phonetic form [IPA] next to the headword ── */
+.entry-ipa { font-family: 'EB Garamond', serif; font-size: 1.2rem; color: var(--ink-light); margin-left: 0.15rem; }
+.ipa-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; min-width: 15px; border-radius: 50%;
+  background: #1c0f06; color: white; font-size: 0.62rem; font-weight: 700; line-height: 1;
+  user-select: none; position: relative; margin-left: 5px; vertical-align: middle; cursor: default;
+}
+.ipa-badge.confirmed { background: #267040; }
+.ipa-badge.can-click { cursor: pointer; }
+.ipa-badge.can-click:hover { transform: scale(1.12); }
+.ipa-badge::after {
+  content: attr(data-tooltip); position: absolute; left: 130%; top: 50%; transform: translateY(-50%);
+  background: #1c0f06; color: #f0dfc0; font-family: 'Crimson Pro', serif; font-size: 0.78rem; font-weight: 400;
+  white-space: normal; width: max-content; max-width: min(280px, 72vw); line-height: 1.3; padding: 4px 10px 5px; border-radius: 3px; box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  pointer-events: none; opacity: 0; transition: opacity 0.12s; z-index: 200; letter-spacing: 0;
+}
+.ipa-badge:hover::after { opacity: 1; }
+/* editor: orthography + IPA side by side */
+.em-lang-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 0.35rem 0.8rem; margin-bottom: 0.9rem; align-items: center; }
+.em-lang-grid .em-colhead { font-family: 'Crimson Pro', serif; font-size: 0.68rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-light); }
+.em-ipa { font-family: 'EB Garamond', serif; }
+.em-ipa.auto { color: #8a6a3a; font-style: italic; }
+
+/* ── Settings dialog ── */
+.st-h { font-family: 'EB Garamond', serif; font-size: 1.1rem; font-weight: 500; margin: 0.2rem 0 0.3rem; color: var(--ink); }
+.st-top { display: flex; align-items: flex-end; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 0.6rem; font-family: 'Crimson Pro', serif; font-size: 0.85rem; color: var(--ink-light); }
+.st-top label { display: flex; flex-direction: column; gap: 2px; }
+.st-check { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.st-table { border-collapse: collapse; width: 100%; font-family: 'Crimson Pro', serif; }
+.st-table th { position: sticky; top: 0; background: #f0e8d8; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-light); text-align: left; padding: 4px 8px; font-weight: 600; }
+.st-table td { padding: 2px 6px; border-bottom: 1px solid var(--border-lt); }
+.st-table tr.st-shared td { background: #fbf4e2; }
+.st-table input.em-input { font-size: 1.05rem; padding: 1px 2px; }
+.st-table select { font-family: 'Crimson Pro', serif; font-size: 0.85rem; border: 1px solid var(--border); border-radius: 3px; background: white; }
+.st-table .st-del { background: none; border: none; color: #c06060; cursor: pointer; font-size: 0.8rem; }
+.st-table .st-del:hover { color: #922810; }
+.st-actions { display: flex; gap: 0.6rem; margin: 0.6rem 0; }
+.st-try { background: #faf6ef; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem 0.8rem 0.6rem;
+  font-family: 'Crimson Pro', serif; font-size: 0.85rem; color: var(--ink-light); }
+.st-try > div { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap; }
+.st-try input.em-input { width: 9rem; font-size: 1.05rem; }
+.st-out { font-family: 'EB Garamond', serif; font-size: 1.25rem; color: var(--ink); min-width: 6rem; }
+
+.st-colors { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.45rem 1rem; margin-bottom: 0.5rem; }
+.st-color { display: flex; align-items: center; gap: 0.4rem; font-family: 'Crimson Pro', serif; }
+.st-color label { min-width: 3.4rem; font-weight: 600; font-size: 0.95rem; }
+.st-color input[type=color] { width: 36px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: none; cursor: pointer; }
+.st-color input.em-input { width: 5.6rem; font-family: 'Source Code Pro', monospace; font-size: 0.8rem; }
+.st-color input.em-input.bad { border-bottom-color: #c0392b; color: #c0392b; }
+.st-color button { background: none; border: none; color: var(--ink-light); cursor: pointer; font-size: 0.85rem; }
+.st-color button:hover { color: var(--ink); }
+
+.st-pw { margin-top: 0.9rem; font-family: 'Crimson Pro', serif; }
+.st-pw summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--ink); }
+.st-pw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.5rem 1rem; margin: 0.5rem 0; }
+.st-pw-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--ink-light); }
+
+/* ── Homonyms and senses ── */
+sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight: 600; margin-left: 1px;
+  color: var(--ink-light); vertical-align: super; letter-spacing: 0; }
+.hw-index a sup.hom-num { font-size: 0.7em; }
+.senses { margin-top: 0.3rem; }
+.sense { position: relative; padding: 0.55rem 0 0.35rem 2rem; border-top: 1px dotted var(--border); }
+.sense:first-child { border-top: none; }
+.sense-head { display: flex; align-items: baseline; gap: 0.6rem; }
+.sense-n { position: absolute; left: 0; top: 0.55rem; font-family: 'EB Garamond', serif; font-weight: 600;
+  font-size: 1.05rem; color: var(--gold); min-width: 1.4rem; }
+.sense-gloss { font-family: 'Source Code Pro', monospace; font-size: 0.7rem; letter-spacing: 0.04em;
+  color: var(--ink-light); background: #f0e8d8; border-radius: 2px; padding: 1px 7px 2px; }
+.sense .entry-gloss { margin-top: 0.2rem; }
+.other-examples-label { font-family: 'Crimson Pro', serif; font-size: 0.7rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-light); margin: 0.9rem 0 0.2rem; }
+
+/* Sense cards in the entry editor */
+.em-senses-head { display: flex; align-items: center; justify-content: space-between; margin: 0.2rem 0 0.4rem;
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem; letter-spacing: 0.06em; color: var(--ink-light); }
+.em-sense { border: 1px solid var(--border); border-left: 3px solid var(--gold); border-radius: 0 4px 4px 0;
+  background: #fffdf8; padding: 0.5rem 0.8rem 0.7rem; margin-bottom: 0.6rem; }
+.em-sense-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;
+  font-family: 'EB Garamond', serif; font-size: 1rem; color: var(--ink); }
+.em-sense-btns button { font-size: 0.7rem; color: var(--ink-light); background: none; border: 1px solid var(--border);
+  border-radius: 3px; padding: 0 6px 1px; margin-left: 3px; cursor: pointer; }
+.em-sense-btns button:hover { color: var(--gold); border-color: var(--gold); }
+.em-sense-btns button.del:hover { color: #922810; border-color: #922810; }
+.em-sense label { display: block; font-family: 'Crimson Pro', serif; font-size: 0.78rem; color: var(--ink-light); margin: 0.35rem 0 0.1rem; }
+.em-hint { grid-column: 1 / -1; font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: #8a5f18;
+  background: #f7efdc; border-radius: 3px; padding: 3px 8px 4px; display: none; }
+.em-hint.visible { display: block; }
+
+/* ── Proposed (ghost) dictionary entries ── */
+.proposed-section-hdr {
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.72rem; letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--ink-light); padding: 1.6rem 0 0.4rem;
+  border-bottom: 1px dashed var(--border); margin-bottom: 0.8rem;
+}
+.entry.proposed {
+  opacity: 0.55; border-left: 2px dashed var(--border);
+  padding-left: 0.6rem; transition: opacity 0.15s;
+}
+.entry.proposed:hover { opacity: 0.85; }
+.proposed-badge {
+  font-family: 'Source Code Pro', monospace; font-size: 0.65rem;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  background: #f5f0e8; border: 1px dashed var(--gold);
+  border-radius: 3px; padding: 1px 7px 2px; color: var(--gold);
+  vertical-align: middle; margin-right: 6px;
+}
+.proposed-actions { margin-top: 0.6rem; display: flex; gap: 0.5rem; }
+.proposed-btn {
+  font-family: 'Crimson Pro', serif; font-size: 0.8rem;
+  padding: 2px 12px 3px; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--border); background: white; color: var(--ink-mid);
+  transition: background 0.12s, border-color 0.12s;
+}
+.proposed-btn:hover { background: #f0e8d8; border-color: var(--gold); }
+.proposed-btn.add { border-color: #267040; color: #267040; }
+.proposed-btn.add:hover { background: #267040; color: white; }
+.proposed-btn.dismiss { border-color: #c06060; color: #c06060; }
+.proposed-btn.dismiss:hover { background: #c06060; color: white; }
+.proposed-example {
+  font-family: 'Crimson Pro', serif; font-size: 0.88rem;
+  font-style: italic; color: var(--ink-light);
+  margin-top: 0.3rem; line-height: 1.5;
+}
+
+</style>
+</head>
+<body id="top">
+
+<div id="lex-tooltip" role="tooltip" aria-hidden="true">
+  <div class="tt-inner">
+    <div><span class="tt-hw" id="tt-hw"></span><span class="tt-pos" id="tt-pos"></span></div>
+    <div class="tt-gloss"  id="tt-gloss"></div>
+    <div class="tt-equivs" id="tt-equivs"></div>
+  </div>
+</div>
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="grammar.html">Grammar</a></li>
+    <li><a href="texts.html">Texts</a></li>
+    <li><a href="dictionary.html" class="active">Dictionary</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.dictionary}}</div>
+</nav>
+
+<div class="dict-shell">
+  <aside class="dict-sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-head-label">Headword language</span>
+      <div class="hw-lang-pills" id="lang-pills"></div>
+    </div>
+    <div class="sidebar-search">
+      <input type="search" id="search-input" placeholder="Search…" autocomplete="off">
+    </div>
+    <nav class="hw-index" id="hw-index" aria-label="Headword index"></nav>
+  </aside>
+
+  <main class="dict-main" id="dict-main">
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:0.5rem;padding:0.25rem 3.5rem 0;background:#f0e8d8;border-bottom:1px solid var(--border);">
+      <button class="edit-tab" id="settings-btn" title="Dictionary settings: the orthography ↔ IPA correspondences">⚙ Settings</button>
+      <button class="edit-tab" id="ortho-btn" title="Convert forms written in IPA to the orthography">🔤 IPA → orthography</button>
+      <button class="edit-tab" id="add-entry-btn" title="Add a new dictionary entry">＋ Add entry</button>
+      <button class="edit-tab" id="dict-edit-tab" title="Upload new dictionary XML">⬆ Upload XML</button>
+    </div>
+    <div class="result-bar" id="result-bar">Loading dictionary…</div>
+    <div class="dict-content" style="padding-bottom:0;">
+      <div id="proposed-section" style="display:none;">
+        <div class="proposed-section-hdr">Proposed entries from confirmed texts</div>
+        <div id="proposed-entries"></div>
+      </div>
+    </div>
+    <div class="dict-content" id="dict-content">
+      <p class="dict-status">Loading the dictionary…</p>
+    </div>
+  </main>
+</div>
+
+<script src="auth.js"></script>
+<script>
+'use strict';
+
+// ── Language metadata ──────────────────────────────────────────
+// The languages come from the project (project/project.json, through /project.js)
+const LANGS     = DBT.names;
+const ABBRS      = DBT.abbrByName;
+const COLORS    = DBT.colorByName;
+const LANG_CODE  = DBT.codeByName;
+
+// ── Runtime state ──────────────────────────────────────────────
+let DICTIONARY = [];
+let DICT_MAP   = {};
+let activeLang = DBT.nameByCode[DBT.project.headwordLanguage];
+let searchQ    = '';
+
+// ══════════════════════════════════════════════════════════════
+//  XML PARSER  —  LEXICA format → DICTIONARY array
+//  Reads the active dictionary XML directly; no conversion step.
+// ══════════════════════════════════════════════════════════════
+async function parseLexicaXML(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Cannot fetch ${url} (HTTP ${resp.status})`);
+
+  const xml = new DOMParser().parseFromString(await resp.text(), 'text/xml');
+
+  // Surface any XML parse errors immediately
+  const parseErr = xml.querySelector('parsererror');
+  if (parseErr) throw new Error('XML parse error — ' + parseErr.textContent.slice(0, 200));
+
+  return [...xml.querySelectorAll('EntréeLexicale')].map(el => {
+
+    // id
+    const id = el.getAttribute('identifiant') || '';
+
+    // ── Forms per language  (ReprésentationDeForme langue="…") ──
+    const langs = {};
+    LANGS.forEach(lang => {
+      const code = LANG_CODE[lang];
+      // querySelector on XML is case-sensitive; element names must match exactly
+      const node = el.querySelector(`Lemme > ReprésentationDeForme[langue="${code}"]`);
+      langs[lang] = node ? node.textContent.trim() : '';
+    });
+
+    // Fallback headword: first non-empty, non-dash form
+    const hw = langs[LANGS.find(l => langs[l] && langs[l] !== '—')] || id;
+
+    // ── Grammatical class ──────────────────────────────────────
+    const pos = el.querySelector('ClasseGrammaticale')?.textContent.trim() ?? '';
+
+    // ── Semantic domain ────────────────────────────────────────
+    const domain = el.querySelector('DomaineSémantique')?.textContent.trim() ?? '';
+
+    // ── Phonetic forms: Lemme/FormePhonétique[@langue], statut="auto" = derived, not yet confirmed ──
+    const ipa = {};
+    LANGS.forEach(lang => {
+      const n = el.querySelector(`:scope > Lemme > FormePhonétique[langue="${LANG_CODE[lang]}"]`);
+      ipa[lang] = n && n.textContent.trim() ? { text: n.textContent.trim(), auto: n.getAttribute('statut') === 'auto' } : null;
+    });
+
+    // ── Homonym number (entries with the same lemma are told apart by <NuméroDHomonyme>) ──
+    const homonym = el.querySelector(':scope > NuméroDHomonyme')?.textContent.trim() ?? '';
+
+    // ── Senses: each <Sens> has its own definition, short gloss, notes … ──
+    // Definition: Définition/ReprésentationDeTexte[eng] if there is one, else Glose[eng]. The text
+    // can hold inline HTML such as <em> (DOMParser unescapes &lt;em&gt;), so it is shown as innerHTML.
+    const senses = [...el.querySelectorAll(':scope > Sens')].map((sn, ref) => {
+      const gloss      = sn.querySelector(':scope > Glose[langue="eng"]')?.textContent.trim() ?? '';
+      const dfNode     = sn.querySelector(':scope > Définition > ReprésentationDeTexte[langue="eng"]');
+      const definition = (dfNode ? dfNode.textContent.trim() : '') || gloss;
+      const shortGloss = sn.querySelector(':scope > gloss')?.textContent.trim() ?? '';
+      const notes      = sn.querySelector(':scope > Notes > ReprésentationDeTexte[langue="eng"]')?.textContent.trim() ?? '';
+      const num        = sn.querySelector(':scope > NuméroDeSens')?.textContent.trim();
+      return { ref, n: /^\d+$/.test(num || '') ? num : String(ref + 1), gloss, definition, shortGloss, notes };
+    });
+    // the first sense is mirrored on the entry, for code that only needs "the" gloss
+    const first = senses[0] || { gloss: '', definition: '', shortGloss: '', notes: '' };
+    const gloss = first.gloss, glossRich = first.definition, notes = first.notes, shortGloss = first.shortGloss;
+
+    // ── Etymology ──────────────────────────────────────────────
+    let etym = null;
+    const etymEl = el.querySelector('Étymologie > Étymon');
+    if (etymEl) {
+      const lang  = etymEl.querySelector('Langue')?.textContent.trim()            ?? 'POc';
+      const forme = etymEl.querySelector('Forme')?.textContent.trim()             ?? '';
+      const glose = etymEl.querySelector('Glose[langue="eng"]')?.textContent.trim() ?? '';
+      // textContent unescapes &amp; → & inside URLs automatically
+      const tlopo      = etymEl.querySelector('LienTLOPO')?.textContent.trim()      ?? '#';
+      const etymograph = etymEl.querySelector('LienEtymograph')?.textContent.trim() ?? '#';
+      etym = { label: `${lang} ${forme} '${glose}'`, tlopo, etymograph };
+    }
+
+    return { id, hw, langs, ipa, pos, domain, homonym, senses, gloss, glossRich, notes, etym, shortGloss };
+  });
+}
+
+// The server decides which dictionary file is active (an uploaded one if there is one,
+// otherwise dbt_dictionary.xml), so ask it rather than guessing the file name here.
+async function loadActiveDictionary() {
+  try {
+    return await parseLexicaXML('/api/dictionary/xml');
+  } catch (e) {
+    // Fall back only when the endpoint itself is unreachable - never hide a parse error
+    if (/Cannot fetch|Failed to fetch|NetworkError/i.test(e.message))
+      return await parseLexicaXML('dbt_dictionary.xml');
+    throw e;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDERING
+// ══════════════════════════════════════════════════════════════
+
+function etymHTML(etym) {
+  if (!etym) return '';
+  const label = etym.label.replace(/^POc\s*/, '');
+  return `<span class="etym-badge">
+    <a class="etym-tag" href="${etym.tlopo}" target="_blank" title="Proto-Oceanic etymology — TLOPO">
+      <span class="etym-pre">POc</span>
+      <span class="etym-form">${label}</span>
+    </a>
+    <a class="etymograph-link" href="${etym.etymograph}" target="_blank" title="View in Etymograph">
+      <img src="etymograph_icon.png" alt="Etymograph">
+    </a>
+  </span>`;
+}
+
+function equivsHTML(entry) {
+  // Show only the OTHER languages as Teanu-style clickable badges.
+  // The headword language is already displayed as the large headword above.
+  const items = LANGS
+    .filter(lang => lang !== activeLang)
+    .map(lang => {
+      const abbr  = ABBRS[lang];
+      const color = COLORS[lang];
+      const form  = entry.langs[lang] || '';
+      // Clicking the badge switches headword language in-page and keeps focus
+      // on this entry. The href also works as a proper URL for cross-page linking
+      // (e.g. from grammar entry chips): dictionary.html?lang=<language name>#<entry id>
+      const href  = `dictionary.html?lang=${lang}#${entry.id}`;
+      const badge = `<span class="étiquette_lang"
+                           style="background:${color};"
+                           data-tooltip="Switch to ${lang}"
+                           data-lang="${lang}"
+                           data-entry="${entry.id}">
+        <a class="lang-badge-link"
+           href="${href}"
+           title="Equivalent in ${lang}">${abbr}</a>
+      </span>`;
+      const formEl = form
+        ? `<span class="idiome_lang" style="color:${color};">${form}</span>`
+        : `<span class="idiome_lang missing">—</span>`;
+      return badge + formEl;
+    }).join('');
+
+  return items ? `<div class="entry-equivs">${items}</div>` : '';        // nothing to show for a one-language project
+}
+
+// ── Examples drawn from confirmed sentences in the texts ─────────────────────
+let dictExamples = {};   // entry id -> [example, ...]  (from /api/dictionary/examples)
+let dictFormIndex = {};  // "code:cleanform" -> entry id (to link words inside examples)
+const CODE2LANG = DBT.nameByCode;
+const EX_VISIBLE = 3;    // examples shown before "show more"
+
+function escHTML(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function cleanForm(s) { return (s || '').trim().replace(/^[-=]+|[-=.,;!?]+$/g, '').toLowerCase(); }
+
+function buildFormIndex() {
+  dictFormIndex = {};
+  DICTIONARY.forEach(e => LANGS.forEach(lang => {
+    const c = cleanForm(e.langs[lang]);
+    if (c && c !== '\u2014') dictFormIndex[LANG_CODE[lang] + ':' + c] = e.id;
+  }));
+}
+
+async function loadDictExamples() {
+  try {
+    const r = await fetch('/api/dictionary/examples');
+    const d = r.ok ? await r.json() : {};
+    dictExamples = d.error ? {} : d;
+  } catch (e) { dictExamples = {}; }
+}
+
+function exTokenCell(code, tok, isMatch, ownId) {
+  if (!tok) return '<td class="ex-cell ex-dash">\u2014</td>';
+  const lang = CODE2LANG[code], color = COLORS[lang], t = escHTML(tok);
+  if (isMatch) return `<td class="ex-cell ex-own"><strong style="color:${color};">${t}</strong></td>`;
+  const id = dictFormIndex[code + ':' + cleanForm(tok)];
+  if (id && id !== ownId)
+    return `<td class="ex-cell"><a class="lexlink" href="#${id}" data-dict-id="${id}" data-lang="${lang}">${t}</a></td>`;
+  return `<td class="ex-cell">${t}</td>`;
+}
+
+function oneTextExample(entry, ex, uid, extra) {
+  const isFN   = ex.type === 'fieldnotes' || ex.type === 'papers';   // parallel languages
+  const codes  = isFN ? DBT.codes : [ex.lang];
+  const byCode = isFN ? ex.tokens : { [ex.lang]: ex.tokens };
+  const nCols  = Math.max(...codes.map(c => (byCode[c] || []).length), 0);
+  const match  = new Set(ex.match_cols || []);
+  const active = LANG_CODE[activeLang];
+
+  const rows = codes.map(code => {
+    const lang = CODE2LANG[code], color = COLORS[lang];
+    const cells = Array.from({ length: nCols }, (_, i) =>
+      exTokenCell(code, (byCode[code] || [])[i] || '', match.has(i), entry.id)).join('');
+    const other = (codes.length > 1 && code !== active) ? ' class="ex-other"' : '';
+    return `<tr${other}><td class="ex-abbr" style="color:${color};">${ABBRS[lang]}</td>${cells}</tr>`;
+  }).join('');
+
+  const sep   = '<td></td>'.repeat(nCols + 1);
+  const gloss = Array.from({ length: nCols }, (_, i) =>
+    `<td class="ex-gloss txt">${escHTML((ex.glosses || [])[i] || '')}</td>`).join('');
+
+  const anchor = '#' + encodeURIComponent(ex.sentence_id);
+  const href = isFN
+    ? `transcription.html?${ex.type === 'papers' ? 'papers' : 'fieldnotes'}=1&index=${ex.index}&title=${encodeURIComponent(ex.title)}${anchor}`
+    : `transcription.html?key=${encodeURIComponent(ex.file)}&title=${encodeURIComponent(ex.title)}&lang=${ex.lang}${anchor}`;
+  const refText = ex.type === 'fieldnotes' ? `Fieldnotes \u00b7 ${ex.title} \u00b7 ${ex.sentence_id}` : `${ex.title} \u00b7 ${ex.sentence_id}`;
+
+  const expandBtn = codes.length > 1
+    ? `<button class="ex-expand-btn" onclick="toggleTextExample('${uid}', this)">\u25bc Show all languages</button>` : '';
+
+  return `<div class="entry-example-block${extra ? ' ex-extra' : ''}" ${extra ? 'style="display:none;"' : ''}>
+    <div class="example-label">Example \u00b7 ${ex.type === 'fieldnotes' ? 'fieldnotes' : ex.type === 'papers' ? 'paper' : 'text'}</div>
+    <div class="example-wrap">
+      <table class="ex-table" id="${uid}">
+        ${rows}
+        <tr class="ex-sep">${sep}</tr>
+        <tr><td class="ex-gloss-empty"></td>${gloss}</tr>
+      </table>
+      <div class="ex-transl">\u2018${escHTML(ex.translation)}\u2019</div>
+      ${expandBtn}
+      <div class="ex-ref">[<a href="${href}">${escHTML(refText)}</a>]</div>
+    </div>
+  </div>`;
+}
+
+function textExamplesHTML(entry, list, tag) {
+  list = list || dictExamples[entry.id] || [];
+  if (!list.length) return '';
+  const safe = entry.id.replace(/[^\w-]/g, '_') + '-' + (tag || 's');
+  const blocks = list.map((ex, i) => oneTextExample(entry, ex, `tx-${safe}-${i}`, i >= EX_VISIBLE)).join('');
+  const more = list.length > EX_VISIBLE
+    ? `<button class="ex-more-btn" onclick="toggleMoreExamples(this)">\u25bc Show ${list.length - EX_VISIBLE} more example${list.length - EX_VISIBLE > 1 ? 's' : ''}</button>` : '';
+  return `<div class="text-examples">${blocks}${more}</div>`;
+}
+
+async function toggleIpaConfirm(badge) {
+  if (!isLoggedIn) return;
+  const entry = DICT_MAP[badge.dataset.entry], lang = CODE2LANG[badge.dataset.lang], v = entry?.ipa?.[lang];
+  if (!v) return;
+  const r = await fetch(`/api/dictionary/entry/${encodeURIComponent(entry.id)}/ipa`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lang: badge.dataset.lang, confirmed: v.auto })   // auto -> confirm; confirmed -> back to "to check"
+  });
+  const d = await r.json();
+  if (!d.ok) { alert(d.error || 'Could not save.'); return; }
+  v.auto = d.auto;
+  const wrap = badge.closest('.ipa-wrap');
+  wrap.outerHTML = ipaHTML(entry);
+}
+
+function toggleTextExample(uid, btn) {
+  const t = document.getElementById(uid);
+  if (!t) return;
+  const open = t.classList.toggle('ex-expanded');
+  btn.textContent = open ? '\u25b2 Hide other languages' : '\u25bc Show all languages';
+}
+
+function toggleMoreExamples(btn) {
+  const wrap = btn.closest('.text-examples');
+  const extras = wrap.querySelectorAll('.ex-extra');
+  const hide = extras[0] && extras[0].style.display !== 'none';
+  extras.forEach(e => e.style.display = hide ? 'none' : '');
+  const n = extras.length;
+  btn.textContent = hide ? `\u25bc Show ${n} more example${n > 1 ? 's' : ''}` : '\u25b2 Show fewer examples';
+}
+
+// Short label for tooltips: the gloss, or every sense's gloss when there are several
+function senseLine(entry) {
+  const ss = entry.senses || [];
+  if (ss.length > 1)
+    return ss.map(s => `${s.n}. ${s.shortGloss || s.gloss || s.definition}`).join('   ');
+  return entry.gloss;
+}
+
+// [IPA] of the headword, in the language the headword is shown in. '?' = derived, awaiting the author.
+function headwordLang(entry) {
+  return entry.langs[activeLang] ? activeLang : (LANGS.find(l => entry.langs[l] && entry.langs[l] !== '\u2014') || activeLang);
+}
+function ipaHTML(entry) {
+  const lang = headwordLang(entry), v = entry.ipa && entry.ipa[lang];
+  if (!v) return '';
+  const code = LANG_CODE[lang];
+  let badge = '';
+  if (v.auto) {
+    badge = `<span class="ipa-badge${isLoggedIn ? ' can-click' : ''}" data-entry="${entry.id}" data-lang="${code}"
+      data-tooltip="Derived automatically from the orthography, needs confirmation by the author">?</span>`;
+  } else if (isLoggedIn) {
+    badge = `<span class="ipa-badge confirmed can-click" data-entry="${entry.id}" data-lang="${code}"
+      data-tooltip="Phonetic form confirmed by the author">✓</span>`;
+  }
+  return `<span class="ipa-wrap"><span class="entry-ipa">[${escHTML(v.text)}]</span>${badge}</span>`;
+}
+
+function headwordHTML(entry) {
+  const hw = entry.langs[activeLang] || entry.hw;
+  return hw + (entry.homonym ? `<sup class="hom-num">${entry.homonym}</sup>` : '');
+}
+
+// The attested examples that belong to one sense, told apart by the gloss the word was given in the text
+function exampleGlossIs(ex, target) {
+  return !!target && (ex.match_cols || []).some(c => cleanForm((ex.glosses || [])[c]) === target);
+}
+function senseTarget(sn) { return cleanForm(sn.shortGloss || sn.gloss); }
+function examplesForSense(entry, sn) {
+  const all = dictExamples[entry.id] || [];
+  return entry.senses.length <= 1 ? all : all.filter(ex => exampleGlossIs(ex, senseTarget(sn)));
+}
+function otherExamples(entry) {          // attestations that match none of several senses
+  if ((entry.senses || []).length <= 1) return [];
+  const targets = entry.senses.map(senseTarget);
+  return (dictExamples[entry.id] || []).filter(ex => !targets.some(t => exampleGlossIs(ex, t)));
+}
+
+function senseHTML(entry, sn, multi) {
+  const head = multi
+    ? `<span class="sense-n">${sn.n}</span>` +
+      (sn.shortGloss ? `<div class="sense-head"><span class="sense-gloss">${escHTML(sn.shortGloss)}</span></div>` : '')
+    : '';
+  return `<div class="${multi ? 'sense' : ''}">
+    ${head}
+    <div class="entry-gloss">${sn.definition}</div>
+    <div class="entry-notes">${sn.notes}</div>
+    ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
+  </div>`;
+}
+
+function entryHTML(entry) {
+  const color = COLORS[activeLang];
+  const etymRow = entry.etym
+    ? `<div style="margin-bottom:0.45rem;">${etymHTML(entry.etym)}</div>` : '';
+  const multi   = entry.senses.length > 1;
+  const sensesHTML = entry.senses.map(sn => senseHTML(entry, sn, multi)).join('');
+  const other = otherExamples(entry);
+  const otherHTML = other.length
+    ? `<div class="other-examples-label">Other examples</div>${textExamplesHTML(entry, other, 'o')}` : '';
+  return `<div class="entry" id="${entry.id}">
+    <div class="entry-header">
+      <span class="entry-headword" style="color:${color};">${headwordHTML(entry)}</span>${ipaHTML(entry)}
+      <span class="entry-pos">${entry.pos}</span>
+      <span class="entry-domain">${entry.domain}</span>
+    </div>
+    <div class="entry-actions${isLoggedIn ? ' visible' : ''}" id="ea-${entry.id}">
+      <button class="entry-action-btn" onclick="openEditEntry('${entry.id}')">✏ Edit</button>
+      <button class="entry-action-btn danger" onclick="deleteEntry('${entry.id}')">🗑 Delete</button>
+    </div>
+    ${etymRow}
+    ${equivsHTML(entry)}
+    <div class="${multi ? 'senses' : ''}">${sensesHTML}</div>
+    ${otherHTML}
+      </div>`;
+}
+
+function filtered() {
+  if (!searchQ) return DICTIONARY.slice();
+  return DICTIONARY.filter(e => {
+    return (e.langs[activeLang] || '').toLowerCase().includes(searchQ)
+      || LANGS.some(l => (e.ipa?.[l]?.text || '').toLowerCase().includes(searchQ))
+      || e.senses.some(s => [s.gloss, s.definition, s.shortGloss].some(t => (t || '').toLowerCase().includes(searchQ)))
+      || Object.values(e.langs).some(v => v.toLowerCase().includes(searchQ));
+  });
+}
+
+function render() {
+  const entries = filtered();
+  const color   = COLORS[activeLang];
+
+  document.getElementById('result-bar').innerHTML =
+    `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}
+     &nbsp;·&nbsp; headword: <span class="rbar-lang" style="color:${color};">${activeLang}</span>`;
+
+  // Group and sort by first letter of active-language form
+  const groups = {};
+  entries.forEach(e => {
+    const form = e.langs[activeLang] || e.hw;
+    const l = form[0].toUpperCase();
+    (groups[l] = groups[l] || []).push(e);
+  });
+  const letters = Object.keys(groups).sort();
+  letters.forEach(l =>
+    groups[l].sort((a, b) =>
+      (a.langs[activeLang] || a.hw).localeCompare(b.langs[activeLang] || b.hw)
+      || (parseInt(a.homonym) || 0) - (parseInt(b.homonym) || 0)
+    )
+  );
+
+  document.getElementById('dict-content').innerHTML = letters.map(l => `
+    <div class="letter-section" id="letter-${l}">
+      <div class="letter-heading" style="border-color:${color};">${l}</div>
+      ${groups[l].map(e => entryHTML(e)).join('')}
+    </div>`).join('');
+
+  document.getElementById('hw-index').innerHTML = letters.map(l => {
+    const links = groups[l].map(e =>
+      `<a href="#${e.id}" data-id="${e.id}">${headwordHTML(e)}</a>`
+    ).join('');
+    return `<div class="hw-letter-divider">${l}</div>${links}`;
+  }).join('');
+
+  document.getElementById('dict-main').scrollTop = 0;
+}
+
+// ── Language pills ────────────────────────────────────────────
+function buildPills() {
+  const pillsDiv = document.getElementById('lang-pills');
+  LANGS.forEach(lang => {
+    const btn = document.createElement('button');
+    btn.className = 'hw-lang-pill' + (lang === activeLang ? ' active' : '');
+    btn.textContent = lang;
+    btn.style.background = COLORS[lang];
+    btn.dataset.lang = lang;
+    btn.addEventListener('click', () => {
+      activeLang = lang;
+      pillsDiv.querySelectorAll('.hw-lang-pill')
+        .forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+      render();
+    });
+    pillsDiv.appendChild(btn);
+  });
+}
+
+// ── Search ────────────────────────────────────────────────────
+function bindSearch() {
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchQ = e.target.value.toLowerCase().trim();
+    render();
+  });
+}
+
+// ── Scrollspy ─────────────────────────────────────────────────
+function bindScrollspy() {
+  const dictMain = document.getElementById('dict-main');
+  let timer = null;
+  dictMain.addEventListener('scroll', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      let active = null;
+      document.querySelectorAll('.entry').forEach(el => {
+        if (el.getBoundingClientRect().top - dictMain.getBoundingClientRect().top < 120)
+          active = el.id;
+      });
+      const idx = document.getElementById('hw-index');
+      document.querySelectorAll('.hw-index a').forEach(a => {
+        const on = a.dataset.id === active;
+        a.classList.toggle('active', on);
+        if (on) {
+          const aTop = a.offsetTop, idxH = idx.clientHeight;
+          if (aTop < idx.scrollTop || aTop > idx.scrollTop + idxH - 40)
+            idx.scrollTop = aTop - idxH / 2;
+        }
+      });
+    }, 40);
+  }, { passive: true });
+}
+
+// ── Sidebar navigation ────────────────────────────────────────
+function bindSidebarNav() {
+  document.getElementById('hw-index').addEventListener('click', e => {
+    const a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    const target = document.getElementById(a.dataset.id);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.querySelectorAll('.hw-index a').forEach(x => x.classList.remove('active'));
+      a.classList.add('active');
+    }
+  });
+}
+
+// ── Tooltip on lexlinks ───────────────────────────────────────
+function bindTooltip() {
+  const tooltip  = document.getElementById('lex-tooltip');
+  const ttHw     = document.getElementById('tt-hw');
+  const ttPos    = document.getElementById('tt-pos');
+  const ttGloss  = document.getElementById('tt-gloss');
+  const ttEquivs = document.getElementById('tt-equivs');
+  let hideTimer  = null;
+
+  function pos(el) {
+    const rect = el.getBoundingClientRect();
+    const tw = 310, ttH = tooltip.offsetHeight || 90, gap = 10;
+    let left = rect.left + rect.width / 2 - 24;
+    if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+    if (left < 8) left = 8;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top  = (rect.top - ttH - gap < 8)
+      ? (rect.bottom + gap) + 'px' : (rect.top - ttH - gap) + 'px';
+  }
+
+  document.addEventListener('mouseover', e => {
+    const a = e.target.closest('a.lexlink');
+    if (!a) return;
+    const id    = a.dataset.dictId || (a.getAttribute('href') || '').split('#').pop();
+    const entry = DICT_MAP[id];
+    if (!entry) return;
+    clearTimeout(hideTimer);
+    // Use the hovered word's own language for the headword display,
+    // falling back to activeLang for non-example lexlinks (no data-lang)
+    const hoverLang  = a.dataset.lang || activeLang;
+    const hoverColor = COLORS[hoverLang] || '#fdeec8';
+    ttHw.textContent  = entry.langs[hoverLang] || entry.hw;
+    ttHw.style.color  = hoverColor;
+    ttPos.textContent = '  ' + entry.pos;
+    ttGloss.textContent = senseLine(entry);
+    // Highlight the hovered language's chip in the equivalents row
+    ttEquivs.innerHTML = LANGS.map(lang => {
+      const isHover = lang === hoverLang;
+      return `<span class="tt-eq${isHover ? ' tt-eq-hl' : ''}">` +
+             `<b>${ABBRS[lang]}</b> ${entry.langs[lang] || '—'}</span>`;
+    }).join('');
+    tooltip.classList.add('visible');
+    pos(a);
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest('a.lexlink'))
+      hideTimer = setTimeout(() => tooltip.classList.remove('visible'), 80);
+  });
+  document.addEventListener('mousemove', e => {
+    if (tooltip.classList.contains('visible')) {
+      const a = e.target.closest('a.lexlink');
+      if (a) pos(a);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INIT  — fetch XML, parse, wire everything up
+// ══════════════════════════════════════════════════════════════
+// ── Lexlink click: switch headword to the clicked word's language ─────────────
+// Clicking a word in the example table (a form of another language than the headword's)
+// switches the headword language to that language and scrolls to that dictionary entry.
+function bindLexlinkClicks() {
+  document.getElementById('dict-content').addEventListener('click', e => {
+    const ib = e.target.closest('.ipa-badge.can-click');
+    if (ib) { toggleIpaConfirm(ib); return; }
+    const a = e.target.closest('a.lexlink');
+    if (!a) return;
+    e.preventDefault();
+
+    const lang   = a.dataset.lang;
+    const dictId = a.dataset.dictId || (a.getAttribute('href') || '').slice(1);
+    if (!dictId) return;
+
+    // Switch headword language if it differs from current
+    if (lang && lang !== activeLang) {
+      activeLang = lang;
+      document.querySelectorAll('.hw-lang-pill').forEach(b =>
+        b.classList.toggle('active', b.dataset.lang === lang)
+      );
+    }
+
+    // Re-render (redraws everything for the new headword language)
+    render();
+
+    // Scroll to the target entry and sync sidebar
+    requestAnimationFrame(() => {
+      const el = document.getElementById(dictId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.querySelectorAll('.hw-index a').forEach(a2 =>
+          a2.classList.toggle('active', a2.dataset.id === dictId)
+        );
+      }
+      // Update URL for bookmarkability
+      const url = new URL(window.location);
+      if (lang) url.searchParams.set('lang', lang);
+      url.hash = dictId;
+      window.history.replaceState(null, '', url);
+    });
+  });
+}
+
+// ── In-page badge-click: switch headword language without reloading ────────────
+function bindBadgeClicks() {
+  document.getElementById('dict-content').addEventListener('click', e => {
+    const a = e.target.closest('a.lang-badge-link');
+    if (!a) return;
+    e.preventDefault();
+    const badge   = a.closest('.étiquette_lang');
+    const lang    = badge?.dataset.lang;
+    const entryId = badge?.dataset.entry;
+    if (!lang || !LANGS.includes(lang)) return;
+
+    // Switch active language
+    activeLang = lang;
+    document.querySelectorAll('.hw-lang-pill').forEach(b =>
+      b.classList.toggle('active', b.dataset.lang === lang)
+    );
+
+    // Re-render (redraws sidebar + entries)
+    render();
+
+    // Scroll to the entry the user was looking at
+    requestAnimationFrame(() => {
+      const el = entryId && document.getElementById(entryId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Sync sidebar highlight
+        document.querySelectorAll('.hw-index a').forEach(a2 =>
+          a2.classList.toggle('active', a2.dataset.id === entryId)
+        );
+      }
+      // Update URL without reloading (for bookmarkability)
+      const url = new URL(window.location);
+      url.searchParams.set('lang', lang);
+      if (entryId) url.hash = entryId;
+      window.history.replaceState(null, '', url);
+    });
+  });
+}
+
+
+// ── Proposed dictionary entries ──────────────────────────────
+let proposedEntries = {}; // colKey → {gloss, forms, examples}
+
+async function loadProposedEntries() {
+  try {
+    const r = await fetch('/api/dictionary/proposed');
+    if (r.ok) proposedEntries = await r.json();
+  } catch(e) {}
+}
+
+function renderProposedEntries() {
+  const section = document.getElementById('proposed-section');
+  const container = document.getElementById('proposed-entries');
+  if (!section || !container) return;
+  const entries = Object.entries(proposedEntries);
+  if (!entries.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  const LANG_FROM_CODE = DBT.nameByCode;
+  container.innerHTML = entries.map(([key, e]) => {
+    const hwLang = activeLang;
+    const hwCode = DBT.codeByName[hwLang];
+    const hw = e.forms?.[hwCode] || e.gloss;
+    const equivs = Object.entries(e.forms||{}).map(([code, form]) => {
+      const lang = LANG_FROM_CODE[code] || code;
+      const col = COLORS[lang] || '#888';
+      return `<span class="equiv-item">
+        <span class="equiv-lang-abbr" style="color:${col};">${ABBRS[lang]||code}</span>
+        <span class="equiv-form" style="color:${col};">${form}</span>
+      </span>`;
+    }).join('');
+    const examples = (e.examples||[]).map(ex =>
+      `<div class="proposed-example">
+        "${ex.translation}" <span style="color:var(--ink-light);font-style:normal;font-size:0.8rem;">[${ex.title||ex.sentence_id}]</span>
+      </div>`
+    ).join('');
+    const actions = isLoggedIn ? `
+      <div class="proposed-actions">
+        <button class="proposed-btn add" onclick="addProposedToDict('${key.replace(/'/g,"\'")}')">＋ Add to dictionary</button>
+        <button class="proposed-btn dismiss" onclick="dismissProposed('${key.replace(/'/g,"\'")}')">✕ Dismiss</button>
+      </div>` : '';
+    return `<div class="entry proposed" data-col-key="${key}">
+      <div class="entry-header">
+        <span class="entry-headword" style="color:var(--ink-mid);">${hw}</span>
+        <span class="proposed-badge">proposed</span>
+      </div>
+      <div class="entry-equivs">${equivs}</div>
+      <div class="entry-gloss">${e.gloss}</div>
+      ${examples}
+      ${actions}
+    </div>`;
+  }).join('');
+}
+
+async function addProposedToDict(colKey) {
+  const r = await fetch('/api/dictionary/proposed/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({col_key: colKey})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    delete proposedEntries[colKey];
+    renderProposedEntries();
+    // Reload dictionary (and its text examples) to show the new entry
+    await reloadDictionary();
+  } else {
+    alert(d.error || 'Could not add entry.');
+  }
+}
+
+async function dismissProposed(colKey) {
+  await fetch('/api/dictionary/proposed/dismiss', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({col_key: colKey})
+  });
+  delete proposedEntries[colKey];
+  renderProposedEntries();
+}
+
+
+// ── Dictionary CRUD ───────────────────────────────────────────
+
+// Reload dictionary XML after any modification
+async function reloadDictionary() {
+  DICTIONARY = await loadActiveDictionary();
+  DICT_MAP = {};
+  DICTIONARY.forEach(e => { DICT_MAP[e.id] = e; });
+  buildFormIndex();
+  await loadDictExamples();
+  render();
+  renderProposedEntries();
+}
+
+// ── Entry modal helpers ───────────────────────────────────────
+let _editingId = null; // null = adding, string = editing existing
+let _senses = [];      // the sense cards of the open editor: {ref, definition, shortGloss, notes}
+let _etymDirty = false;
+let _homTouched = false;
+
+const _blankSense = () => ({ ref: null, definition: '', shortGloss: '', notes: '' });
+
+function renderSenseCards() {
+  const box = document.getElementById('em-senses');
+  box.innerHTML = _senses.map((s, i) => `
+    <div class="em-sense" data-i="${i}">
+      <div class="em-sense-bar">
+        <b>Sense ${i + 1}</b>
+        <span class="em-sense-btns">
+          ${_senses.length > 1 ? `<button type="button" data-act="up" title="Move up"${i === 0 ? ' disabled' : ''}>▲</button>
+          <button type="button" data-act="down" title="Move down"${i === _senses.length - 1 ? ' disabled' : ''}>▼</button>` : ''}
+          <button type="button" data-act="del" class="del" title="Remove this sense">✕</button>
+        </span>
+      </div>
+      <label>Definition (English)</label>
+      <textarea class="em-input" data-f="definition" style="width:100%;box-sizing:border-box;height:3rem;resize:vertical;"
+                placeholder="e.g. speech, language, word">${escHTML(s.definition)}</textarea>
+      <label>Short gloss for interlinear</label>
+      <input class="em-input" data-f="shortGloss" style="width:100%;box-sizing:border-box;"
+             value="${escHTML(s.shortGloss)}" placeholder="e.g. speech">
+      <label>Notes</label>
+      <textarea class="em-input" data-f="notes" style="width:100%;box-sizing:border-box;height:3rem;resize:vertical;"
+                placeholder="Usage notes, cognate information…">${escHTML(s.notes)}</textarea>
+    </div>`).join('');
+}
+
+// Homonyms: entries that share a form with the one being edited
+function homonymSharers() {
+  const mine = new Set();
+  LANGS.forEach(lang => {
+    const c = cleanForm(document.getElementById('ef-' + LANG_CODE[lang])?.value);
+    if (c) mine.add(LANG_CODE[lang] + ':' + c);
+  });
+  return DICTIONARY.filter(e => e.id !== _editingId &&
+    LANGS.some(lang => { const c = cleanForm(e.langs[lang]); return c && mine.has(LANG_CODE[lang] + ':' + c); }));
+}
+function updateHomHint() {
+  const hint = document.getElementById('em-hom-hint'), homEl = document.getElementById('ef-hom');
+  const sharers = homonymSharers();
+  if (!sharers.length) { hint.classList.remove('visible'); hint.innerHTML = ''; return; }
+  const list = sharers.map(e => `<b>${escHTML(e.langs[activeLang] || e.hw)}</b>${e.homonym ? '<sup>' + e.homonym + '</sup>' : ''} (${escHTML(e.pos || 'no PoS')})`).join(', ');
+  const unnumbered = sharers.some(e => !e.homonym);
+  hint.innerHTML = `Same form as ${list}. Give each homonym its own number` +
+    (unnumbered ? ' — the entries without a number will be numbered for you.' : '.');
+  hint.classList.add('visible');
+  if (!_editingId && !homEl.value && !_homTouched) {      // suggest the next number for a new entry
+    const used = sharers.map(e => parseInt(e.homonym)).filter(n => n > 0);
+    homEl.value = used.length ? Math.max(...used) + 1 : 2;
+  }
+}
+
+// ── IPA boxes of the editor ──
+// A box holds either what the author wrote (data-auto="0") or a suggestion derived from the
+// orthography (data-auto="1"): the suggestion follows the orthography until the author edits the box.
+function setIpaBox(code, text, auto) {
+  const box = document.getElementById('ef-ipa-' + code);
+  box.value = text || '';
+  box.dataset.auto = auto ? '1' : '0';
+  box.classList.toggle('auto', !!auto && !!text);
+}
+const _ipaTimers = {};
+function suggestIpa(code) {
+  clearTimeout(_ipaTimers[code]);
+  _ipaTimers[code] = setTimeout(async () => {
+    const box = document.getElementById('ef-ipa-' + code);
+    if (box.dataset.auto !== '1') return;                         // the author's own IPA is never overwritten
+    const orth = document.getElementById('ef-' + code).value.trim();
+    if (!orth || orth === '\u2014') { setIpaBox(code, '', true); return; }     // — = no form, nothing to transcribe
+    try {
+      const r = await fetch('/api/dictionary/ipa-suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                           body: JSON.stringify({ forms: { [code]: orth } }) });
+      const d = await r.json();
+      if (box.dataset.auto === '1' && d[code]) setIpaBox(code, d[code], true);
+    } catch (e) { /* offline: the box simply stays empty and is filled in on save */ }
+  }, 220);
+}
+
+function _openEntryModal(title, entry) {
+  _editingId = entry ? entry.id : null;
+  _etymDirty = false; _homTouched = false;
+  document.getElementById('em-title').textContent = title;
+  document.getElementById('em-msg').textContent = '';
+
+  // Clear all inputs first
+  [...DBT.codes, 'pos','domain','hom','el','ef','eg','et','ee'].forEach(id => {
+    const el = document.getElementById('ef-'+id);
+    if (el) el.value = '';
+  });
+  LANGS.forEach(l => setIpaBox(LANG_CODE[l], '', true));
+
+  if (entry) {
+    LANGS.forEach(lang => {
+      const el = document.getElementById('ef-' + LANG_CODE[lang]);
+      if (el) el.value = entry.langs[lang] || '';
+    });
+    LANGS.forEach(lang => {
+      const v = entry.ipa?.[lang];
+      setIpaBox(LANG_CODE[lang], v?.text || '', v ? v.auto : true);
+      if (!v && entry.langs[lang] && entry.langs[lang] !== '\u2014') suggestIpa(LANG_CODE[lang]);        // a form without IPA gets a suggestion
+    });
+    document.getElementById('ef-pos').value    = entry.pos    || '';
+    document.getElementById('ef-domain').value = entry.domain || '';
+    document.getElementById('ef-hom').value    = entry.homonym || '';
+    _senses = entry.senses.map(s => ({ ref: s.ref, definition: s.definition || '',
+                                       shortGloss: s.shortGloss || '', notes: s.notes || '' }));
+    if (entry.etym) {
+      document.getElementById('ef-el').value = entry.etym.label?.split(' ')[0] || 'POc';
+      // label = "POc *form 'gloss'" — best effort parse
+      const m = entry.etym.label?.match(/^(\S+)\s+(\S+)\s+'(.+)'$/);
+      if (m) {
+        document.getElementById('ef-ef').value = m[2];
+        document.getElementById('ef-eg').value = m[3];
+      }
+      document.getElementById('ef-et').value = entry.etym.tlopo       || '';
+      document.getElementById('ef-ee').value = entry.etym.etymograph  || '';
+    }
+  } else {
+    _senses = [_blankSense()];
+  }
+  renderSenseCards();
+  updateHomHint();
+  document.getElementById('entry-modal').classList.add('visible');
+  document.getElementById('ef-' + DBT.codes[0]).focus();      // the first language of the project
+}
+
+function _collectEntryData() {
+  const forms = {};
+  LANGS.forEach(lang => { const c = LANG_CODE[lang]; forms[c] = document.getElementById('ef-'+c)?.value.trim() || ''; });
+  // Etymology: untouched -> null (left exactly as it is); edited -> written; emptied -> removed
+  const etymForm = document.getElementById('ef-ef')?.value.trim();
+  const hadEtym  = !!(_editingId && DICT_MAP[_editingId]?.etym);
+  const etym = !_etymDirty ? null : etymForm ? {
+    lang:       document.getElementById('ef-el')?.value.trim() || 'POc',
+    form:       etymForm,
+    gloss:      document.getElementById('ef-eg')?.value.trim() || '',
+    tlopo:      document.getElementById('ef-et')?.value.trim() || '',
+    etymograph: document.getElementById('ef-ee')?.value.trim() || '',
+  } : (hadEtym ? {} : null);
+  const ipa = {};
+  LANGS.forEach(lang => {
+    const c = LANG_CODE[lang], box = document.getElementById('ef-ipa-' + c), text = box.value.trim();
+    ipa[c] = { text, auto: box.dataset.auto === '1' && !!text };
+  });
+  return {
+    forms, ipa,
+    pos:     document.getElementById('ef-pos')?.value.trim()    || '',
+    domain:  document.getElementById('ef-domain')?.value.trim() || '',
+    homonym: document.getElementById('ef-hom')?.value.trim()    || '',
+    senses:  _senses.map(s => ({ ref: s.ref, definition: s.definition.trim(),
+                                 shortGloss: s.shortGloss.trim(), notes: s.notes.trim() })),
+    etym,
+  };
+}
+
+function openAddEntry() {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  _openEntryModal('Add entry', null);
+}
+
+function openEditEntry(entryId) {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  const entry = DICT_MAP[entryId];
+  if (!entry) return;
+  _openEntryModal('Edit entry', entry);
+}
+
+async function deleteEntry(entryId) {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  const entry = DICT_MAP[entryId];
+  const hw = entry ? (entry.langs[activeLang] || entry.hw) : entryId;
+  if (!confirm(`Delete "${hw}"?\n\nThis removes it from the dictionary XML and cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/dictionary/entry/${encodeURIComponent(entryId)}`,
+                         { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { await reloadDictionary(); }
+    else { alert(d.error || 'Delete failed.'); }
+  } catch(e) { alert('Network error.'); }
+}
+
+async function _submitEntry() {
+  const msg  = document.getElementById('em-msg');
+  const data = _collectEntryData();
+  if (!Object.values(data.forms).some(v => v)) {
+    msg.textContent = 'Please fill in at least one language form.';
+    msg.className = 'dbt-modal-msg error'; return;
+  }
+  msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg';
+  try {
+    const url    = _editingId
+      ? `/api/dictionary/entry/${encodeURIComponent(_editingId)}`
+      : '/api/dictionary/entry';
+    const method = _editingId ? 'PUT' : 'POST';
+    const r = await fetch(url, {
+      method, headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('entry-modal').classList.remove('visible');
+      await reloadDictionary();
+      // Scroll to the new/updated entry
+      const targetId = d.id || _editingId;
+      if (targetId) setTimeout(() => {
+        document.getElementById(targetId)?.scrollIntoView({behavior:'smooth',block:'start'});
+      }, 300);
+    } else {
+      msg.textContent = d.error || 'Save failed.';
+      msg.className = 'dbt-modal-msg error';
+    }
+  } catch(e) {
+    msg.textContent = 'Network error.';
+    msg.className = 'dbt-modal-msg error';
+  }
+}
+
+// The editor's language rows (orthography + IPA), one per language of the project
+function buildLangRows() {
+  const grid = document.getElementById('em-lang-grid');
+  if (grid.dataset.built) return;
+  grid.dataset.built = '1';
+  grid.insertAdjacentHTML('beforeend', DBT.langs.map(l => `
+      <label style="font-family:'Crimson Pro',serif;font-size:0.8rem;font-weight:600;color:var(--c-${l.code});">${escHTML(l.name)}</label>
+      <input id="ef-${l.code}" class="em-input" style="border-bottom-color:var(--c-${l.code});" placeholder="orthography" spellcheck="false">
+      <input id="ef-ipa-${l.code}" class="em-input em-ipa" style="border-bottom-color:var(--c-${l.code});" placeholder="IPA" spellcheck="false" title="Phonetic form, shown as [ ] next to the headword">`).join(''));
+}
+
+function _bindEntryModal() {
+  buildLangRows();
+  document.getElementById('em-cancel').addEventListener('click', () =>
+    document.getElementById('entry-modal').classList.remove('visible'));
+  document.getElementById('entry-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget)
+      document.getElementById('entry-modal').classList.remove('visible');
+  });
+  document.getElementById('em-submit').addEventListener('click', _submitEntry);
+  document.getElementById('add-entry-btn')?.addEventListener('click', openAddEntry);
+  document.getElementById('ortho-btn')?.addEventListener('click', openOrthoPreview);
+  bindSettings();
+  document.getElementById('ortho-apply').addEventListener('click', applyOrtho);
+  document.getElementById('ortho-cancel').addEventListener('click', () =>
+    document.getElementById('ortho-modal').classList.remove('visible'));
+  document.getElementById('ortho-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible');
+  });
+
+  // senses: typing updates the card's data; ▲ ▼ ✕ and "Add sense" change the list
+  const box = document.getElementById('em-senses');
+  box.addEventListener('input', e => {
+    const card = e.target.closest('.em-sense'), fld = e.target.dataset.f;
+    if (card && fld) _senses[+card.dataset.i][fld] = e.target.value;
+  });
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const i = +b.closest('.em-sense').dataset.i, act = b.dataset.act;
+    if (act === 'del') {
+      const s = _senses[i], filled = s.definition || s.shortGloss || s.notes;
+      if (s.ref !== null && !confirm(`Remove sense ${i + 1}? Its examples and relations in the XML are deleted with it.`)) return;
+      if (s.ref === null && filled && !confirm(`Remove sense ${i + 1}?`)) return;
+      _senses.splice(i, 1);
+    } else {
+      const j = act === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= _senses.length) return;
+      [_senses[i], _senses[j]] = [_senses[j], _senses[i]];
+    }
+    renderSenseCards();
+  });
+  document.getElementById('em-add-sense').addEventListener('click', () => {
+    _senses.push(_blankSense()); renderSenseCards();
+    box.lastElementChild?.querySelector('textarea')?.focus();
+  });
+
+  // homonym hint follows the forms; etymology edits are tracked so an untouched one is never rewritten
+  LANGS.forEach(lang => {
+    const c = LANG_CODE[lang];
+    document.getElementById('ef-' + c).addEventListener('input', () => { updateHomHint(); suggestIpa(c); });
+    document.getElementById('ef-ipa-' + c).addEventListener('input', e => {
+      e.target.dataset.auto = '0'; e.target.classList.remove('auto');        // the author wrote it: confirmed
+    });
+  });
+  document.getElementById('ef-hom').addEventListener('input', () => { _homTouched = true; });
+  ['el','ef','eg','et','ee'].forEach(id =>
+    document.getElementById('ef-' + id).addEventListener('input', () => { _etymDirty = true; }));
+}
+
+
+
+// ── Convert IPA forms to the orthography (preview first; the server keeps a backup) ──
+async function openOrthoPreview() {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  const modal = document.getElementById('ortho-modal'), desc = document.getElementById('ortho-desc'),
+        list = document.getElementById('ortho-list'), msg = document.getElementById('ortho-msg'),
+        apply = document.getElementById('ortho-apply');
+  list.innerHTML = ''; msg.textContent = ''; msg.className = 'dbt-modal-msg'; apply.style.display = 'none';
+  desc.textContent = 'Looking for forms written in IPA…';
+  modal.classList.add('visible');
+  try {
+    const r = await fetch('/api/dictionary/orthography');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    if (!d.changes.length) {
+      desc.textContent = `All ${d.unchanged} forms in the ${d.entries} entries already look orthographic. Nothing to convert.`;
+      return;
+    }
+    desc.textContent = `${d.changes.length} form${d.changes.length > 1 ? 's' : ''} in IPA will be rewritten in the orthography ` +
+      `(${d.unchanged} others already look orthographic and are left alone). A backup of the dictionary is kept.`;
+    list.innerHTML = '<table style="border-collapse:collapse;width:100%;font-size:0.95rem;">' +
+      d.changes.map(c => {
+        const lang = CODE2LANG[c.lang], col = COLORS[lang] || '#888';
+        return `<tr style="border-bottom:1px solid var(--border-lt);">
+          <td style="padding:2px 8px 2px 0;font-family:'Source Code Pro',monospace;font-size:0.72rem;color:var(--ink-light);">${escHTML(c.id)}</td>
+          <td style="padding:2px 8px 2px 0;color:${col};font-weight:600;font-variant:small-caps;">${ABBRS[lang]}</td>
+          <td style="padding:2px 6px 2px 0;color:var(--ink-light);">${escHTML(c.from)}</td>
+          <td style="padding:2px 6px;color:var(--ink-light);">→</td>
+          <td style="padding:2px 0;font-family:'EB Garamond',serif;font-size:1.05rem;color:${col};">${escHTML(c.to)}</td></tr>`;
+      }).join('') + '</table>';
+    apply.style.display = '';
+  } catch (e) {
+    desc.textContent = ''; msg.textContent = 'Could not check the dictionary: ' + e.message; msg.className = 'dbt-modal-msg error';
+  }
+}
+
+async function applyOrtho() {
+  const msg = document.getElementById('ortho-msg'), apply = document.getElementById('ortho-apply');
+  msg.textContent = 'Converting…'; msg.className = 'dbt-modal-msg'; apply.disabled = true;
+  try {
+    const r = await fetch('/api/dictionary/orthography', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    msg.textContent = `Done: ${d.converted} form${d.converted === 1 ? '' : 's'} converted. Backup: ${d.backup}`;
+    msg.className = 'dbt-modal-msg success';
+    apply.style.display = 'none';
+    document.getElementById('ortho-list').innerHTML = '';
+    await reloadDictionary();
+  } catch (e) {
+    msg.textContent = 'Conversion failed: ' + e.message; msg.className = 'dbt-modal-msg error';
+  } finally { apply.disabled = false; }
+}
+
+
+// ── Settings: the orthography ↔ IPA correspondence table ──
+let _stRows = [], _stDefaults = null, _stTryTimer = null;
+let _stColors = {}, _stColorsLoaded = {}, _stDefaultColors = {}, _stColorNames = {};
+
+function renderSettingsRows() {
+  const count = {};
+  _stRows.forEach(r => { count[r.orth] = (count[r.orth] || 0) + 1; });
+  document.getElementById('st-rows').innerHTML = _stRows.map((r, i) => `
+    <tr data-i="${i}" class="${r.orth && count[r.orth] > 1 ? 'st-shared' : ''}">
+      <td><input class="em-input" data-f="orth" value="${escHTML(r.orth)}" size="4" spellcheck="false"></td>
+      <td><input class="em-input" data-f="ipa" value="${escHTML(r.ipa)}" size="8" spellcheck="false"></td>
+      <td><select data-f="type"><option value="consonant"${r.type !== 'vowel' ? ' selected' : ''}>consonant</option>
+                                <option value="vowel"${r.type === 'vowel' ? ' selected' : ''}>vowel</option></select></td>
+      <td style="text-align:center;"><input type="checkbox" data-f="default"${r.default ? ' checked' : ''}
+          title="${count[r.orth] > 1 ? 'Several sounds share this letter: tick the one to suggest' : 'Suggested for this letter'}"></td>
+      <td><button type="button" class="st-del" data-act="del" title="Remove this row">✕</button></td>
+    </tr>`).join('');
+}
+
+function stCollect() {
+  return { name: document.getElementById('st-name').value.trim(),
+           long_vowel_doubling: document.getElementById('st-long').checked,
+           rows: _stRows.map(r => ({ orth: r.orth.trim(), ipa: r.ipa.trim(), type: r.type, default: !!r.default })) };
+}
+
+function stTry() {
+  clearTimeout(_stTryTimer);
+  _stTryTimer = setTimeout(async () => {
+    const orth = document.getElementById('st-try-orth').value, ipa = document.getElementById('st-try-ipa-in').value;
+    try {
+      const r = await fetch('/api/dictionary/settings/test', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                             body: JSON.stringify({ correspondences: stCollect(), orth, ipa }) });
+      const d = await r.json();
+      document.getElementById('st-try-ipa').textContent      = r.ok && orth ? '[' + d.ipa + ']' : '';
+      document.getElementById('st-try-orth-out').textContent = r.ok && ipa  ? d.orth : '';
+    } catch (e) { /* offline */ }
+  }, 200);
+}
+
+const _HEX_RE = /^#[0-9a-fA-F]{6}$/;
+const _colorOrder = () => DBT.codes.filter(c => c in _stColorNames);      // the project's order
+function renderColorRows() {
+  document.getElementById('st-colors').innerHTML = _colorOrder().map(c => `
+    <div class="st-color">
+      <label style="color:${_stColors[c]};">${escHTML(_stColorNames[c])}</label>
+      <input type="color" data-c="${c}" value="${_stColors[c]}" title="Choose the colour of ${escHTML(_stColorNames[c])}">
+      <input class="em-input" data-c="${c}" data-hex="1" value="${_stColors[c]}" maxlength="7" spellcheck="false">
+      <button type="button" data-reset="${c}" title="Back to the default colour">↺</button>
+    </div>`).join('');
+}
+function setColor(c, v) {
+  _stColors[c] = v.toLowerCase();
+  const row = document.querySelector(`#st-colors .st-color input[type=color][data-c="${c}"]`).closest('.st-color');
+  row.querySelector('input[type=color]').value = _stColors[c];
+  const hex = row.querySelector('input[data-hex]'); if (document.activeElement !== hex) hex.value = _stColors[c]; hex.classList.remove('bad');
+  row.querySelector('label').style.color = _stColors[c];
+}
+function bindColorRows() {
+  const box = document.getElementById('st-colors');
+  box.addEventListener('input', e => {
+    const c = e.target.dataset.c; if (!c) return;
+    if (e.target.type === 'color') setColor(c, e.target.value);
+    else if (e.target.dataset.hex) {
+      let v = e.target.value.trim(); if (v && v[0] !== '#') v = '#' + v;
+      if (_HEX_RE.test(v)) setColor(c, v); else e.target.classList.toggle('bad', v.length > 0);
+    }
+  });
+  box.addEventListener('focusout', e => { if (e.target.dataset.hex) { e.target.value = _stColors[e.target.dataset.c]; e.target.classList.remove('bad'); } });
+  box.addEventListener('click', e => { const b = e.target.closest('button[data-reset]'); if (b) setColor(b.dataset.reset, _stDefaultColors[b.dataset.reset]); });
+  document.getElementById('st-colors-reset').addEventListener('click', () => _colorOrder().forEach(c => setColor(c, _stDefaultColors[c])));
+}
+
+function stLoad(cfg) {
+  document.getElementById('st-name').value = cfg.name || '';
+  document.getElementById('st-long').checked = !!cfg.long_vowel_doubling;
+  _stRows = cfg.rows.map(r => ({ orth: r.orth, ipa: r.ipa, type: r.type === 'vowel' ? 'vowel' : 'consonant', default: !!r.default }));
+  renderSettingsRows(); stTry();
+}
+
+async function openSettings() {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  const msg = document.getElementById('st-msg');
+  msg.textContent = ''; msg.className = 'dbt-modal-msg';
+  document.getElementById('settings-modal').classList.add('visible');
+  try {
+    const r = await fetch('/api/dictionary/settings');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    _stDefaults = d.defaults;
+    _stColors = {...d.colors}; _stColorsLoaded = {...d.colors}; _stDefaultColors = d.default_colors; _stColorNames = d.color_names;
+    renderColorRows();
+    stLoad(d.correspondences);
+  } catch (e) { msg.textContent = 'Could not load the settings: ' + e.message; msg.className = 'dbt-modal-msg error'; }
+}
+
+async function saveSettings() {
+  const msg = document.getElementById('st-msg'), btn = document.getElementById('st-save');
+  msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/dictionary/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ correspondences: stCollect(), colors: _stColors, rederive: document.getElementById('st-rederive').checked }) });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    msg.textContent = 'Saved.' + (d.rederived ? ` ${d.rederived} provisional transcription${d.rederived > 1 ? 's' : ''} re-derived.` : '');
+    msg.className = 'dbt-modal-msg success';
+    if (JSON.stringify(_stColors) !== JSON.stringify(_stColorsLoaded)) {      // the colours are used by every page: reload to apply them
+      msg.textContent += ' Applying the new colours…';
+      setTimeout(() => location.reload(), 700);
+      return;
+    }
+    const g = await (await fetch('/api/dictionary/settings')).json();      // show what the server really kept
+    if (g.correspondences) stLoad(g.correspondences);
+    await reloadDictionary();
+  } catch (e) { msg.textContent = 'Not saved: ' + e.message; msg.className = 'dbt-modal-msg error'; }
+  finally { btn.disabled = false; }
+}
+
+async function changePassword() {
+  const msg = document.getElementById('pw-msg'), cur = document.getElementById('pw-current').value,
+        nw = document.getElementById('pw-new').value, nw2 = document.getElementById('pw-new2').value;
+  msg.className = 'dbt-modal-msg';
+  if (nw !== nw2) { msg.textContent = 'The two new passwords differ.'; msg.className = 'dbt-modal-msg error'; return; }
+  try {
+    const r = await fetch('/api/auth/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current: cur, new: nw }) });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    msg.textContent = 'Password changed.'; msg.className = 'dbt-modal-msg success';
+    ['pw-current', 'pw-new', 'pw-new2'].forEach(id => { document.getElementById(id).value = ''; });
+  } catch (e) { msg.textContent = e.message; msg.className = 'dbt-modal-msg error'; }
+}
+
+function bindSettings() {
+  bindColorRows();
+  document.getElementById('pw-change').addEventListener('click', changePassword);
+  document.getElementById('settings-btn')?.addEventListener('click', openSettings);
+  document.getElementById('st-cancel').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('visible'));
+  document.getElementById('settings-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible'); });
+  document.getElementById('st-save').addEventListener('click', saveSettings);
+  document.getElementById('st-add-row').addEventListener('click', () => {
+    _stRows.push({ orth: '', ipa: '', type: 'consonant', default: false }); renderSettingsRows();
+    document.getElementById('st-rows').lastElementChild?.querySelector('input')?.focus();
+  });
+  document.getElementById('st-reset').addEventListener('click', () => {
+    if (_stDefaults && confirm('Replace the table by the project default' + (_stDefaults.name ? ' (' + _stDefaults.name + ')' : '') + '? Nothing is saved until you press "Save settings".')) stLoad(_stDefaults);
+  });
+  ['st-try-orth', 'st-try-ipa-in', 'st-long'].forEach(id => document.getElementById(id).addEventListener('input', stTry));
+  const body = document.getElementById('st-rows');
+  body.addEventListener('input', e => {
+    const tr = e.target.closest('tr'), f = e.target.dataset.f;
+    if (!tr || !f || f === 'default') return;
+    const idx = +tr.dataset.i, row = _stRows[idx];
+    row[f] = e.target.value;
+    if (f === 'orth') {
+      // the default of a letter: this row, unless another row of the same letter already is
+      row.default = !!row.orth.trim() && !_stRows.some((o, k) => k !== idx && o.orth === row.orth && o.default);
+      tr.querySelector('input[data-f="default"]').checked = row.default;
+      renderSettingsRowsKeepFocus(tr, e.target);
+    }
+    stTry();
+  });
+  body.addEventListener('change', e => {
+    const tr = e.target.closest('tr'), f = e.target.dataset.f;
+    if (!tr) return;
+    const row = _stRows[+tr.dataset.i];
+    if (f === 'type') row.type = e.target.value;
+    if (f === 'default') {
+      row.default = e.target.checked;
+      if (row.default) _stRows.forEach(o => { if (o !== row && o.orth === row.orth) o.default = false; });
+      else if (!_stRows.some(o => o !== row && o.orth === row.orth && o.default) && !_stRows.some(o => o !== row && o.orth === row.orth)) row.default = true;
+      renderSettingsRows(); stTry();
+    }
+  });
+  body.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act="del"]');
+    if (!b) return;
+    _stRows.splice(+b.closest('tr').dataset.i, 1); renderSettingsRows(); stTry();
+  });
+}
+// re-colour the "shared letter" rows while typing in an orthography box, without losing the cursor
+function renderSettingsRowsKeepFocus(tr, input) {
+  const count = {};
+  _stRows.forEach(r => { count[r.orth] = (count[r.orth] || 0) + 1; });
+  document.querySelectorAll('#st-rows tr').forEach(row => {
+    const r = _stRows[+row.dataset.i];
+    row.classList.toggle('st-shared', !!(r && r.orth && count[r.orth] > 1));
+  });
+}
+
+async function init() {
+  // ── Read URL params: ?lang=<language name>#<entry id> ──────────────────────
+  const params   = new URLSearchParams(window.location.search);
+  const langParam = params.get('lang');
+  if (langParam && LANGS.includes(langParam)) activeLang = langParam;
+
+  // Check auth for proposed entry actions
+  try {
+    const authR = await fetch('/api/auth/status');
+    if (authR.ok) { const ad = await authR.json(); isLoggedIn = ad.logged_in; }
+  } catch(e) {}
+
+  try {
+    DICTIONARY = await loadActiveDictionary();
+    DICTIONARY.forEach(e => { DICT_MAP[e.id] = e; });
+    buildFormIndex();
+    await Promise.all([loadProposedEntries(), loadDictExamples()]);
+    buildPills();
+    bindSearch();
+    render();
+    renderProposedEntries();
+    bindScrollspy();
+    bindSidebarNav();
+    bindBadgeClicks();
+    bindLexlinkClicks();
+    bindTooltip();
+    _bindEntryModal();
+
+    // ── Scroll to hash entry after render ───────────────────────
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ block: 'start' });
+          // Highlight in sidebar
+          document.querySelectorAll('.hw-index a').forEach(a =>
+            a.classList.toggle('active', a.dataset.id === hash)
+          );
+        }
+      });
+    }
+  } catch (err) {
+    const isNet = /Cannot fetch|Failed to fetch|NetworkError|XML parse/i.test(err.message);
+    document.getElementById('result-bar').textContent = '\u26a0 ' + err.message;
+    document.getElementById('dict-content').innerHTML =
+      `<p class="dict-status error">Could not load dictionary.<br>
+       <small>${err.message}</small><br><br>
+       ${isNet
+         ? 'Make sure the dictionary XML is available and the page is served by the Flask app (not opened as a local file).'
+         : 'This looks like a script error, not a missing file \u2014 open the browser console (F12) for details.'}</p>`;
+    console.error(err);
+  }
+}
+
+init();
+</script>
+<!-- ── Add / Edit entry modal ── -->
+<div class="dbt-modal-backdrop" id="entry-modal">
+  <div class="dbt-modal" style="max-width:560px;width:94vw;max-height:90vh;overflow-y:auto;">
+    <h3 id="em-title">Add entry</h3>
+
+    <div class="em-lang-grid" id="em-lang-grid">
+      <span></span><span class="em-colhead">Orthography</span><span class="em-colhead">IPA [ ]</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;margin-bottom:0.9rem;">
+      <label class="em-label">Part of speech</label>
+      <input id="ef-pos" class="em-input" placeholder="n., v.tr., part.…">
+      <label class="em-label">Semantic domain</label>
+      <input id="ef-domain" class="em-input" placeholder="Language, Nature…">
+      <label class="em-label" title="Entries with the same form are told apart by a number">Homonym no.</label>
+      <input id="ef-hom" class="em-input" type="number" min="1" placeholder="(none)">
+      <div class="em-hint" id="em-hom-hint"></div>
+    </div>
+
+    <div class="em-senses-head">
+      <span>Senses</span>
+      <button type="button" class="fn-col-add" id="em-add-sense">＋ Add sense</button>
+    </div>
+    <div id="em-senses"></div>
+
+    <details style="margin-bottom:0.9rem;">
+      <summary style="font-family:'Crimson Pro',serif;font-size:0.82rem;color:var(--ink-light);
+                      cursor:pointer;letter-spacing:0.05em;">Etymology (optional)</summary>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:0.4rem 0.8rem;margin-top:0.5rem;">
+        <label class="em-label">Proto-language</label><input id="ef-el" class="em-input" placeholder="POc">
+        <label class="em-label">Form</label><input id="ef-ef" class="em-input" placeholder="*qaliŋa-">
+        <label class="em-label">Meaning</label><input id="ef-eg" class="em-input" placeholder="voice">
+        <label class="em-label">TLOPO link</label><input id="ef-et" class="em-input" placeholder="https://tlopo…">
+        <label class="em-label">Etymograph</label><input id="ef-ee" class="em-input" placeholder="https://evosem…">
+      </div>
+    </details>
+
+    <div class="dbt-modal-msg" id="em-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="em-cancel">Cancel</button>
+      <button class="modal-btn primary" id="em-submit">Save entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Settings dialog ── -->
+<div class="dbt-modal-backdrop" id="settings-modal">
+  <div class="dbt-modal" style="max-width:700px;width:96vw;max-height:92vh;overflow-y:auto;">
+    <h3>Dictionary settings</h3>
+    <h4 class="st-h">Language colours</h4>
+    <p class="modal-desc">The colour that codes each language everywhere on the site: headwords, tables, texts, the grammar and the LaTeX export.</p>
+    <div id="st-colors" class="st-colors"></div>
+    <div class="st-actions" style="margin-top:0.2rem;">
+      <button type="button" class="fn-col-add" id="st-colors-reset">↺ Default colours</button>
+    </div>
+    <h4 class="st-h" style="margin-top:1.1rem;">Orthography ↔ IPA</h4>
+    <p class="modal-desc">One row per correspondence. These rows suggest the IPA of a form from its orthography, and read forms
+      typed in IPA. If a language has one letter standing for several sounds, add a row for each and tick <b>default</b> on the one
+      to suggest; every row is still understood when reading IPA.</p>
+    <div class="st-top">
+      <label>Orthography <input id="st-name" class="em-input" placeholder="e.g. {{project.orthographyName}}" spellcheck="false"></label>
+      <label class="st-check"><input type="checkbox" id="st-long"> A doubled vowel letter is a long vowel (ēē = ɪː)</label>
+    </div>
+    <div style="max-height:40vh;overflow-y:auto;border:1px solid var(--border);border-radius:4px;">
+      <table class="st-table">
+        <thead><tr><th>Orthography</th><th>IPA</th><th>Type</th><th title="Suggested when going from orthography to IPA">Default</th><th></th></tr></thead>
+        <tbody id="st-rows"></tbody>
+      </table>
+    </div>
+    <div class="st-actions">
+      <button type="button" class="fn-col-add" id="st-add-row">＋ Add a correspondence</button>
+      <button type="button" class="fn-col-add" id="st-reset" style="border-color:#c06060;color:#c06060;">↺ Reset to {{project.orthographyName}}</button>
+    </div>
+    <div class="st-try">
+      <b>Try it</b> (uses the table as it is now, saved or not)
+      <div><span>orthography</span> <input id="st-try-orth" class="em-input" placeholder="tuqa" spellcheck="false"> → <b>IPA</b> <span id="st-try-ipa" class="st-out"></span></div>
+      <div><span>IPA</span> <input id="st-try-ipa-in" class="em-input" placeholder="tuk͡pʷa" spellcheck="false"> → <b>orthography</b> <span id="st-try-orth-out" class="st-out"></span></div>
+    </div>
+    <label class="st-check" style="margin-top:0.7rem;"><input type="checkbox" id="st-rederive" checked>
+      Also re-derive the transcriptions still marked <b>?</b> with this table (confirmed ones are never changed)</label>
+    <details class="st-pw">
+      <summary>Author password</summary>
+      <p class="modal-desc">The password is stored on the server only as a hash (in <code>instance/</code>, never in the code or the repository).
+        Use at least 8 characters.</p>
+      <div class="st-pw-grid">
+        <label>Current password <input type="password" id="pw-current" class="em-input" autocomplete="current-password"></label>
+        <label>New password <input type="password" id="pw-new" class="em-input" autocomplete="new-password"></label>
+        <label>Repeat the new password <input type="password" id="pw-new2" class="em-input" autocomplete="new-password"></label>
+      </div>
+      <button type="button" class="fn-col-add" id="pw-change">Change password</button>
+      <div class="dbt-modal-msg" id="pw-msg"></div>
+    </details>
+    <div class="dbt-modal-msg" id="st-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="st-cancel">Close</button>
+      <button class="modal-btn primary" id="st-save">Save settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IPA → orthography dialog ── -->
+<div class="dbt-modal-backdrop" id="ortho-modal">
+  <div class="dbt-modal" style="max-width:620px;width:94vw;max-height:88vh;overflow-y:auto;">
+    <h3>Convert IPA forms to orthography</h3>
+    <p class="modal-desc" id="ortho-desc">Looking for forms written in IPA…</p>
+    <div id="ortho-list" style="max-height:46vh;overflow-y:auto;margin-bottom:0.7rem;"></div>
+    <div class="dbt-modal-msg" id="ortho-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="ortho-cancel">Close</button>
+      <button class="modal-btn primary" id="ortho-apply" style="display:none;">Convert these forms</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Login modal ── -->
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+<!-- ── Upload dictionary modal ── -->
+<div class="dbt-modal-backdrop" id="upload-modal">
+  <div class="dbt-modal">
+    <h3>Upload Dictionary XML</h3>
+    <p class="modal-desc">Select a LEXICA-format XML file to replace the current dictionary.
+    All the language forms will be reloaded automatically.</p>
+    <input type="file" id="dict-file" accept=".xml">
+    <div class="dbt-modal-msg" id="upload-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="upload-cancel">Cancel</button>
+      <button class="modal-btn primary" id="upload-submit">Upload</button>
+    </div>
+  </div>
+</div>
+<script>
+function onAuthChange(loggedIn) {
+  document.querySelectorAll('.entry-actions').forEach(el =>
+    el.classList.toggle('visible', loggedIn));
+  // the IPA badges differ for the author (✓ on confirmed forms, clickable ones): redraw them in place
+  document.querySelectorAll('#dict-content .entry').forEach(el => {
+    const entry = DICT_MAP[el.id], w = el.querySelector('.ipa-wrap');
+    if (entry && w) w.outerHTML = ipaHTML(entry);
+  });
+  if (typeof renderProposedEntries === 'function') renderProposedEntries();
+}
+
+// Scripts at bottom of body — DOM already ready, no DOMContentLoaded needed
+bindLoginModal();
+checkAuth();
+
+// Edit tab → open upload modal
+const dictEditTab = document.getElementById('dict-edit-tab');
+if (dictEditTab) {
+  dictEditTab.addEventListener('click', () => {
+    document.getElementById('upload-msg').textContent = '';
+    document.getElementById('upload-msg').className = 'dbt-modal-msg';
+    document.getElementById('upload-modal').classList.add('visible');
+  });
+}
+
+// Upload modal buttons
+document.getElementById('upload-cancel').addEventListener('click', () => {
+  document.getElementById('upload-modal').classList.remove('visible');
+});
+document.getElementById('upload-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget)
+    document.getElementById('upload-modal').classList.remove('visible');
+});
+document.getElementById('upload-submit').addEventListener('click', async () => {
+  const file = document.getElementById('dict-file').files[0];
+  const msg  = document.getElementById('upload-msg');
+  if (!file) { msg.textContent = 'Please choose a file.'; msg.className='dbt-modal-msg error'; return; }
+  const form = new FormData(); form.append('file', file);
+  try {
+    const r = await fetch('/api/upload/dictionary', { method:'POST', body:form });
+    const d = await r.json();
+    if (d.ok) {
+      msg.textContent = 'Upload successful — reloading dictionary…';
+      msg.className = 'dbt-modal-msg success';
+      setTimeout(async () => {
+        document.getElementById('upload-modal').classList.remove('visible');
+        await reloadDictionary();
+      }, 800);
+    } else {
+      msg.textContent = d.error || 'Upload failed.';
+      msg.className = 'dbt-modal-msg error';
+    }
+  } catch(e) {
+    msg.textContent = 'Network error.';
+    msg.className = 'dbt-modal-msg error';
+  }
+});
+</script>
+</body>
