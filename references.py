@@ -405,17 +405,66 @@ def intext(items, ctx, narrative=False):
     return '(' + '; '.join(t for t, _ in texts) + ')', texts
 
 
-def parse_source_spec(spec):
-    """'smith2020, p. 12; jones2019, narrative' -> [(key, locator, narrative)]"""
+_YEAR = r'\d{4}[a-z]?|n\.\s?d\.(?:-[a-z])?|in press(?:-[a-z])?'
+
+
+def parse_source_spec(spec, keys=None):
+    """'smith2020, p. 12; Jones 2019, narrative; Lee, 2018' -> [(what, locator, narrative)].
+    `what` is a key, or the author(s) and year as written in the text ('Jones 2019', 'Lee, 2018'). `keys` are the keys that
+    exist: a first word that is a key is never taken for an author."""
+    keys = {str(k).lower() for k in (keys or ())}
     items = []
     for chunk in str(spec or '').split(';'):
         toks = [t.strip() for t in chunk.split(',') if t.strip()]
         if not toks:
             continue
-        narrative = any(t.lower() == 'narrative' for t in toks[1:])
-        loc = ', '.join(t for t in toks[1:] if t.lower() != 'narrative')
-        items.append((toks[0].lower(), loc, narrative))
+        what, rest = toks[0], toks[1:]
+        if what.lower() not in keys and rest and re.fullmatch(_YEAR, rest[0], re.I):      # "Lee, 2018": author, then year
+            what, rest = f'{what} {rest[0]}', rest[1:]
+        narrative = any(t.lower() == 'narrative' for t in rest)
+        loc = ', '.join(t for t in rest if t.lower() != 'narrative')
+        items.append((what.lower() if (what.lower() in keys or ' ' not in what) else what, loc, narrative))
     return items
+
+
+def find_reference(what, refs, ctx):
+    """Find the reference a citation points to. `what` is a key, or the author(s) and year as one writes them in a text:
+    'Smith 2020b', 'Smith & Jones 2016', 'Lee et al. 2018', 'A. Young 2019', 'Smith 2020' (when only one year
+    of that author matches). Returns (reference, None), or (None, 'not found') or (None, 'ambiguous: 2005a, 2005b')."""
+    t = str(what or '').strip()
+    for r in refs:
+        if r['id'] == t.lower():
+            return r, None
+    m = re.fullmatch(r'(.+?)[\s,]+(' + _YEAR + r')', t, re.I)
+    if not m:
+        return None, 'not found'
+    who, year = m.group(1).strip(), m.group(2).lower()
+    year = 'n.d.' + year[year.index('.', 2) + 1:] if year.startswith('n') else year
+    ini = ''
+    mi = re.match(r'^((?:[^\W\d_]\.\s*)+)(\S.*)$', who)                      # "A. McManus": initials before the surname
+    if mi:
+        ini, who = _fold(mi.group(1)).replace('.', '').replace(' ', ''), mi.group(2).strip()
+    et_al = bool(re.search(r'\s+et\s+al\.?$', who, re.I))
+    who = re.sub(r'\s+et\s+al\.?$', '', who, flags=re.I)
+    names = [_fold(x).strip() for x in re.split(r'\s*&\s*|\s+and\s+', who) if x.strip()]
+    exact, loose = [], []
+    for r in refs:
+        au = r.get('authors') or []
+        have = [_fold(a.get('org') or a.get('family')) for a in au]
+        if not names or len(names) > len(have) or have[:len(names)] != names:
+            continue
+        if ini and not _fold(initials(au[0].get('given'))).replace('.', '').replace(' ', '').startswith(ini):
+            continue
+        shown = ctx.year(r)
+        if (shown != year) if (year[-1:].isalpha() and not year.startswith(('n.d.', 'in press')) or '-' in year) else (split_year(shown)[0] != year):
+            continue
+        (exact if (len(have) == len(names) or (et_al and len(have) > len(names))) else loose).append(r)
+    for found in (exact, loose):
+        if len(found) == 1:
+            return found[0], None
+        if len(found) > 1:
+            return None, 'ambiguous: ' + ', '.join(sorted(ctx.year(r) for r in found))
+    return None, 'not found'
 
 
 # ───────────────────────── export: BibTeX ─────────────────────────
