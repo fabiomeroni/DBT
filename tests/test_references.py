@@ -101,6 +101,41 @@ check('group author in the text', R.intext([(org, 'Key strategies section')], R.
 check('no author: the title in italics or in quotes', (R.author_text(ref('a', 'book', year='2019', title='Interpersonal Skills', publisher='P'), R.Context([])), R.author_text(ref('a', 'article', year='2019', title='Interpersonal Skills', container='J'), R.Context([]))), ('Interpersonal Skills', '“Interpersonal Skills”'))
 check('shortcode spec', R.parse_source_spec('francois2026b, p. 128; Miestamo2020, narrative'), [('francois2026b', 'p. 128', False), ('miestamo2020', '', True)])
 
+# ── citing by author and year, as one writes it in a text ──
+def found(what, refs):
+    r, why = R.find_reference(what, refs, R.Context(refs))
+    return r['id'] if r else why
+sm   = ref('smith2020', 'book', authors=[P('Smith', 'Jane')], year='2020', title='One', publisher='P')
+smj  = ref('smithjones2016', 'book', authors=[P('Smith', 'Jane'), P('Jones', 'Bob')], year='2016', title='Two', publisher='P')
+gur  = gu
+mxA  = ref('mxa', 'book', authors=[P('McManus', 'A.')], year='2019', title='A', publisher='P')
+mxJ  = ref('mxj', 'book', authors=[P('McManus', 'J.')], year='2019', title='B', publisher='P')
+allr = [fr, sm, smj, gur, mxA, mxJ, c1, c2, nd]
+check('François 2026b', found('François 2026b', allr), 'francois2026b')
+check('François, 2026b (with a comma)', found('François, 2026b', allr), 'francois2026b')
+check('case and accents do not matter', found('FRANCOIS 2026B', allr), 'francois2026b')
+check('no letter: the only year of that author', found('François 2026', allr), 'francois2026b')
+check('the wrong letter is not found', found('François 2026a', allr), 'not found')
+check('an unknown author is not found', found('Nobody 2000', allr), 'not found')
+check('an author without a year is not a citation', found('François', allr), 'not found')
+check('a key still works', found('smith2020', allr), 'smith2020')
+check('two authors with &', found('Smith & Jones 2016', allr), 'smithjones2016')
+check('two authors with and, and a comma', found('Smith and Jones, 2016', allr), 'smithjones2016')
+check('the first author only, when that is enough', found('Smith 2016', allr), 'smithjones2016')
+check('but the one-author work wins when there is one', found('Smith 2020', allr), 'smith2020')
+check('three authors: et al.', found('Gursoy et al. 2018', allr), 'g')
+check('same surname, different people: ambiguous', found('McManus 2019', allr).startswith('ambiguous'), True)
+check('…told apart by the initial', (found('A. McManus 2019', allr), found('J. McManus 2019', allr)), ('mxa', 'mxj'))
+check('two works of one year: ambiguous, naming the letters', found('Collier & McManus 2005', allr), 'ambiguous: 2005a, 2005b')
+check('…and fine with the letter', (found('Collier & McManus 2005a', allr), found('Collier & McManus 2005b', allr)), ('c2', 'c1'))
+check('n.d.', found('Zed n.d.', allr), 'nd')
+check('a surname with particles', found('van der Berg 2001', [ref('vdb', 'book', authors=[P('van der Berg', 'H.')], year='2001', title='T', publisher='P')]), 'vdb')
+keys = {'smith2020', 'francois2026b'}
+check('parse: author, comma, year, locator', R.parse_source_spec('François, 2026b, p. 128', keys), [('François 2026b', 'p. 128', False)])
+check('parse: author year, narrative', R.parse_source_spec('Smith 2020, narrative', keys), [('Smith 2020', '', True)])
+check('parse: several, mixing forms', R.parse_source_spec('Lee, 2018; smith2020, p. 3; Kim 2019', keys), [('Lee 2018', '', False), ('smith2020', 'p. 3', False), ('Kim 2019', '', False)])
+check('parse: a key followed by a number keeps its locator (the number is not taken for a year)', R.parse_source_spec('smith2020, 2021', keys), [('smith2020', '2021', False)])
+
 # ── validation and keys ──
 r, e = R.clean({'type': 'article', 'title': 'T', 'year': '2020', 'authors': [{'family': 'Doe', 'given': 'J'}, {'family': ''}], 'url': 'ftp://x'})
 check('a URL must be http(s)', e is not None, True)
