@@ -10,12 +10,14 @@ import re
 import sys
 import json
 import unicodedata
+import html as _html
 from html import escape as _esc
 from flask import Flask, request, jsonify, session, send_from_directory, abort, Response, redirect
 from lxml import etree
 import markdown as md_lib
 
 import security
+import references as refs_lib
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -76,7 +78,7 @@ def _load_project():
     files = {'dictionary': 'project/dictionary.xml', 'fieldnotes': 'project/fieldnotes.xml',
              'grammarDir': 'project/grammar', 'recordingsDir': 'project/texts', 'imagesDir': 'project/images',
              'orthography': 'project/orthography.json', 'seedPhonetic': 'project/seed-phonetic-forms.json',
-             'pagesDir': 'project/pages'}
+             'pagesDir': 'project/pages', 'references': 'project/references.json'}
     files.update(p.get('files') or {})
     p['files'] = files
     return p
@@ -87,6 +89,7 @@ UPLOAD_FOLDER  = 'uploads'
 GRAMMAR_FOLDER = PROJECT['files']['grammarDir']
 
 DICT_FILE             = PROJECT['files']['dictionary']
+REFERENCES_FILE       = PROJECT['files']['references']
 FIELDNOTES_FILE       = PROJECT['files']['fieldnotes']
 IMAGES_FOLDER         = PROJECT['files']['imagesDir']
 TRANSCRIPTIONS_FOLDER = PROJECT['files']['recordingsDir']
@@ -637,9 +640,219 @@ def build_entry_chip(entry_id):
 
 
 # ══════════════════════════════════════════════════════════════
+#  REFERENCES (the project's bibliography, APA 7)
+#  project/references.json holds what the author typed in the form; the formatting is done by references.py.
+#  {{source: key}} cites one in the grammar; the References page lists them; they export to BibTeX and EndNote.
+# ══════════════════════════════════════════════════════════════
+import threading as _threading
+_REFS_LOCK = _threading.Lock()
+
+def _refs_load():
+    try:
+        with open(REFERENCES_FILE, encoding='utf-8') as f:
+            raw = (json.load(f) or {}).get('references', [])
+    except (OSError, ValueError):
+        return []
+    out, taken = [], set()
+    for r in raw if isinstance(raw, list) else []:
+        c, err = refs_lib.clean(r)
+        if c is None:
+            continue
+        c['id'] = c['id'] or refs_lib.suggest_id(c, taken)
+        if c['id'] in taken:
+            continue
+        taken.add(c['id'])
+        out.append(c)
+    return out
+
+def _refs_save(refs):
+    os.makedirs(os.path.dirname(REFERENCES_FILE) or '.', exist_ok=True)
+    tmp = REFERENCES_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump({'references': refs}, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, REFERENCES_FILE)
+
+_SOURCE_RE = re.compile(r'\{\{\s*source\s*:\s*([^\}]+)\}\}')
+
+def _grammar_citations():
+    """{reference key: [grammar section ids that cite it]}"""
+    found = {}
+    try:
+        names = sorted(os.listdir(GRAMMAR_FOLDER))
+    except OSError:
+        return found
+    for fn in names:
+        if not fn.endswith('.md'):
+            continue
+        with open(os.path.join(GRAMMAR_FOLDER, fn), encoding='utf-8') as f:
+            text = f.read()
+        for m in _SOURCE_RE.finditer(text):
+            for key, _loc, _nar in refs_lib.parse_source_spec(_html.unescape(m.group(1))):
+                if fn[:-3] not in found.setdefault(key, []):
+                    found[key].append(fn[:-3])
+    return found
+
+def _resolve_sources(spec):
+    """Parse a {{source: …}} spec against the stored references. Returns (items, narrative, ctx, missing)."""
+    refs = _refs_load()
+    byid = {r['id']: r for r in refs}
+    items, missing, narrative = [], [], False
+    for key, loc, nar in refs_lib.parse_source_spec(spec):
+        if key in byid:
+            items.append((byid[key], loc))
+            narrative = narrative or nar
+        else:
+            missing.append(key)
+    return items, narrative, refs_lib.Context(refs), missing
+
+def build_source_cite(spec):
+    """{{source: smith2020, p. 12}} -> (Smith, 2020, p. 12), a link to the reference with the full APA entry on hover."""
+    items, narrative, ctx, missing = _resolve_sources(spec)
+    if missing and not items:
+        return f'<span class="shortcode-error">Reference not found: {_esc(", ".join(missing))}</span>'
+    text, parts = refs_lib.intext(items, ctx, narrative and len(items) == 1)
+    byid = {r['id']: r for r, _ in items}
+    def link(label, rid):
+        return (f'<a class="source-cite" href="references.html#{_esc(rid)}" '
+                f'data-ref="{_esc(refs_lib.apa(byid[rid], ctx)[0], quote=True)}">{_esc(label)}</a>')
+    if narrative and len(items) == 1:
+        out = link(parts[0][0], parts[0][1])
+    else:
+        out = '(' + '; '.join(link(t, rid) for t, rid in parts) + ')'
+    if missing:
+        out += f' <span class="shortcode-error">Reference not found: {_esc(", ".join(missing))}</span>'
+    return out
+
+def _source_latex(spec, cited):
+    items, narrative, ctx, missing = _resolve_sources(spec)
+    if missing and not items:
+        return f'\\textit{{[reference not found: {_le(", ".join(missing))}]}}'
+    text, _parts = refs_lib.intext(items, ctx, narrative and len(items) == 1)
+    cited.update(r['id'] for r, _ in items)
+    return _le(text)
+
+def _ref_view(r, ctx, cited_in=None):
+    html_, text_ = refs_lib.apa(r, ctx)
+    return dict(r, html=html_, text=text_, yearDisplay=ctx.year(r),
+                intext=refs_lib.intext([(r, '')], ctx)[0], narrative=refs_lib.intext([(r, '')], ctx, True)[0],
+                citedIn=(cited_in or {}).get(r['id'], []))
+
+@app.route('/api/references')
+def references_list():
+    refs = _refs_load()
+    ctx = refs_lib.Context(refs)
+    cited = _grammar_citations()
+    return jsonify({'references': [_ref_view(r, ctx, cited) for r in ctx.sorted()],
+                    'types': [{'id': i, 'label': l} for i, l in refs_lib.TYPES]})
+
+@app.route('/api/references/preview', methods=['POST'])
+def references_preview():
+    """How a reference that is being typed will look (the author's form calls this as they type)."""
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    ref, err = refs_lib.clean(data)
+    if err:
+        return jsonify({'ok': False, 'error': err})
+    others = [r for r in _refs_load() if r['id'] != (data.get('editing') or '')]
+    taken = {r['id'] for r in others}
+    ref['id'] = ref['id'] or refs_lib.suggest_id(ref, taken)
+    ctx = refs_lib.Context(others + [ref])
+    view = _ref_view(ref, ctx)
+    view['suggestedId'] = refs_lib.suggest_id(ref, taken)
+    return jsonify({'ok': True, 'view': view})
+
+@app.route('/api/references', methods=['POST'])
+def references_create():
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    ref, err = refs_lib.clean(request.get_json(silent=True) or {})
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    with _REFS_LOCK:
+        refs = _refs_load()
+        taken = {r['id'] for r in refs}
+        if ref['id'] and ref['id'] in taken:
+            return jsonify({'ok': False, 'error': f'The key "{ref["id"]}" is already used by another reference.'}), 409
+        ref['id'] = ref['id'] or refs_lib.suggest_id(ref, taken)
+        refs.append(ref)
+        _refs_save(refs)
+    return jsonify({'ok': True, 'id': ref['id']})
+
+def _rename_in_grammar(old, new):
+    """Rewrite {{source: old …}} as {{source: new …}} in every grammar section. Returns the sections changed."""
+    changed = []
+    for fn in sorted(os.listdir(GRAMMAR_FOLDER)):
+        if not fn.endswith('.md'):
+            continue
+        path = os.path.join(GRAMMAR_FOLDER, fn)
+        with open(path, encoding='utf-8') as f:
+            text = f.read()
+        def fix(m):
+            chunks = m.group(1).split(';')
+            for i, ch in enumerate(chunks):
+                core = ch.lstrip()
+                head = re.match(r'[^,;\s}]+', core)
+                if head and head.group(0).lower() == old:
+                    chunks[i] = ch[:len(ch) - len(core)] + new + core[len(head.group(0)):]
+            return '{{source:' + (' ' if not m.group(1).startswith(' ') else '') + ';'.join(chunks) + '}}'
+        new_text = _SOURCE_RE.sub(fix, text)
+        if new_text != text:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new_text)
+            changed.append(fn[:-3])
+    return changed
+
+@app.route('/api/references/<ref_id>', methods=['PUT'])
+def references_update(ref_id):
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    ref, err = refs_lib.clean(request.get_json(silent=True) or {})
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    with _REFS_LOCK:
+        refs = _refs_load()
+        idx = next((i for i, r in enumerate(refs) if r['id'] == ref_id), None)
+        if idx is None:
+            return jsonify({'ok': False, 'error': 'Reference not found.'}), 404
+        new_id = ref['id'] or ref_id
+        if new_id != ref_id and any(r['id'] == new_id for r in refs):
+            return jsonify({'ok': False, 'error': f'The key "{new_id}" is already used by another reference.'}), 409
+        ref['id'] = new_id
+        refs[idx] = ref
+        _refs_save(refs)
+        renamed_in = _rename_in_grammar(ref_id, new_id) if new_id != ref_id else []
+    return jsonify({'ok': True, 'id': new_id, 'updatedGrammarSections': renamed_in})
+
+@app.route('/api/references/<ref_id>', methods=['DELETE'])
+def references_delete(ref_id):
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    with _REFS_LOCK:
+        refs = _refs_load()
+        kept = [r for r in refs if r['id'] != ref_id]
+        if len(kept) == len(refs):
+            return jsonify({'ok': False, 'error': 'Reference not found.'}), 404
+        _refs_save(kept)
+    return jsonify({'ok': True, 'citedIn': _grammar_citations().get(ref_id, [])})
+
+def _export_name(ext):
+    return f"{re.sub(r'[^a-z0-9]+', '-', str(PROJECT.get('id') or 'dbt').lower()).strip('-') or 'dbt'}-references.{ext}"
+
+@app.route('/api/references/export/bibtex')
+def references_export_bibtex():
+    return Response(refs_lib.to_bibtex(_refs_load()), mimetype='text/plain; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename="{_export_name("bib")}"'})
+
+@app.route('/api/references/export/endnote')
+def references_export_endnote():
+    return Response(refs_lib.to_endnote(_refs_load()), mimetype='text/plain; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename="{_export_name("enw")}"'})
+
+# ══════════════════════════════════════════════════════════════
 #  GRAMMAR RENDERER
 #  Pass 1: Markdown → HTML
-#  Pass 2: resolve {{example:…}} and {{entry:…}} shortcodes
+#  Pass 2: resolve {{example:…}}, {{cite:…}}, {{entry:…}} and {{source:…}} shortcodes
 # ══════════════════════════════════════════════════════════════
 
 _MD = md_lib.Markdown(extensions=['extra', 'tables', 'attr_list', 'toc'])
@@ -665,6 +878,7 @@ def render_grammar(md_text):
         lambda m: build_entry_chip(m.group(1).strip()),
         html
     )
+    html = _SOURCE_RE.sub(lambda m: build_source_cite(_html.unescape(m.group(1)).strip()), html)
     return html
 
 
@@ -1296,6 +1510,23 @@ def _entry_child(el, tag, create=False):
         el.insert(idx, c)
     return c
 
+# ── Languages: what a sense or an etymology applies to ──────────────────────────────────
+# <Sens langues="aa cc"> and <Étymon langues="aa cc"> name the languages (codes, space separated) whose form of the
+# entry the sense, or the etymology, belongs to. No attribute = all the languages, so older dictionaries are unchanged.
+def _langs_attr(el):
+    """The language codes an element is restricted to, or None for 'all of them'."""
+    codes = [c for c in (el.get('langues') or '').split() if c in LANG_CODES]
+    return codes or None
+
+def _set_langs_attr(el, codes, keep_all=False):
+    """Write the languages an element applies to. For a sense, all of them (or none given) means no restriction: no
+    attribute. For an etymon, ticking every language is a statement (cognates in all the languages): keep_all writes it."""
+    chosen = [c for c in LANG_CODES if c in {str(x) for x in (codes or [])}]
+    if not chosen or (len(chosen) == len(LANG_CODES) and not keep_all):
+        el.attrib.pop('langues', None)
+    else:
+        el.set('langues', ' '.join(chosen))
+
 def _sense_current(s):
     """The values the editor shows for an existing <Sens> (kept in step with the page's parser)."""
     gl = s.find('Glose[@langue="eng"]')
@@ -1353,6 +1584,9 @@ def _fill_sense(node, sd, existing):
             _set_text(rt, notes)
         elif n_el is not None:
             node.remove(n_el)
+    # the languages the sense applies to (sent whole by the editor; an unchanged choice rewrites nothing)
+    if isinstance(sd.get('langs'), list):
+        _set_langs_attr(node, sd['langs'])
 
 def _apply_senses(el, eid, payload):
     existing = el.findall('Sens')
@@ -1388,6 +1622,57 @@ def _senses_payload(data):
         return [{'ref': None, 'definition': data.get('gloss', ''),
                  'shortGloss': data.get('shortGloss', ''), 'notes': data.get('notes', '')}]
     return []
+
+def _fill_etymon(ety, ed):
+    def put(tag, val, attrs=None, keep_blank=True):
+        sel = tag + (f'[@langue="{attrs["langue"]}"]' if attrs else '')
+        node = ety.find(sel)
+        if val:
+            if node is None:
+                node = etree.SubElement(ety, tag, **(attrs or {}))
+            _set_text(node, val)
+        elif node is not None and not keep_blank:
+            ety.remove(node)
+        elif node is not None:
+            _set_text(node, '')
+    put('Langue', str(ed.get('lang') or 'POc').strip())
+    put('Forme', str(ed.get('form') or '').strip())
+    put('Glose', str(ed.get('gloss') or '').strip(), {'langue': 'eng'})
+    put('LienTLOPO', str(ed.get('tlopo') or '').strip(), keep_blank=False)
+    put('LienEtymograph', str(ed.get('etymograph') or '').strip(), keep_blank=False)
+    if isinstance(ed.get('langs'), list):
+        _set_langs_attr(ety, ed['langs'], keep_all=True)
+
+def _apply_etymons(el, payload):
+    """Make the entry's etymons the ones listed. An existing etymon is edited in place (its `ref` is its position), so
+    anything else it holds is kept. A language belongs to one etymon only: the first one listing it keeps it."""
+    ety_el = _entry_child(el, 'Étymologie')
+    existing = ety_el.findall('Étymon') if ety_el is not None else []
+    used, ordered, taken = set(), [], set()
+    items = [d for d in payload[:20] if isinstance(d, dict) and str(d.get('form') or '').strip()]
+    for ed in items:
+        if isinstance(ed.get('langs'), list):
+            mine = [c for c in LANG_CODES if c in {str(x) for x in ed['langs']} and c not in taken]
+            taken.update(mine)
+            if not mine and len(items) > 1:
+                continue                       # every language it asked for belongs to another etymon
+            ed = dict(ed, langs=mine)
+        ref, node = ed.get('ref'), None
+        if isinstance(ref, int) and 0 <= ref < len(existing) and ref not in used:
+            node = existing[ref]; used.add(ref)
+        else:
+            node = etree.Element('Étymon')
+        _fill_etymon(node, ed)
+        ordered.append(node)
+    if not ordered:
+        if ety_el is not None:
+            el.remove(ety_el)
+        return
+    ety_el = _entry_child(el, 'Étymologie', create=True)
+    for n in existing:
+        ety_el.remove(n)
+    for n in ordered:
+        ety_el.append(n)
 
 def _apply_entry_data(el, eid, data):
     forms = data.get('forms') or {}
@@ -1440,34 +1725,19 @@ def _apply_entry_data(el, eid, data):
         elif c is not None:
             _set_text(c, '')
 
-    # etymology: absent/None = leave as it is; {} = remove it; {form: …} = write it
-    etym = data.get('etym', None)
-    if isinstance(etym, dict):
-        ety_el = _entry_child(el, 'Étymologie')
-        if not etym.get('form'):
-            if ety_el is not None:
-                el.remove(ety_el)
+    # etymology: `etyms` = the whole list of etymons (absent = leave them as they are), each {ref, lang, form, gloss,
+    # tlopo, etymograph, langs}; older callers send one `etym` (absent = leave, {} = remove, {form: …} = write)
+    if isinstance(data.get('etyms'), list):
+        _apply_etymons(el, data['etyms'])
+    elif isinstance(data.get('etym'), dict):                 # older callers: one etymology, written to the first etymon
+        e = data['etym']
+        if not e.get('form'):
+            _apply_etymons(el, [])
         else:
-            ety_el = _entry_child(el, 'Étymologie', create=True)
-            ety = ety_el.find('Étymon')
-            if ety is None:
-                ety = etree.SubElement(ety_el, 'Étymon')
-            def put(tag, val, attrs=None, keep_blank=True):
-                sel = tag + (f'[@langue="{attrs["langue"]}"]' if attrs else '')
-                node = ety.find(sel)
-                if val:
-                    if node is None:
-                        node = etree.SubElement(ety, tag, **(attrs or {}))
-                    _set_text(node, val)
-                elif node is not None and not keep_blank:
-                    ety.remove(node)
-                elif node is not None:
-                    _set_text(node, '')
-            put('Langue', etym.get('lang', 'POc'))
-            put('Forme', etym.get('form', ''))
-            put('Glose', etym.get('gloss', ''), {'langue': 'eng'})
-            put('LienTLOPO', etym.get('tlopo', ''), keep_blank=False)
-            put('LienEtymograph', etym.get('etymograph', ''), keep_blank=False)
+            first = _entry_child(el, 'Étymologie', create=True).find('Étymon')
+            if first is None:
+                first = etree.SubElement(_entry_child(el, 'Étymologie'), 'Étymon')
+            _fill_etymon(first, e)
 
     _apply_senses(el, eid, _senses_payload(data))
     _ensure_ipa(el)                              # whatever is still missing is derived
@@ -2193,7 +2463,10 @@ def dictionary_entries():
             # <gloss> (short interlinear label) is preferred over the full definition
             short = _text_of(sn.find('gloss')) or _text_of(sn.find('Glose[@langue="eng"]'))
             if short:
-                senses.append({'n': i, 'gloss': short, 'definition': cur['definition']})
+                s = {'n': i, 'gloss': short, 'definition': cur['definition']}
+                if _langs_attr(sn):
+                    s['langs'] = _langs_attr(sn)
+                senses.append(s)
         if not senses:
             continue
         forms = {}
@@ -2384,8 +2657,10 @@ def _cite_papers_latex(example_id, n):
     return (f'\\begin{{exe}}\n\\ex\\label{{ex:{n}}}\n{label_tex}{tabular}\\\\\n'
             f'\\trans `{_le(transl)}\'\n\\end{{exe}}')
 
-def _md_to_latex_body(source):
-    """Convert grammar Markdown (with shortcodes) to a LaTeX body string."""
+def _md_to_latex_body(source, cited=None):
+    """Convert grammar Markdown (with shortcodes) to a LaTeX body string. `cited` collects the keys of the
+    references cited with {{source: …}} (they make the References section)."""
+    cited = cited if cited is not None else set()
     counter = [0]
 
     def resolve_cite(m):
@@ -2412,6 +2687,7 @@ def _md_to_latex_body(source):
     src = re.sub(r'\{\{\s*example\s*:\s*([^\}]+)\}\}', resolve_example, src)
     src = re.sub(r'\{\{\s*entry\s*:\s*([^\}]+)\}\}',
                  lambda m: _entry_latex(m.group(1).strip()), src)
+    src = _SOURCE_RE.sub(lambda m: _source_latex(_html.unescape(m.group(1)).strip(), cited), src)
 
     lines = src.split('\n')
     out   = []
@@ -2512,7 +2788,7 @@ _LATEX_DOC = r"""\documentclass[12pt, a4paper]{{article}}
 @app.route('/api/grammar/export/latex')
 def export_grammar_latex():
     """Render all grammar sections as a single downloadable .tex file."""
-    sections_latex = []
+    sections_latex, cited = [], set()
     for fname in sorted(os.listdir(GRAMMAR_FOLDER)):
         if not fname.endswith('.md'):
             continue
@@ -2520,11 +2796,15 @@ def export_grammar_latex():
         with open(path, encoding='utf-8') as f:
             source = f.read()
         try:
-            sections_latex.append(_md_to_latex_body(source))
+            sections_latex.append(_md_to_latex_body(source, cited))
         except Exception as e:
             sections_latex.append(f'% ERROR in {fname}: {e}')
 
     body = '\n\n'.join(sections_latex)
+    used = [r for r in _refs_load() if r['id'] in cited]                      # the works cited in the grammar
+    if used:
+        body += ('\n\n\\section*{References}\\addcontentsline{toc}{section}{References}\n'
+                 + refs_lib.latex_list(used, _le, refs_lib.Context(_refs_load())))
     lx   = PROJECT['latex']
     tex  = _LATEX_DOC.format(body=body, latex_title=lx.get('title', 'Comparative Grammar'),
                              latex_subtitle=lx.get('subtitle', ''), latex_author=lx.get('author', ''),
@@ -2879,6 +3159,7 @@ def _page_tokens():
          'project.homeTitle': PROJECT['homeTitle'], 'project.orthographyName': _DEFAULT_CORR['name']}
     for k, v in PROJECT['nav'].items():
         t[f'project.nav.{k}'] = str(v).replace('{languages}', f"{n} Language{'s' if n != 1 else ''}").replace('{n}', str(n))
+    t.setdefault('project.nav.references', 'References')
     ab = ABOUT or {}
     t['project.about.tabTitle'] = ab.get('tabTitle', 'About')
     return t
@@ -3069,6 +3350,10 @@ def api_setup():
             for sub_dir in ('grammar', 'texts', 'pages'):
                 for fn in os.listdir(os.path.join(STARTER_DIR, sub_dir)):
                     shutil.copyfile(os.path.join(STARTER_DIR, sub_dir, fn), os.path.join('project', sub_dir, fn))
+            shutil.copyfile(os.path.join(STARTER_DIR, 'references.json'), os.path.join('project', 'references.json'))
+        else:                                                      # an empty list of references, ready for the first one
+            with open(os.path.join('project', 'references.json'), 'w', encoding='utf-8') as f:
+                json.dump({'references': []}, f, indent=1)
         security.set_password(data['password'])
         with open(PROJECT_PATH, 'w', encoding='utf-8') as f:       # written last: it is what ends the setup
             json.dump(proj, f, ensure_ascii=False, indent=2)
