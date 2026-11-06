@@ -467,7 +467,7 @@ async function loadSection(id) {
         <ul>
           <li><code>{{example: ID}}</code> — numbered example from "Examples from papers"</li>
           <li><code>{{entry: ID}}</code> — inline word chip from dictionary XML</li>
-          <li><code>{{source: key}}</code> — cite a reference: (Author, Year). Add <code>, p. 12</code> for a page, <code>, narrative</code> for Author (Year), or cite several with <code>;</code></li>
+          <li><code>{{source: Author 2020}}</code> — cite a reference: (Author, 2020). Add <code>, p. 12</code> for a page, <code>, narrative</code> for Author (2020), or cite several with <code>;</code>. The reference's key works too</li>
           <li><code>![caption](images/file.jpg)</code> — uploaded image</li>
         </ul>
         <li><code>{{cite: file.xml#sentId}}</code> — numbered example from a transcribed narrative</li>
@@ -550,7 +550,7 @@ const MARKUP = {
   table:   ()    => '\n| Column 1 | Column 2 | Column 3 |\n|---|---|---|\n| Cell | Cell | Cell |\n',
   example: ()    => '{{example: negation_example_01}}',
   entry:   ()    => '{{entry: speech}}',
-  source:  ()    => '{{source: key, p. 12}}',
+  source:  ()    => '{{source: Author 2020, p. 12}}',
 };
 
 function insertMarkup(id, type) {
