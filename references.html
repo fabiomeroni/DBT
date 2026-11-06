@@ -98,8 +98,10 @@ body.is-author .ref-meta { display: block; }
       <button class="edit-tab" id="ref-add" title="Add a reference">＋ Add reference</button>
     </div>
   </div>
-  <p class="refs-hint">Cite a reference in the grammar with <code>{{source: key}}</code>, as in <code>{{source: smith2020, p. 12}}</code> for a page, or
-    <code>{{source: smith2020, narrative}}</code> for <i>Smith (2020)</i>. Several at once: <code>{{source: key1; key2}}</code>. Click a key to copy its shortcode.</p>
+  <p class="refs-hint">Cite a reference in the grammar by author and year, as you would write it: <code>{{source: Smith 2020}}</code> gives (Smith, 2020);
+    with a page, <code>{{source: Smith 2020, p. 12}}</code>; as part of the sentence, <code>{{source: Smith 2020, narrative}}</code> gives <i>Smith (2020)</i>;
+    several at once, <code>{{source: Smith 2020; Jones 2019}}</code>. Two authors: <code>Smith &amp; Jones 2016</code>; three or more: <code>Smith et al. 2016</code>.
+    Add the letter when needed (<code>Smith 2020b</code>). The key shown below each reference (<code>smith2020</code>) works too: click it to copy its shortcode.</p>
   <p class="refs-count" id="refs-count"></p>
   <div id="refs-list"></div>
 </main>
