@@ -1,0 +1,44 @@
+{
+ "references": [
+  {
+   "id": "smith2020",
+   "type": "book",
+   "authors": [
+    {
+     "family": "Smith",
+     "given": "Jordan"
+    }
+   ],
+   "editors": [],
+   "year": "2020",
+   "title": "A sketch of the Example language",
+   "publisher": "Example University Press",
+   "edition": "",
+   "volume": "",
+   "doi": "",
+   "url": ""
+  },
+  {
+   "id": "smith2021",
+   "type": "article",
+   "authors": [
+    {
+     "family": "Smith",
+     "given": "Jordan"
+    },
+    {
+     "family": "Rivera",
+     "given": "Ana"
+    }
+   ],
+   "editors": [],
+   "year": "2021",
+   "title": "Reduplication in Example",
+   "container": "Journal of Invented Languages",
+   "volume": "12",
+   "issue": "3",
+   "pages": "201-224",
+   "doi": "10.0000/jil.2021.12.3.201"
+  }
+ ]
+}
