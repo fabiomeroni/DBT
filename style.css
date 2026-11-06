@@ -397,12 +397,14 @@ footer a { color: #9a8060; }
 @media (max-width: 720px) {
   .topnav { padding: 0 0.6rem; }
   .topnav-brand { margin-right: 0.3rem; }
-  .topnav ul li a { padding: 0 0.55rem; }
+  .topnav ul li a { padding: 0 0.42rem; }
+  .topnav ul { min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }   /* five links and two buttons may not fit: the links then scroll inside the bar */
+  .topnav ul::-webkit-scrollbar { display: none; }
   .topnav-right { display: none; }
 }
 @media (max-width: 480px) {
   .topnav-brand { display: none; }
-  .topnav ul li a { padding: 0 0.42rem; font-size: 0.88rem; }
+  .topnav ul li a { padding: 0 0.3rem; font-size: 0.82rem; }
   .topnav-auth .auth-btn { padding: 3px 8px; font-size: 0.72rem; }
 }
 
