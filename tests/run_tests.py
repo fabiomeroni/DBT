@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DBT regression harness.
+DBT regression harness (the "safety net").
 
 It starts the site on a PRIVATE COPY of the repository with clean data (your real uploads, edits
 and settings are never touched), then checks three things:
@@ -1243,6 +1243,29 @@ def suite_references(browser, args):
         check(S, "two authors: & in brackets and “and” in the sentence; three or more: et al.; several works: alphabetical, separated by semicolons",
               links == ["Smith & Jones, 2016", "Smith and Jones (2016)", "Lupin et al., 2018", "Lupin et al. (2018)", "Black, 2017", "François, 2026b, p. 3", "Lupin et al., 2018"], str(links))
 
+        # ── citing by author and year, as one writes it in a text ──
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Miestamo", "Matti")], year="2020", title="Negation", publisher="P", id="miestamo2020"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Alpha first", publisher="P", id="roepoe-a"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Beta second", publisher="P", id="roepoe-b"))
+        src = ("## §9 Forms\n\nOne {{source: François 2026b}}. Two {{source: François 2026b; Miestamo 2020}}. Three {{source: François 2026b, narrative}}. "
+               "Four {{source: François, 2026b, p. 128}}. Five {{source: Francois 2026}}. Six {{source: Miestamo 2020, narrative, p. 4}}. Seven {{source: Nobody 2000}}. "
+               "Eight {{source: Roe & Poe 2010}}. Nine {{source: Roe & Poe 2010a}}.\n")
+        st, j = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": src})
+        h = j.get("html", ""); plain = html_lib.unescape(re.sub(r"<[^>]+>", "", h))
+        check(S, "the three forms are written as one writes them in a text: (François, 2026b)  (François, 2026b; Miestamo, 2020)  François (2026b)",
+              "One (François, 2026b)." in plain and "Two (François, 2026b; Miestamo, 2020)." in plain and "Three François (2026b)." in plain, plain[plain.find("One"):plain.find("Four")])
+        check(S, "a comma between author and year, a page, no accent and no letter all work", "Four (François, 2026b, p. 128)." in plain and "Five (François, 2026b)." in plain and "Six Miestamo (2020, p. 4)." in plain, plain[plain.find("Four"):plain.find("Seven")])
+        check(S, "the citation by author and year links to the reference, like one made with its key", h.count('href="references.html#francois2026b"') >= 5 and 'href="references.html#miestamo2020"' in h)
+        check(S, "an unknown author and year says so, with what was typed", "Reference not found: Nobody 2000" in h)
+        check(S, "works of the same authors and year are refused when the letter is missing, and the message names the letters; with the letter it works",
+              "Ambiguous reference: Roe &amp; Poe 2010 (2010a, 2010b): add the letter" in h and "Nine (Roe & Poe, 2010a)." in plain, plain[plain.find("Eight"):])
+        lst = {r["id"]: r for r in _jcall(aa, "get", site.url + "api/references")[1]["references"]}
+        check(S, "a citation by author and year counts as cited in the list (and when deleting)", "zz_sources" in lst["francois2026b"]["citedIn"] and lst["miestamo2020"]["citedIn"] == ["zz_sources"], str((lst["francois2026b"]["citedIn"], lst["miestamo2020"]["citedIn"])))
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "LaTeX: the same citations, and the References section lists the works found by author and year", "One (François, 2026b)." in tex and "Two (François, 2026b; Miestamo, 2020)." in tex and "Three François (2026b)." in tex and "Miestamo, M. (2020). \\emph{Negation}." in tex, tex[tex.find("One"):tex.find("One") + 160])
+        for rid in ("miestamo2020", "roepoe-a", "roepoe-b"): _jcall(aa, "delete", site.url + "api/references/" + rid)
+        (gdir / "zz_sources.md").unlink(missing_ok=True)
+
         # ── hostile input ──
         evil = dict(type="article", authors=[{"family": "<b>Evil</b>", "given": "<i>x</i>"}], year="2020", title="<img src=x onerror=alert(1)> & \"quotes\" <script>alert(2)</script>", container="J<script>", id="evil2020")
         st, j = _jcall(aa, "post", site.url + "api/references", evil)
@@ -1299,7 +1322,7 @@ def suite_references(browser, args):
         # ── the author's form, in a browser ──
         pa = au.new_page(); errs = []; watch(pa, errs)
         open_page(pa, site, "references.html", ".ref-entry", 800)
-        check(S, "the author sees Add, Edit, Delete, the key of each reference and a hint about the shortcode", pa.locator("#ref-add").is_visible() and pa.locator("[data-edit]").first.is_visible() and pa.locator(".ref-key").first.inner_text() == "francois2026b" and "{{source: key}}" in pa.locator(".refs-hint").inner_text())
+        check(S, "the author sees Add, Edit, Delete, the key of each reference and a hint about the shortcode", pa.locator("#ref-add").is_visible() and pa.locator("[data-edit]").first.is_visible() and pa.locator(".ref-key").first.inner_text() == "francois2026b" and "{{source: Smith 2020}}" in pa.locator(".refs-hint").inner_text() and "key" in pa.locator(".refs-hint").inner_text())
         pa.click("#ref-add"); pa.wait_for_selector("#ref-modal.visible")
         check(S, "the form opens on a journal article, with the fields of an article only", pa.locator("#rf-container").is_visible() and pa.locator("#rf-issue").is_visible() and not pa.locator("#rf-editors-box").is_visible() and not pa.locator("#rf-level").is_visible())
         def fill_person(row, fam, giv):
@@ -1355,7 +1378,7 @@ def suite_references(browser, args):
         pg.evaluate("window.scrollTo(0, 0)")
         pg.evaluate("document.querySelector('.edit-tab.section-edit').click()"); pg.wait_for_selector(".editor-toolbar-btn", timeout=8000)
         pg.evaluate("[...document.querySelectorAll('.editor-toolbar-btn')].find(b => b.textContent.includes('{{source}}')).click()")
-        check(S, "the grammar editor has a {{source}} button that inserts a citation, and lists it among the shortcodes", "{{source: key, p. 12}}" in pg.locator("textarea").first.input_value() and "cite a reference" in pg.locator(".shortcode-ref").first.inner_text().lower(), pg.locator("textarea").first.input_value()[-40:])
+        check(S, "the grammar editor has a {{source}} button that inserts a citation, and lists it among the shortcodes", "{{source: Author 2020, p. 12}}" in pg.locator("textarea").first.input_value() and "cite a reference" in pg.locator(".shortcode-ref").first.inner_text().lower(), pg.locator("textarea").first.input_value()[-40:])
         cite.click(); pg.wait_for_url("**/references.html#francois2026b", timeout=8000)
         check(S, "…and clicking it goes to that reference", pg.url.endswith("references.html#francois2026b"))
         check(S, "the grammar page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
