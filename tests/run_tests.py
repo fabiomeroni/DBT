@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DBT regression harness (the "safety net").
+DBT regression harness.
 
 It starts the site on a PRIVATE COPY of the repository with clean data (your real uploads, edits
 and settings are never touched), then checks three things:
@@ -18,8 +18,9 @@ and settings are never touched), then checks three things:
 Needs:  pip install -r tests/requirements-test.txt  &&  playwright install chromium
 Screenshots depend on the fonts of the machine, so a baseline belongs to the machine that recorded it.
 """
-import argparse, hashlib, json, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+import argparse, hashlib, html as html_lib, json, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 from pathlib import Path
+from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
@@ -171,12 +172,14 @@ VISITOR_PAGES = [
     ("viewer-fieldnotes", "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase"),
     ("viewer-papers",     "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase"),
     ("viewer-recording",  "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase"),
+    ("references",        "references.html",                 ".ref-entry"),
 ]
 AUTHOR_PAGES = [
     ("author-grammar",           "grammar.html",                    "#sections-container .grammar-section"),
     ("author-dictionary-koro",   "dictionary.html?lang=Koro",       "#dict-content .entry"),
     ("author-viewer-fieldnotes", "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase"),
     ("author-viewer-recording",  "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase"),
+    ("author-references",        "references.html",                 ".ref-entry"),
 ]
 
 def settle(page, quiet_ms=900, timeout_ms=15000):
@@ -257,6 +260,9 @@ def suite_visual(browser, site, args):
     def open_edit(page):
         page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(900)
     visual_one(browser, site, args, "author-edit-entry-dialog", "dictionary.html?lang=Koro", "#dict-content .entry", 1280, True, open_edit)
+    def open_reference_form(page):
+        page.click('[data-edit="francois2026b"]'); page.wait_for_selector("#ref-modal.visible"); page.wait_for_function("document.getElementById('rf-prev-text').textContent.includes('2026b')"); page.wait_for_timeout(600)
+    visual_one(browser, site, args, "author-reference-form", "references.html", ".ref-entry", 1280, True, open_reference_form)
 
 # ───────────────────────── 2. API suite ─────────────────────────
 PUBLIC_API = [
@@ -276,6 +282,9 @@ PUBLIC_API = [
     ("grammar-s1", "api/grammar/s1"),
     ("colors-js", "colors.js"),
     ("project-js", "project.js"),
+    ("references", "api/references"),
+    ("references-bibtex", "api/references/export/bibtex"),
+    ("references-endnote", "api/references/export/endnote"),
 ]
 AUTHOR_API = [
     ("dictionary-settings", "api/dictionary/settings"),
@@ -477,9 +486,9 @@ def suite_functional(browser, site, args):
 
 
 # ───────────────────────── 4. generality suite: the code knows no language ─────────────────────────
-CODE_FILES = ["app.py", "security.py", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html"]
+CODE_FILES = ["app.py", "security.py", "references.py", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
 PROJECT_WORDS = re.compile(r"\b(Nume|Dorig|Koro|Olrat|Lakon|Gaua|Vanuatu|Banks Islands|Meroni|Fran[cç]ois)\b")
-NOT_SERVED = ["app.py", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
+NOT_SERVED = ["app.py", "references.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
               "project/orthography.json", "project/dictionary.xml", "project/fieldnotes.xml", "project/grammar/s1.md",
               "project/texts/crdo-WWO_FARFADETS.xml", "uploads/dictionary_settings.json", "tests/run_tests.py", "grammar_content/s1.md",
               ".gitignore", "requirements.txt", "transcribed_narratives/crdo-WWO_FARFADETS.xml", "%2e%2e/app.py", "../app.py"]
@@ -493,7 +502,7 @@ def suite_generality(browser, site, args):
     anon = new_context(browser, site, author=False); api = anon.request
     bad = [p for p in NOT_SERVED if api.get(site.url + p).status != 404]
     check(S, "source code and data files are not served (app.py, XML, JSON, uploads, project, tests ...)", not bad, str(bad))
-    pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html"]
+    pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
     assets = ["style.css", "auth.js", "images/gaua_map.png", "etymograph_icon.png"]
     check(S, "the site's pages and images are served", all(api.get(site.url + p).status == 200 for p in pages + assets))
     left = [p for p in pages if "{{project." in api.get(site.url + p).text()]
@@ -867,7 +876,7 @@ def suite_security(browser, site, args):
         r = _login(a, s4, "anything")
         check(S, "no password set: nobody can log in, and the message says what to do", r.status == 403 and "--set-password" in r.json().get("error", ""), f"{r.status} {r.json()}")
         cli = lambda text: subprocess.run([sys.executable, "app.py", "--set-password"], cwd=s4.dir, input=text, capture_output=True, text=True, timeout=60)
-        check(S, "--set-password: two different passwords change nothing", cli("Valid-pass-123\nOther-pass-456\n").returncode == 1 and not (s4.dir / "instance" / "author.json").exists() or True)
+        check(S, "--set-password: two different passwords change nothing", (lambda r: r.returncode == 1 and not ((s4.dir / "instance" / "author.json").exists() and "passwordHash" in (s4.dir / "instance" / "author.json").read_text(encoding="utf-8")))(cli("Valid-pass-123\nOther-pass-456\n")))
         check(S, "--set-password: the published password is refused", cli("gaua" + "2026\n" + "gaua" + "2026\n").returncode == 1)
         ok = cli("Valid-pass-123\nValid-pass-123\n")
         data = json.loads((s4.dir / "instance" / "author.json").read_text(encoding="utf-8"))
@@ -963,6 +972,9 @@ def suite_setup(browser, args):
         p2.click("#em-submit"); p2.wait_for_timeout(1500)
         d = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
         check(S, "the first entry is saved into the project's own dictionary file", len(d.findall(".//EntréeLexicale")) == 1 and d.find('.//Lemme/ReprésentationDeForme[@langue="lot"]').text == "toga")
+        rj = json.loads((site.dir / "project" / "references.json").read_text(encoding="utf-8"))
+        open_page(p2, site, "references.html", "#refs-list", 800)
+        check(S, "a new project gets an empty list of references, and its References page says so", rj == {"references": []} and "No references yet" in p2.locator("#refs-list").inner_text())
         real = [e for e in errs + e2 if "/api/setup" not in e and "/api/auth/status" not in e]    # the refusals and the wait for the restart are expected
         check(S, "no JavaScript or loading error", not real, "; ".join(real[:2]))
         ctx.close(); a2.close()
@@ -989,6 +1001,12 @@ def suite_setup(browser, args):
         open_page(page, site, "grammar.html", "#sections-container .grammar-section", 2000)
         body = page.locator("#sections-container").inner_text()
         check(S, "starter: the grammar cites the text and shows the entry", "Tamo neme" in body and "The house is good" in body and "tamo" in body.lower())
+        cites = page.locator("#sections-container .source-cite").all_inner_texts()
+        check(S, "starter: the grammar cites its references (with a page; narrative with two authors)", cites == ["Smith, 2020, p. 14", "Smith and Rivera (2021)"] and not page.locator("#sections-container .shortcode-error").count(), str(cites))
+        open_page(page, site, "references.html", ".ref-entry", 800)
+        check(S, "starter: the References page lists its two invented references in APA style", [x.strip() for x in page.locator(".ref-text").all_inner_texts()] == [
+            "Smith, J. (2020). A sketch of the Example language. Example University Press.",
+            "Smith, J., & Rivera, A. (2021). Reduplication in Example. Journal of Invented Languages, 12(3), 201–224. https://doi.org/10.0000/jil.2021.12.3.201"])
         a3 = new_context(browser, site, author=False)
         check(S, "starter: the password chosen at the setup works, the old published one does not", _login(a3.request, site, "a-good-password-1").status == 200 and _login(a3.request, site, "gaua" + "2026").status == 401)
         check(S, "starter: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
@@ -1095,12 +1113,520 @@ def suite_migration(browser, args):
     finally:
         site.stop()
 
+
+# ───────────────────────── 9. references suite: the bibliography, APA 7, citations, exports ─────────────────────────
+FRANCOIS_APA = ("François, A. (2026b). Negation in Dorig. In M. Miestamo & L. Veselinova (Eds.), Negation in the world’s languages III: "
+                "Papunesia, Australia, and the Americas (pp. 73–128). Language Science Press. https://doi.org/10.5281/zenodo.18234067")
+_H = {"Content-Type": "application/json"}
+
+def _jcall(api, method, url, data=None):
+    kw = {"headers": _H, "data": json.dumps(data)} if data is not None else {}
+    r = getattr(api, method)(url, **kw)
+    try: return r.status, r.json()
+    except Exception: return r.status, r.text()
+
+def _P(f, g=""): return {"family": f, "given": g} if g else {"family": f}
+
+# each example below is a template or example of the UTS "APA 7th referencing guide" (expected = the guide's reference-list line)
+_APA_CASES = [
+    ("journal article, one author", dict(type="article", authors=[_P("Alderton", "Z.")], year="2014", title="“Snapewives” and “Snapeism”: A fiction-based religion within the Harry Potter fandom", container="Religions", volume="5", issue="1", pages="219-267", doi="10.3390/rel5010219"),
+     "Alderton, Z. (2014). “Snapewives” and “Snapeism”: A fiction-based religion within the Harry Potter fandom. Religions, 5(1), 219–267. https://doi.org/10.3390/rel5010219"),
+    ("journal article, three authors", dict(type="article", authors=[_P("Gursoy", "A."), _P("Wickett", "K."), _P("Feinberg", "M.")], year="2018", title="Understanding tag functions in a moderated, user-generated metadata ecosystem", container="Journal of Documentation", volume="74", issue="3", pages="490-508", doi="10.1108/JD-09-2017-0134"),
+     "Gursoy, A., Wickett, K., & Feinberg, M. (2018). Understanding tag functions in a moderated, user-generated metadata ecosystem. Journal of Documentation, 74(3), 490–508. https://doi.org/10.1108/JD-09-2017-0134"),
+    ("edited book, two editors", dict(type="edited", authors=[_P("Burley", "J."), _P("Harris", "J.")], year="2008", title="A companion to genetics", edition="2", publisher="John Wiley & Sons"),
+     "Burley, J., & Harris, J. (Eds.). (2008). A companion to genetics (2nd ed.). John Wiley & Sons."),
+    ("chapter: edition, volume, pages, title ending in ?", dict(type="chapter", authors=[_P("Slee", "R.")], year="2014", title="Inclusive schooling as an apprenticeship in democracy?", editors=[_P("Florian", "L.")], container="The SAGE handbook of special education", edition="2", volume="1", pages="217-229", publisher="SAGE Publications"),
+     "Slee, R. (2014). Inclusive schooling as an apprenticeship in democracy? In L. Florian (Ed.), The SAGE handbook of special education (2nd ed., Vol. 1, pp. 217–229). SAGE Publications."),
+    ("doctoral dissertation from a database", dict(type="thesis", authors=[_P("Hollander", "M.")], year="2017", title="Resistance to authority: Methodological innovations and new lessons from the Milgram experiment", number="Publication No. 10289373", level="Doctoral dissertation", institution="University of Wisconsin-Madison", publisher="ProQuest Dissertations and Theses Global"),
+     "Hollander, M. (2017). Resistance to authority: Methodological innovations and new lessons from the Milgram experiment (Publication No. 10289373) [Doctoral dissertation, University of Wisconsin-Madison]. ProQuest Dissertations and Theses Global."),
+    ("conference paper with a date range", dict(type="conference", authors=[_P("Campbell", "K.")], year="2019", dateText="October 28-29", title="An information behaviours view of first in family students before and during university", container="Research Applications in Information and Library Studies", place="Canberra, ACT, Australia"),
+     "Campbell, K. (2019, October 28–29). An information behaviours view of first in family students before and during university [Paper presentation]. Research Applications in Information and Library Studies, Canberra, ACT, Australia."),
+    ("data set by an organisation, retrieved", dict(type="dataset", authors=[{"org": "Pew Research Center"}], year="2018", title="American trends panel Wave 26", accessed="October 21, 2019", url="https://www.pewsocialtrends.org/dataset/american-trends-panel-wave-26/"),
+     "Pew Research Center. (2018). American trends panel Wave 26 [Data set]. Retrieved October 21, 2019, from https://www.pewsocialtrends.org/dataset/american-trends-panel-wave-26/"),
+    ("unpublished manuscript", dict(type="unpublished", authors=[_P("Yoo", "J."), _P("Miyamoto", "Y."), _P("Rigotti", "A."), _P("Ryff", "C.")], year="2016", title="Linking positive affect to blood lipids: A cultural perspective", publisher="Department of Psychology, University of Wisconsin-Madison"),
+     "Yoo, J., Miyamoto, Y., Rigotti, A., & Ryff, C. (2016). Linking positive affect to blood lipids: A cultural perspective [Unpublished manuscript]. Department of Psychology, University of Wisconsin-Madison."),
+    ("web page, organisation (site name omitted when it is the author)", dict(type="web", authors=[{"org": "World Health Organization"}], year="2022", dateText="July 14", title="Immunization coverage", container="World Health Organization", url="https://www.who.int/news-room/fact-sheets/detail/immunization-coverage"),
+     "World Health Organization. (2022, July 14). Immunization coverage. https://www.who.int/news-room/fact-sheets/detail/immunization-coverage"),
+]
+
+def suite_references(browser, args):
+    S = "references"
+    section("references: the bibliography in APA 7, {{source: …}} citations, BibTeX and EndNote")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_references.py")], capture_output=True, text=True, timeout=120)
+    last = [l for l in unit.stdout.strip().split("\n") if l][-1] if unit.stdout.strip() else unit.stderr[-200:]
+    check(S, "the formatting engine passes its own direct tests (APA 7 templates, initials, year letters, order, in-text, exports)", unit.returncode == 0, last + ("" if unit.returncode == 0 else "\n" + unit.stdout[-600:]))
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+
+        # ── the page, the navigation and what a visitor sees ──
+        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "transcription.html", "references.html"]
+        missing = [p for p in pages if 'href="references.html"' not in va.get(site.url + p).text()]
+        check(S, "every page has the References link in its top bar", not missing, str(missing))
+        check(S, "no project marker is left unexpanded on the References page", "{{project." not in va.get(site.url + "references.html").text())
+        pg = vis.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "references.html", ".ref-entry", 800)
+        check(S, "a visitor sees the project's reference in APA 7, exactly as the guide and the author write it", [x.strip() for x in pg.locator(".ref-text").all_inner_texts()] == [FRANCOIS_APA], pg.locator(".ref-text").first.inner_text()[:90])
+        check(S, "the title of the book is in italics, the DOI is a link", pg.locator(".ref-text em").all_inner_texts() == ["Negation in the world’s languages III: Papunesia, Australia, and the Americas"] and pg.locator('.ref-text a[href="https://doi.org/10.5281/zenodo.18234067"]').count() == 1)
+        check(S, "the list has a hanging indent", pg.evaluate("parseFloat(getComputedStyle(document.querySelector('.ref-text')).textIndent) < 0"))
+        check(S, "a visitor has no author tools (no Add, Edit, Delete, key or hint) but can export", not any(pg.locator(s).first.is_visible() for s in ("#ref-add", "[data-edit]", "[data-del]", ".ref-meta", ".refs-hint")) and pg.locator('a[href="/api/references/export/bibtex"]').is_visible() and pg.locator('a[href="/api/references/export/endnote"]').is_visible())
+        check(S, "the top-bar label comes from the project", "Bibliography" in pg.locator(".topnav-right").inner_text() and pg.title().startswith("References"))
+        check(S, "the page has no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+
+        # ── the formatting, through the real server (the guide's own examples) ──
+        bad = []
+        for name, data, want in _APA_CASES:
+            st, j = _jcall(aa, "post", site.url + "api/references/preview", data)
+            got = j["view"]["text"] if st == 200 and j.get("ok") else str(j)
+            if got != want: bad.append(f"{name}: {got[:90]}")
+        check(S, f"{len(_APA_CASES)} templates of the APA guide are reproduced to the letter (article, edited book, chapter, thesis, conference paper, data set, manuscript, web page ...)", not bad, " | ".join(bad))
+        names = ["Kalnay", "Kanamitsu", "Kistler", "Collins", "Deaven", "Gandin", "Iredell", "Saha", "White", "Woollen", "Zhu", "Chelliah", "Ebisuzaki", "Higgins", "Janowial", "Mo", "Ropelewski", "Wang", "Leetmaa", "Reynolds", "Jenne", "Joseph"]
+        st, j = _jcall(aa, "post", site.url + "api/references/preview", dict(type="article", authors=[_P(n, n[0]) for n in names], year="1996", title="The NCEP/NCAR 40-year reanalysis project", container="Bulletin of the American Meteorological Society", volume="77", issue="3", pages="437-471"))
+        tx = j["view"]["text"]
+        check(S, "21 or more authors: the first 19, an ellipsis and the last, as the guide says", tx.startswith("Kalnay, K., ") and "Leetmaa, L., … Joseph, J. (1996)." in tx and "Reynolds" not in tx, tx[-150:-60])
+        for k, (data, why) in {"title": (dict(type="book", year="2020"), "no title"), "type": (dict(title="x", year="2020"), "no type"), "year": (dict(type="book", title="x", year="soon"), "a year that is not a year"),
+                               "url": (dict(type="book", title="x", year="2020", url="javascript:alert(1)"), "a script URL"), "key": (dict(type="book", title="x", year="2020", id="Bad Key!"), "a key with spaces")}.items():
+            st, _ = _jcall(aa, "post", site.url + "api/references", data)
+            check(S, f"a reference with {why} is refused", st == 400)
+
+        # ── who may change the bibliography ──
+        st = [_jcall(va, "post", site.url + "api/references", dict(type="book", title="x", year="2020"))[0], _jcall(va, "put", site.url + "api/references/francois2026b", dict(type="book", title="x", year="2020"))[0],
+              _jcall(va, "delete", site.url + "api/references/francois2026b")[0], _jcall(va, "post", site.url + "api/references/preview", dict(type="book", title="x", year="2020"))[0]]
+        check(S, "a visitor cannot add, change, delete or preview a reference (401)", st == [401] * 4, str(st))
+
+        # ── create, update, rename, delete ──
+        def add(data): return _jcall(aa, "post", site.url + "api/references", data)
+        cm = dict(type="article", authors=[_P("Collier", "K."), _P("McManus", "J.")], year="2005", container="J", volume="1")
+        st, a1 = add(dict(cm, title="Setting up learning partnerships in vocational education and training: Lessons learnt"))
+        st2, a2 = add(dict(cm, title="Bridging the gap: The use of learning partnerships to enhance workplace learning"))
+        lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
+        years = {r["id"]: r["yearDisplay"] for r in lst}
+        check(S, "a key is made from the author and the year when none is given", a1.get("id") == "collier2005" and a2.get("id") == "collier2005-2", f"{a1} {a2}")
+        check(S, "two works by the same authors in the same year get a and b, in the order of their titles (guide 11.08)", years == {"francois2026b": "2026b", "collier2005": "2005b", "collier2005-2": "2005a"}, str(years))
+        check(S, "the list is in alphabetical order of the first author", [r["id"] for r in lst] == ["collier2005-2", "collier2005", "francois2026b"], str([r["id"] for r in lst]))
+        check(S, "a key that is already used is refused (409)", add(dict(cm, title="t", id="collier2005"))[0] == 409)
+        st, _ = _jcall(aa, "put", site.url + "api/references/collier2005", dict(cm, title="Setting up learning partnerships: A new title", id="collier2005"))
+        check(S, "a reference can be changed", st == 200 and "A new title" in [r for r in _jcall(aa, "get", site.url + "api/references")[1]["references"] if r["id"] == "collier2005"][0]["text"])
+        gdir = site.dir / "project" / "grammar"
+        (gdir / "zz_rename.md").write_text("## §8 Rename\n\nSee {{source: collier2005, p. 4}} and {{source: francois2026b; collier2005}}, or {{source: COLLIER2005, narrative}}. Other: {{source: francois2026b}}.\n", encoding="utf-8")
+        st, j = _jcall(aa, "put", site.url + "api/references/collier2005", dict(cm, title="Setting up learning partnerships: A new title", id="collier-mcmanus-b"))
+        txt = (gdir / "zz_rename.md").read_text(encoding="utf-8")
+        check(S, "changing a key updates the citations in the grammar (and only that key)", st == 200 and j.get("updatedGrammarSections") == ["zz_rename"] and "{{source: collier-mcmanus-b, p. 4}}" in txt and "{{source: francois2026b; collier-mcmanus-b}}" in txt and "{{source: collier-mcmanus-b, narrative}}" in txt and "{{source: francois2026b}}" in txt, txt)
+        st, j = _jcall(aa, "put", site.url + "api/references/collier-mcmanus-b", dict(cm, title="t", id="francois2026b"))
+        check(S, "a key cannot be changed to one that is taken (409)", st == 409)
+        lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
+        check(S, "the list says where each reference is cited", {r["id"]: r["citedIn"] for r in lst}["collier-mcmanus-b"] == ["zz_rename"] and {r["id"]: r["citedIn"] for r in lst}["francois2026b"] == ["zz_rename"])
+        st, j = _jcall(aa, "delete", site.url + "api/references/collier-mcmanus-b")
+        check(S, "deleting a cited reference says where it was cited", st == 200 and j.get("citedIn") == ["zz_rename"], str(j))
+        check(S, "deleting a reference that does not exist is a 404", _jcall(aa, "delete", site.url + "api/references/nothing")[0] == 404 and _jcall(aa, "put", site.url + "api/references/nothing", dict(cm, title="t"))[0] == 404)
+        _jcall(aa, "delete", site.url + "api/references/collier2005-2")
+        stored = json.loads((site.dir / "project" / "references.json").read_text(encoding="utf-8"))
+        check(S, "the references are kept in project/references.json, written whole", [r["id"] for r in stored["references"]] == ["francois2026b"] and not list((site.dir / "project").glob("references.json.tmp")))
+
+        # ── {{source: …}} in the grammar ──
+        src = ("## §9 Sources\n\nA page: {{source: francois2026b, p. 128}}. A bare number: {{source: francois2026b, 128}}. A range: {{source: francois2026b, 73-128}}. Narrative: {{source: francois2026b, narrative}}.\n\n"
+               "Unknown: {{source: nobody2000}}. Mixed case: {{source: Francois2026B}}.\n\n| a | b |\n|---|---|\n| {{source: francois2026b}} | x |\n")
+        st, j = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": src})
+        h = j.get("html", "")
+        links = [html_lib.unescape(x) for x in re.findall(r'<a class="source-cite"[^>]*>(.*?)</a>', h)]
+        check(S, "{{source: key}} gives (Author, Year); a page, a bare number and a range give p. 128, p. 128 and pp. 73–128; narrative gives Author (Year)",
+              links[:4] == ["François, 2026b, p. 128", "François, 2026b, p. 128", "François, 2026b, pp. 73–128", "François (2026b)"], str(links))
+        check(S, "the citation links to the reference and carries the whole APA entry for the hover", 'href="references.html#francois2026b"' in h and "Language Science Press" in h and "&lt;em&gt;Negation in the world" in h)
+        check(S, "an unknown key shows an error in place of the citation, and no shortcode is left in the text", "Reference not found: nobody2000" in h and "{{source" not in h)
+        check(S, "keys are not case-sensitive, and a citation works inside a table", links.count("François, 2026b") == 2 and "<td><span" not in h and "<td>(<a" in h, str(links))
+        st, j = _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Smith", "A."), _P("Jones", "B.")], year="2016", title="Two authors", publisher="P", id="smithjones2016"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Black", "A.")], year="2017", title="Black", publisher="P", id="black2017"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Lupin", "R."), _P("Potter", "H."), _P("Weasley", "R.")], year="2018", title="Three", publisher="P", id="lupin2018"))
+        st, j = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": "## §9 Sources\n\n{{source: smithjones2016}} {{source: smithjones2016, narrative}} {{source: lupin2018}} {{source: lupin2018, narrative}} {{source: lupin2018; black2017; francois2026b, p. 3}}\n"})
+        links = [html_lib.unescape(x) for x in re.findall(r'<a class="source-cite"[^>]*>(.*?)</a>', j.get("html", ""))]
+        check(S, "two authors: & in brackets and “and” in the sentence; three or more: et al.; several works: alphabetical, separated by semicolons",
+              links == ["Smith & Jones, 2016", "Smith and Jones (2016)", "Lupin et al., 2018", "Lupin et al. (2018)", "Black, 2017", "François, 2026b, p. 3", "Lupin et al., 2018"], str(links))
+
+        # ── hostile input ──
+        evil = dict(type="article", authors=[{"family": "<b>Evil</b>", "given": "<i>x</i>"}], year="2020", title="<img src=x onerror=alert(1)> & \"quotes\" <script>alert(2)</script>", container="J<script>", id="evil2020")
+        st, j = _jcall(aa, "post", site.url + "api/references", evil)
+        lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
+        e = [r for r in lst if r["id"] == "evil2020"][0]
+        st, g = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": "## §9\n\n{{source: evil2020}}"})
+        check(S, "HTML typed into a reference is escaped in the list, in the hover text and in the preview", "<img" not in e["html"] and "<script" not in e["html"] and "&lt;img" in e["html"] and "<img" not in g["html"] and "<script" not in g["html"], e["html"][:100])
+        pge = au.new_page(); ee = []; watch(pge, ee)
+        pge.on("dialog", lambda d: ee.append("DIALOG " + d.message))
+        open_page(pge, site, "references.html", ".ref-entry", 800)
+        check(S, "…and nothing runs when the page shows it", not pge.locator(".ref-text img, .ref-text script").count() and not [x for x in ee if "DIALOG" in x or "PAGEERROR" in x], str(ee[:2]))
+        _jcall(aa, "delete", site.url + "api/references/evil2020")
+
+        # ── LaTeX ──
+        (gdir / "zz_rename.md").unlink()
+        st, j = _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Fish & Chips", "A.")], year="2001", title="100% of C_x # costs", publisher="R&D Press", id="fish2001"))
+        _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": "## §9 Sources\n\nOne {{source: francois2026b, p. 128}} and {{source: fish2001}} and {{source: smithjones2016, narrative}}.\n"})
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "LaTeX: the citations are written as text, escaped", "One (François, 2026b, p. 128) and (Fish \\& Chips, 2001) and Smith and Jones (2016)." in tex, tex[tex.find("One"):tex.find("One") + 120] if "One" in tex else "")
+        refs_part = tex[tex.find("\\section*{References}"):]
+        check(S, "LaTeX: a References section lists the cited works only, in APA style, titles in italics, hanging indent",
+              "\\section*{References}" in tex and "\\hangindent=1.27cm" in refs_part and "\\emph{Negation in the world’s languages III: Papunesia, Australia, and the Americas}" in refs_part
+              and "\\url{https://doi.org/10.5281/zenodo.18234067}" in refs_part and "Smith, A., \\& Jones, B. (2016)" in refs_part and "Black" not in refs_part and "Lupin" not in refs_part, refs_part[:200])
+        check(S, "LaTeX: special characters in a reference are escaped (& % _ #)", "Fish \\& Chips, A. (2001). \\emph{100\\% of C\\_x \\# costs}. R\\&D Press." in refs_part, refs_part[refs_part.find("Fish"):refs_part.find("Fish") + 120])
+        for fn in ("zz_sources.md",): (gdir / fn).unlink(missing_ok=True)
+        tex2 = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "LaTeX: with no citation in the grammar there is no References section", "\\section*{References}" not in tex2)
+
+        # ── exports ──
+        _jcall(aa, "post", site.url + "api/references", dict(type="dataset", authors=[{"org": "Pew Research Center"}], year="2018", title="American trends panel Wave 26", url="https://example.org/pew", id="pew2018"))
+        bib = va.get(site.url + "api/references/export/bibtex"); enw = va.get(site.url + "api/references/export/endnote")
+        check(S, "a visitor can download both exports, with a file name made from the project", bib.status == 200 and enw.status == 200 and 'filename="gaua-references.bib"' in bib.headers.get("content-disposition", "") and 'filename="gaua-references.enw"' in enw.headers.get("content-disposition", ""), bib.headers.get("content-disposition", ""))
+        try:
+            import bibtexparser
+            lib = bibtexparser.parse_string(bib.text())
+            ent = {e.key: {k: v.value for k, v in e.fields_dict.items()} | {"_type": e.entry_type} for e in lib.entries}
+            check(S, "BibTeX: a real BibTeX parser reads the whole file without a failure", not lib.failed_blocks and len(lib.entries) == len(_jcall(aa, "get", site.url + "api/references")[1]["references"]), str(lib.failed_blocks)[:100])
+            f = ent["francois2026b"]
+            check(S, "BibTeX: the chapter is an @incollection with author, editors, book title, pages (--), the year without its letter, publisher and DOI",
+                  f["_type"] == "incollection" and f["author"] == "François, Alexandre" and f["editor"] == "Miestamo, M. and Veselinova, L." and f["booktitle"].startswith("Negation in the world") and f["pages"] == "73--128"
+                  and f["year"] == "2026" and f["publisher"] == "Language Science Press" and f["doi"] == "10.5281/zenodo.18234067" and f["title"] == "{Negation in Dorig}", str(f)[:200])
+            check(S, "BibTeX: special characters are escaped, an organisation is kept whole in braces", ent["fish2001"]["title"] == "{100\\% of C\\_x \\# costs}" and ent["fish2001"]["author"] == "Fish \\& Chips, A." and ent["pew2018"]["author"] == "{Pew Research Center}" and ent["pew2018"]["_type"] == "misc", str(ent["pew2018"]))
+        except ImportError:
+            check(S, "BibTeX: a real parser (pip install bibtexparser) reads the file", True, "skipped: bibtexparser is not installed")
+        records = [r for r in enw.text().strip().split("\n\n") if r.strip()]
+        fr = [r for r in records if "%F francois2026b" in r][0].split("\n")
+        check(S, "EndNote: one record per reference, separated by blank lines, each starting with its type", len(records) == len(_jcall(aa, "get", site.url + "api/references")[1]["references"]) and all(r.startswith("%0 ") for r in records))
+        check(S, "EndNote: the chapter is a Book Section with author, one line per editor, title, book title, year, pages, publisher and DOI",
+              fr[0] == "%0 Book Section" and "%A François, Alexandre" in fr and "%E Miestamo, M." in fr and "%E Veselinova, L." in fr and "%T Negation in Dorig" in fr and "%D 2026" in fr and "%P 73–128" in fr and "%I Language Science Press" in fr and "%R 10.5281/zenodo.18234067" in fr, str(fr))
+        pew = [r for r in records if "%F pew2018" in r][0].split("\n")
+        check(S, "EndNote: an organisation keeps its name whole (a trailing comma stops EndNote splitting it), a data set is a Dataset", "%0 Dataset" in pew and "%A Pew Research Center," in pew, str(pew))
+        for rid in ("smithjones2016", "black2017", "lupin2018", "fish2001", "pew2018"): _jcall(aa, "delete", site.url + "api/references/" + rid)
+
+        # ── the author's form, in a browser ──
+        pa = au.new_page(); errs = []; watch(pa, errs)
+        open_page(pa, site, "references.html", ".ref-entry", 800)
+        check(S, "the author sees Add, Edit, Delete, the key of each reference and a hint about the shortcode", pa.locator("#ref-add").is_visible() and pa.locator("[data-edit]").first.is_visible() and pa.locator(".ref-key").first.inner_text() == "francois2026b" and "{{source: key}}" in pa.locator(".refs-hint").inner_text())
+        pa.click("#ref-add"); pa.wait_for_selector("#ref-modal.visible")
+        check(S, "the form opens on a journal article, with the fields of an article only", pa.locator("#rf-container").is_visible() and pa.locator("#rf-issue").is_visible() and not pa.locator("#rf-editors-box").is_visible() and not pa.locator("#rf-level").is_visible())
+        def fill_person(row, fam, giv):
+            pa.locator(f"#rf-authors .rf-person:nth-child({row}) [data-f=family]").fill(fam); pa.locator(f"#rf-authors .rf-person:nth-child({row}) [data-f=given]").fill(giv)
+        fill_person(1, "Roe", "Jane Q."); pa.click("#rf-add-author"); fill_person(2, "Doe", "Richard")
+        pa.fill("#rf-year", "2014"); pa.fill("#rf-title-in", "A study of tests"); pa.fill("#rf-container", "Journal of Tests"); pa.fill("#rf-volume", "3"); pa.fill("#rf-issue", "2"); pa.fill("#rf-pages", "1-9"); pa.fill("#rf-doi", "10.1000/xyz123")
+        pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.includes('Journal of Tests')"); pa.wait_for_timeout(300)
+        check(S, "while the author types, the form shows the reference as it will appear, and how to cite it", pa.inner_text("#rf-prev-ref") == "Roe, J. Q., & Doe, R. (2014). A study of tests. Journal of Tests, 3(2), 1–9. https://doi.org/10.1000/xyz123" and pa.inner_text("#rf-prev-text").replace("\u00a0", " ").split("·")[0].strip() == "(Roe & Doe, 2014)", pa.inner_text("#rf-prev-text"))
+        check(S, "the key is suggested from the first author and the year", pa.input_value("#rf-id") == "roe2014", pa.input_value("#rf-id"))
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-mv="-1"]').click(); pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.startsWith('Doe, R., & Roe')")
+        check(S, "the authors can be moved up and down, and the preview follows", pa.input_value("#rf-id") == "doe2014")
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-mv="-1"]').click(); pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.startsWith('Roe, J. Q., & Doe')")
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-f=org]').check(); pa.fill('#rf-authors .rf-person:nth-child(2) [data-f=family]', "Doe Institute")
+        pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.includes('Doe Institute')")
+        check(S, "an organisation is one name, with no given names", pa.locator('#rf-authors .rf-person:nth-child(2) [data-f=given]').is_disabled() and pa.inner_text("#rf-prev-ref").startswith("Roe, J. Q., & Doe Institute. (2014)"), pa.inner_text("#rf-prev-ref")[:60])
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-rm]').click()
+        pa.select_option("#rf-type", "chapter"); pa.wait_for_timeout(200)
+        check(S, "choosing another type changes the fields: a chapter asks for the editors and the title of the book", pa.locator("#rf-editors-box").is_visible() and pa.locator('label[data-f="container"] .lbl').inner_text() == "Title of the book" and not pa.locator("#rf-issue").is_visible())
+        pa.select_option("#rf-type", "web"); pa.wait_for_timeout(200)
+        check(S, "…and a web page asks for the website and the date", pa.locator('label[data-f="container"] .lbl').inner_text() == "Name of the website" and pa.locator("#rf-dateText").is_visible() and pa.locator("#rf-accessed").is_visible())
+        pa.select_option("#rf-type", "article")
+        pa.fill("#rf-title-in", ""); pa.click("#rf-save"); pa.wait_for_timeout(700)
+        check(S, "saving without a title shows the reason in the form and keeps it open", "title" in pa.inner_text("#rf-msg") and pa.locator("#ref-modal.visible").count() == 1, pa.inner_text("#rf-msg"))
+        pa.fill("#rf-title-in", "A study of tests"); pa.wait_for_timeout(500); pa.click("#rf-save")
+        pa.wait_for_selector("#roe2014", timeout=8000)
+        check(S, "saving adds the reference to the list, in its alphabetical place", pa.locator(".ref-entry").evaluate_all("els => els.map(e => e.id)") == ["francois2026b", "roe2014"], str(pa.locator(".ref-entry").evaluate_all("els => els.map(e => e.id)")))
+        check(S, "…with its text in APA style", pa.locator("#roe2014 .ref-text").inner_text().strip() == "Roe, J. Q. (2014). A study of tests. Journal of Tests, 3(2), 1–9. https://doi.org/10.1000/xyz123")
+        pa.click('[data-key="roe2014"]'); pa.wait_for_timeout(200)
+        check(S, "clicking a key copies its shortcode", "copied: {{source: roe2014}}" in pa.locator('[data-key="roe2014"]').inner_text())
+        pa.click('[data-edit="roe2014"]'); pa.wait_for_selector("#ref-modal.visible")
+        check(S, "Edit opens the form filled in, with its key", pa.input_value("#rf-title-in") == "A study of tests" and pa.input_value("#rf-container") == "Journal of Tests" and pa.input_value("#rf-pages") == "1-9" and pa.input_value("#rf-id") == "roe2014" and pa.locator("#rf-heading").inner_text() == "Edit the reference")
+        pa.fill("#rf-title-in", "A second study of tests"); pa.click("#rf-save"); pa.wait_for_function("document.querySelector('#roe2014 .ref-text').textContent.includes('A second study')", timeout=8000)
+        check(S, "an edited reference is updated in the list", "A second study of tests" in pa.locator("#roe2014 .ref-text").inner_text())
+        pa.fill("#refs-search", "dorig"); pa.wait_for_timeout(200)
+        shown = pa.locator(".ref-entry").count(); pa.fill("#refs-search", "zzzzz"); pa.wait_for_timeout(200)
+        check(S, "the search box narrows the list, and says when nothing matches", shown == 1 and "Nothing matches" in pa.locator("#refs-list").inner_text() and "shown" in pa.locator("#refs-count").inner_text())
+        pa.fill("#refs-search", ""); pa.wait_for_timeout(200)
+        pa.click('[data-del="roe2014"]'); pa.wait_for_function("!document.getElementById('roe2014')", timeout=8000)
+        check(S, "Delete removes it (after a confirmation)", pa.locator(".ref-entry").count() == 1)
+        open_page(pa, site, "references.html#francois2026b", ".ref-entry", 700)
+        check(S, "a link to references.html#key highlights that reference", pa.evaluate("getComputedStyle(document.getElementById('francois2026b')).backgroundColor") == "rgb(251, 241, 214)")
+        real = [e for e in errs if not ("HTTP 400" in e and e.endswith("/api/references"))]          # the refusal of an empty title is expected
+        check(S, "the form and the list raised no JavaScript or loading error", not real, "; ".join(real[:2]))
+
+        # ── the citation in the grammar page, with its hover ──
+        (gdir / "zz_page.md").write_text("## §9 Sources\n\nThe negator is described by {{source: francois2026b, p. 128}}.\n", encoding="utf-8")
+        pg = au.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "grammar.html", "#sections-container .source-cite", 1500)
+        cite = pg.locator(".source-cite").first
+        cite.scroll_into_view_if_needed(); cite.hover(); pg.wait_for_timeout(300)
+        tip = pg.evaluate("""() => { const d = [...document.querySelectorAll('body > div')].filter(e => getComputedStyle(e).position === 'fixed' && getComputedStyle(e).display !== 'none' && e.textContent.includes('Language Science Press')).pop(); return d ? {text: d.innerText, html: d.innerHTML} : null; }""") or {"text": "", "html": ""}
+        check(S, "in the grammar the citation reads (François, 2026b, p. 128) and, on hover, shows the whole reference with its italics", cite.inner_text() == "François, 2026b, p. 128" and "Negation in Dorig" in tip["text"] and "Language Science Press" in tip["text"] and "<em>" in tip["html"], tip["text"][:60])
+        pg.evaluate("window.scrollTo(0, 0)")
+        pg.evaluate("document.querySelector('.edit-tab.section-edit').click()"); pg.wait_for_selector(".editor-toolbar-btn", timeout=8000)
+        pg.evaluate("[...document.querySelectorAll('.editor-toolbar-btn')].find(b => b.textContent.includes('{{source}}')).click()")
+        check(S, "the grammar editor has a {{source}} button that inserts a citation, and lists it among the shortcodes", "{{source: key, p. 12}}" in pg.locator("textarea").first.input_value() and "cite a reference" in pg.locator(".shortcode-ref").first.inner_text().lower(), pg.locator("textarea").first.input_value()[-40:])
+        cite.click(); pg.wait_for_url("**/references.html#francois2026b", timeout=8000)
+        check(S, "…and clicking it goes to that reference", pg.url.endswith("references.html#francois2026b"))
+        check(S, "the grammar page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        (gdir / "zz_page.md").unlink()
+
+        # ── narrow screens ──
+        for w in (600, 390, 320):
+            c = new_context(browser, site, w, author=True); p = c.new_page()
+            wide = []
+            for fn in pages:
+                open_page(p, site, fn, None, 500)
+                nav = p.evaluate("(() => { const n = document.querySelector('.topnav'); return n ? n.scrollWidth - n.clientWidth : 0; })()")
+                if nav > 0: wide.append(f"{fn} nav +{nav}px")
+            open_page(p, site, "references.html", ".ref-entry", 500)
+            page_w = p.evaluate("document.documentElement.scrollWidth")
+            p.click("#ref-add"); p.wait_for_selector("#ref-modal.visible"); box = p.locator("#ref-modal .ref-form").bounding_box()
+            check(S, f"at {w}px the top bar of every page fits, the References page does not scroll sideways and its form stays inside the screen", not wide and page_w <= w and box["x"] >= 0 and box["x"] + box["width"] <= w + 1, f"{wide} page {page_w}px form {box}")
+            c.close()
+        pg.context.close(); pa.context.close(); vis.close(); au.close()
+    finally:
+        site.stop()
+
+    # ── a project with no references yet ──
+    site = Site(prepare=lambda d: (d / "project" / "references.json").unlink())
+    try:
+        c = new_context(browser, site, 1280); p = c.new_page(); errs = []; watch(p, errs)
+        open_page(p, site, "references.html", "#refs-list", 700)
+        d = c.request.get(site.url + "api/references").json()
+        check(S, "with no references.json the page says there are none, the API returns an empty list and the exports are empty", "No references yet" in p.locator("#refs-list").inner_text() and d["references"] == [] and c.request.get(site.url + "api/references/export/bibtex").text() == "" and not errs, "; ".join(errs[:2]))
+        a = new_context(browser, site, 1280, author=True)
+        st, j = _jcall(a.request, "post", site.url + "api/references", dict(type="book", authors=[_P("First", "A.")], year="2020", title="The first one", publisher="P"))
+        check(S, "the author can add the first reference to a project that had none (the file is created)", st == 200 and (site.dir / "project" / "references.json").exists() and j.get("id") == "first2020", str(j))
+        c.close(); a.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 10. dictionary suite: entries in the headword language, etymology and senses per language ─────────────────────────
+ALLC = ["num", "drg", "kro", "olr", "lkn"]
+
+def _entry_xml(site, eid):
+    root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+    found = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == eid]
+    return found[0] if found else None
+
+def _dict_with_languages(d):
+    """speech: its etymology applies to Dorig and Lakon only; sense 1 is for Dorig, Olrat and Lakon, sense 2 for Nume and Koro.
+    multi: three senses, for Dorig / Dorig and Koro / Koro. art already has no Olrat and no Lakon form."""
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
+    sp.find("Étymologie/Étymon").set("langues", "drg lkn")
+    sp.find("Sens").set("langues", "drg olr lkn")
+    sp.append(etree.fromstring('<Sens identifiant="speechⓢ2" langues="num kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">noise, sound</Glose>'
+                               '<Définition><ReprésentationDeTexte langue="eng">noise, sound</ReprésentationDeTexte></Définition><gloss>noise</gloss></Sens>'))
+    root.find(".//Dictionnaire").append(etree.fromstring(
+        '<EntréeLexicale identifiant="multi"><Lemme><ReprésentationDeForme langue="drg">mltdrg</ReprésentationDeForme><ReprésentationDeForme langue="kro">mltkro</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale>'
+        '<Sens identifiant="multiⓢ1" langues="drg"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">alpha</Glose><gloss>alpha</gloss></Sens>'
+        '<Sens identifiant="multiⓢ2" langues="drg kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">beta</Glose><gloss>beta</gloss></Sens>'
+        '<Sens identifiant="multiⓢ3" langues="kro"><NuméroDeSens>3</NuméroDeSens><Glose langue="eng">gamma</Glose><gloss>gamma</gloss></Sens></EntréeLexicale>'))
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_hostile(d):
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    et = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0].find("Étymologie/Étymon")
+    et.find("Forme").text = "<img src=x onerror=alert(1)>"
+    et.find("LienTLOPO").text = "javascript:alert(2)"
+    et.find("LienEtymograph").text = "https://example.org/ok"
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+_VIEW_JS = """(id) => { const e = document.getElementById(id); if (!e) return null;
+  const t = s => [...e.querySelectorAll(s)].map(x => x.innerText.trim());
+  const abbr = s => [...e.querySelectorAll(s + ' .étiquette_lang')].map(x => x.innerText.trim().toLowerCase());
+  return { etym: t('.etym-form'), pre: t('.etym-pre'), cogLabel: e.querySelectorAll('.cog-label').length, cognates: abbr('.entry-cognates'),
+           others: abbr('.entry-equivs:not(.entry-cognates)'), senses: t('.entry-gloss'), numbers: t('.sense-n'), nosense: e.querySelectorAll('.no-sense').length,
+           links: [...e.querySelectorAll('.etym-badge a')].map(a => a.getAttribute('href')), imgs: e.querySelectorAll('.etym-badge img').length }; }"""
+
+def suite_dictionary(browser, args):
+    S = "dictionary"
+    section("dictionary: entries in the headword language, the etymology of a form, the senses of a language")
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    NAME = {l["code"]: l["name"] for l in proj["languages"]}
+    ABBR = {l["code"]: l["abbr"].lower() for l in proj["languages"]}
+    ET = "*[qa]liŋa- 'voice'"
+
+    def view(page, site, lang_code, eid):
+        open_page(page, site, f"dictionary.html?lang={NAME[lang_code]}", "#dict-content .entry", 500)
+        return page.evaluate(_VIEW_JS, eid)
+
+    # ── old data: no language list anywhere, nothing changes ──
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); page = vis.new_page(); errs = []; watch(page, errs)
+        same = []
+        for c in ALLC:
+            v = view(page, site, c, "speech")
+            if not (v and v["etym"] == [ET] and v["cogLabel"] == 0 and len(v["others"]) == 4): same.append(c)
+        check(S, "an etymology without a language list applies to every language and looks as before (no cognates row)", not same, str(same))
+        check(S, "…and so does a sense without a language list: every language shows it", all((view(page, site, c, "speech") or {}).get("senses", [""])[0].startswith("speech") for c in ALLC))
+        check(S, "no JavaScript or loading error on old data", not errs, "; ".join(errs[:2]))
+        vis.close()
+    finally:
+        site.stop()
+
+    # ── the display, language by language ──
+    site = Site(prepare=_dict_with_languages)
+    try:
+        vis = new_context(browser, site, 1280); page = vis.new_page(); errs = []; watch(page, errs)
+        v = view(page, site, "drg", "speech")
+        check(S, "Dorig: the etymology of the Dorig form, followed by its cognates (Lakon only), then the other forms", v["etym"] == [ET] and [x.lower() for x in v["pre"]] == ["poc"] and v["cogLabel"] == 1 and v["cognates"] == [ABBR["lkn"]] and sorted(v["others"]) == sorted(ABBR[c] for c in ("num", "kro", "olr")), str(v))
+        check(S, "Dorig: only the senses ticked for Dorig (sense 1), not numbered when there is one", v["senses"] == ["speech, language, word"] and v["numbers"] == [], str(v["senses"]))
+        v = view(page, site, "lkn", "speech")
+        check(S, "Lakon: the same etymology, with Dorig as its cognate", v["etym"] == [ET] and v["cognates"] == [ABBR["drg"]] and v["senses"] == ["speech, language, word"], str(v))
+        v = view(page, site, "num", "speech")
+        check(S, "Nume: no etymology (it applies to Dorig and Lakon only), no cognates, every other form listed", v["etym"] == [] and v["cogLabel"] == 0 and len(v["others"]) == 4, str(v))
+        check(S, "Nume: only sense 2 (“noise, sound”), the one ticked for Nume and Koro", v["senses"] == ["noise, sound"], str(v["senses"]))
+        v = view(page, site, "kro", "speech"); k = v["senses"]
+        v2 = view(page, site, "olr", "speech")
+        check(S, "Koro shows sense 2 and Olrat sense 1, each without the other's", k == ["noise, sound"] and v2["senses"] == ["speech, language, word"] and v2["etym"] == [], f"{k} / {v2['senses']}")
+        d = view(page, site, "drg", "multi"); k = view(page, site, "kro", "multi")
+        check(S, "senses are numbered 1, 2 … among those shown (Koro: stored senses 2 and 3 show as 1 and 2)", d["senses"] == ["alpha", "beta"] and d["numbers"] == ["1", "2"] and k["senses"] == ["beta", "gamma"] and k["numbers"] == ["1", "2"], f"{d} {k}")
+        # entries per language
+        counts = {}
+        for c in ALLC:
+            open_page(page, site, f"dictionary.html?lang={NAME[c]}", "#dict-content .entry", 400)
+            counts[c] = (page.locator("#dict-content .entry").count(), page.locator("#art").count(), page.locator("#result-bar").inner_text().split()[0])
+        check(S, "a language lists the entries that have a form in it: art (no Olrat, no Lakon form) is not listed under Olrat or Lakon", counts["olr"][1] == 0 and counts["lkn"][1] == 0 and all(counts[c][1] == 1 for c in ("num", "drg", "kro")), str(counts))
+        check(S, "…and the entry count follows (multi has forms in Dorig and Koro only)", [counts[c][0] for c in ALLC] == [8, 9, 9, 7, 7] and [counts[c][2] for c in ALLC] == ["8", "9", "9", "7", "7"], str(counts))
+        # search follows the senses of the language
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 400); page.fill("#search-input", "noise"); page.wait_for_timeout(500)
+        in_dorig = page.locator("#dict-content .entry").count()
+        open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 400); page.fill("#search-input", "noise"); page.wait_for_timeout(500)
+        in_nume = page.locator("#dict-content .entry").count()
+        check(S, "a word found only in a sense that is not shown for the language does not find the entry there (Dorig: 0, Nume: 1)", (in_dorig, in_nume) == (0, 1), f"{in_dorig}, {in_nume}")
+        # a badge for a language without a form does not leave the entry
+        open_page(page, site, "dictionary.html?lang=Nume", "#art", 400)
+        page.locator(f"#art .étiquette_lang[data-lang='{NAME['olr']}'] a").click(); page.wait_for_timeout(600)
+        check(S, "clicking the badge of a language in which the entry has no form changes nothing", page.locator("#art").count() == 1 and NAME["num"] in page.locator("#result-bar").inner_text())
+        page.locator(f"#speech .étiquette_lang[data-lang='{NAME['drg']}'] a").click(); page.wait_for_timeout(600)
+        check(S, "…while the badge of a language that has the form switches to it, with its etymology", NAME["drg"] in page.locator("#result-bar").inner_text() and page.locator("#speech .etym-form").count() == 1)
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        vis.close()
+
+        # ── the entries API names the language of a restricted sense only ──
+        api = new_context(browser, site, 1280, author=False).request
+        ents = {e["id"]: e for e in api.get(site.url + "api/dictionary/entries").json()["entries"]}
+        check(S, "the entries API gives the languages of a restricted sense, and nothing for a free one", ents["speech"]["senses"][1].get("langs") == ["num", "kro"] and "langs" not in ents["know"]["senses"][0], str(ents["speech"]["senses"]))
+
+        # ── the server, through the API ──
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        def send(method, path, body): r = getattr(aa, method)(site.url + path, headers=_H, data=json.dumps(body)); return r.status, (r.json() if r.headers.get("content-type", "").startswith("application/json") else {})
+        base = dict(forms={"drg": "zzdrg", "lkn": "zzlkn", "num": "zznum"}, pos="n.", domain="")
+        st, j = send("post", "api/dictionary/entry", dict(base, senses=[{"ref": None, "definition": "one", "shortGloss": "one", "langs": ["drg", "lkn", "xx"]}, {"ref": None, "definition": "two", "shortGloss": "two", "langs": ALLC}, {"ref": None, "definition": "three", "shortGloss": "three", "langs": ["xx"]}],
+                  etyms=[{"ref": None, "lang": "POc", "form": "*aaa", "gloss": "x", "langs": ["drg", "lkn"]}, {"ref": None, "lang": "PNCV", "form": "*bbb", "gloss": "y", "langs": ["num", "drg"]}]))
+        eid = j.get("id"); el = _entry_xml(site, eid)
+        sens = [s.get("langues") for s in el.findall("Sens")]; ets = [(e.findtext("Forme"), e.get("langues")) for e in el.findall("Étymologie/Étymon")]
+        check(S, "the server writes the languages of a sense (unknown codes dropped; all of them, or none valid, means no attribute)", st == 200 and sens == ["drg lkn", None, None], f"{st} {sens}")
+        check(S, "…and of an etymon, keeping an explicit list; a language belongs to one etymon only (the first keeps Dorig)", ets == [("*aaa", "drg lkn"), ("*bbb", "num")], str(ets))
+        before = etree.tostring(el)
+        payload = dict(base, senses=[{"ref": i, "definition": d, "shortGloss": d, "langs": l} for i, (d, l) in enumerate([("one", ["drg", "lkn"]), ("two", ALLC), ("three", ALLC)])])
+        send("put", f"api/dictionary/entry/{eid}", payload)
+        check(S, "saving the same languages again leaves the entry byte for byte as it was (no etymons sent = left alone)", etree.tostring(_entry_xml(site, eid)) == before)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 1, "lang": "PNCV", "form": "*bbb", "gloss": "y2", "langs": ["num", "kro"]}]))
+        ets = [(e.findtext("Forme"), e.findtext("Glose"), e.get("langues")) for e in _entry_xml(site, eid).findall("Étymologie/Étymon")]
+        check(S, "an etymon is edited in place by its position, the others of the list are removed", ets == [("*bbb", "y2", "num kro")], str(ets))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etym={"lang": "POc", "form": "*ccc", "gloss": "z"}))
+        e1 = _entry_xml(site, eid).find("Étymologie/Étymon")
+        check(S, "an older caller that sends one etymology rewrites the first etymon and keeps its languages", e1.findtext("Forme") == "*ccc" and e1.get("langues") == "num kro" and len(_entry_xml(site, eid).findall("Étymologie/Étymon")) == 1)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[]))
+        check(S, "an empty list removes the etymology", _entry_xml(site, eid).find("Étymologie") is None)
+        send("delete", f"api/dictionary/entry/{eid}", {})
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the author's window ──
+    site = Site()
+    try:
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
+        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible")
+        ticks = lambda sel: page.evaluate("(sel) => [...document.querySelectorAll(sel + ' input[type=checkbox]')].filter(c => c.checked).map(c => c.dataset.lang)", sel)
+        check(S, "the window offers, for each sense, a tick per language of the project (all ticked for an old sense)", len(page.locator(".em-sense:not(.em-etym) .em-lang-tick").all()) == 5 and ticks(".em-sense:not(.em-etym)") == list(NAME.values()))
+        check(S, "…and for the etymology (an old one shows every language ticked)", ticks(".em-etym") == list(NAME.values()) and page.locator("#em-etym-box").evaluate("e => e.open"))
+        page.fill('.em-etym [data-f="tlopo"]', "https://tlopo.example/changed"); page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
+        et = _entry_xml(site, "speech").find("Étymologie/Étymon")
+        check(S, "changing only a link of an old etymology does not give it a language list", et.get("langues") is None and et.findtext("LienTLOPO") == "https://tlopo.example/changed")
+        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible")
+        for l in ("Nume", "Koro", "Olrat"): page.locator(f'.em-etym input[data-lang="{l}"]').uncheck()
+        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
+        check(S, "unticking languages on the etymology writes the list of the forms it applies to", _entry_xml(site, "speech").find("Étymologie/Étymon").get("langues") == "drg lkn")
+        check(S, "…and the entry now shows it in Dorig, with Lakon as its cognate, and not in Nume", view(page, site, "drg", "speech")["cognates"] == [ABBR["lkn"]] and view(page, site, "num", "speech")["etym"] == [])
+        # a second etymology for the other forms
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
+        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible"); page.click("#em-add-etym")
+        second = ticks(".em-etym:nth-child(2)")
+        check(S, "a new etymology starts with the languages that have a form and belong to no other etymology", second == [NAME["num"], NAME["kro"], NAME["olr"]] and ticks(".em-etym:nth-child(1)") == [NAME["drg"], NAME["lkn"]], str(second))
+        page.locator('.em-etym:nth-child(2) input[data-lang="Dorig"]').check()
+        check(S, "ticking a language on one etymology takes it from the other", ticks(".em-etym:nth-child(1)") == [NAME["lkn"]] and NAME["drg"] in ticks(".em-etym:nth-child(2)"))
+        page.locator('.em-etym:nth-child(2) input[data-lang="Dorig"]').uncheck(); page.locator('.em-etym:nth-child(1) input[data-lang="Dorig"]').check()
+        page.fill('.em-etym:nth-child(2) [data-f="form"]', "*bbb"); page.fill('.em-etym:nth-child(2) [data-f="gloss"]', "other"); page.fill('.em-etym:nth-child(2) [data-f="lang"]', "PNCV")
+        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
+        ets = [(e.findtext("Forme"), e.get("langues")) for e in _entry_xml(site, "speech").findall("Étymologie/Étymon")]
+        check(S, "two etymologies are saved, each with its own languages", ets == [(ET.split(" ")[0], "drg lkn"), ("*bbb", "num kro olr")], str(ets))
+        n = view(page, site, "num", "speech")
+        check(S, "Nume shows the second one, with Koro and Olrat as its cognates; Dorig still shows the first", n["etym"] == ["*bbb 'other'"] and [x.lower() for x in n["pre"]] == ["pncv"] and n["cognates"] == [ABBR["kro"], ABBR["olr"]] and view(page, site, "drg", "speech")["etym"] == [ET])
+        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible")
+        page.locator('.em-etym:nth-child(2) [data-act="del"]').click(); page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
+        check(S, "an etymology can be removed from the window", len(_entry_xml(site, "speech").findall("Étymologie/Étymon")) == 1)
+        # senses: a sense with no language is refused
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
+        page.evaluate("openEditEntry('know')"); page.wait_for_selector("#entry-modal.visible"); before = etree.tostring(_entry_xml(site, "know"))
+        for l in NAME.values(): page.locator(f'.em-sense:not(.em-etym) input[data-lang="{l}"]').uncheck()
+        page.click("#em-submit"); page.wait_for_timeout(500)
+        check(S, "a sense with no language ticked is refused, with the reason, and nothing is written", "Tick at least one language for sense 1" in page.inner_text("#em-msg") and etree.tostring(_entry_xml(site, "know")) == before)
+        page.locator('.em-sense:not(.em-etym) input[data-lang="Koro"]').check(); page.locator('.em-sense:not(.em-etym) input[data-lang="Olrat"]').check()
+        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
+        check(S, "ticking some languages for a sense saves them (and the entry disappears from the others)", _entry_xml(site, "know").find("Sens").get("langues") == "kro olr" and view(page, site, "kro", "know") is not None)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
+        v = page.evaluate(_VIEW_JS, "know")
+        check(S, "…in Dorig the entry is still listed (it has a Dorig form) but says it has no sense there", v["nosense"] == 1 and v["senses"] == ["No sense for Dorig yet."], str(v["senses"]))
+        # a new entry whose only form is in another language: the page follows it
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 600)
+        page.click("#add-entry-btn"); page.wait_for_selector("#entry-modal.visible")
+        page.fill("#ef-num", "zznume"); page.locator(".em-sense textarea").first.fill("only in Nume"); page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); page.wait_for_timeout(900)
+        check(S, "a new entry that has no form in the language being viewed: the page moves to a language where it exists and shows it", NAME["num"] in page.locator("#result-bar").inner_text() and page.locator("#zznume").count() == 1, page.locator("#result-bar").inner_text())
+        check(S, "the window and the list raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── what the author types is never run ──
+    site = Site(prepare=_dict_hostile)
+    try:
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        v = view(page, site, "drg", "speech")
+        check(S, "an etymology with markup in its form is shown as text; a link that is not http(s) is not made a link, a good one is", v["imgs"] == 1 and page.locator("#speech .etym-badge img[src=x]").count() == 0 and v["links"] == ["https://example.org/ok"] and "<img" in v["etym"][0], str(v["links"]))
+        check(S, "nothing ran", not [e for e in errs if "DIALOG" in e or "PAGEERROR" in e], str(errs[:2]))
+        c.close()
+    finally:
+        site.stop()
+
+    # ── a project with one language: nothing to tick ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        a = new_context(browser, site, 1280); _login(a.request, site, "a-good-password-1"); page = a.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html", "#dict-content .entry", 800)
+        page.evaluate("openEditEntry('house')"); page.wait_for_selector("#entry-modal.visible"); page.click("#em-etym-box summary"); page.click("#em-add-etym")
+        page.fill('.em-etym [data-f="form"]', "*one"); page.fill('.em-etym [data-f="gloss"]', "dwelling")
+        check(S, "with one language the window shows no language ticks, for senses or etymologies", page.locator(".em-lang-tick").count() == 0)
+        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); page.wait_for_timeout(500)
+        root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+        et = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "house"][0].find("Étymologie/Étymon")
+        check(S, "…and an etymology added there carries no language list, and is shown", et is not None and et.get("langues") is None and page.locator("#house .etym-form").inner_text() == "*one 'dwelling'")
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); a.close()
+    finally:
+        site.stop()
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -1118,6 +1644,8 @@ def main():
             if args.only in (None, "security"):   suite_security(browser, site, args)
             if args.only in (None, "setup"):      suite_setup(browser, args)
             if args.only in (None, "migration"):  suite_migration(browser, args)
+            if args.only in (None, "references"): suite_references(browser, args)
+            if args.only in (None, "dictionary"): suite_dictionary(browser, args)
             browser.close()
     finally:
         site.stop()
