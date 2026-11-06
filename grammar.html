@@ -196,6 +196,11 @@
 /* Entry chip */
 .entry-chip { display: inline-flex; align-items: baseline; gap: 4px; font-family: 'EB Garamond', serif; font-size: 1.02rem; text-decoration: none; color: var(--ink); border-bottom: 1.5px dotted var(--gold); border-radius: 2px; padding: 0 2px; transition: color 0.12s, background 0.12s; }
 .entry-chip:hover { color: #b84c10; background: #fff5e8; }
+
+/* ── {{source: …}} citations: the author-date text links to the References page ── */
+.source-cite { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--gold); cursor: pointer; }
+.source-cite:hover { color: #b84c10; border-bottom-style: solid; }
+
 .chip-forms { font-size: 1rem; }
 .chip-gloss { font-family: 'Crimson Pro', serif; font-size: 0.88rem; font-style: italic; color: var(--ink-light); }
 
@@ -258,6 +263,7 @@ tr[data-lang].lang-hidden { display: none; }
     <li><a href="grammar.html" class="active">Grammar</a></li>
     <li><a href="texts.html">Texts</a></li>
     <li><a href="dictionary.html">Dictionary</a></li>
+    <li><a href="references.html">References</a></li>
   </ul>
   <div class="topnav-auth">
     <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
@@ -451,6 +457,8 @@ async function loadSection(id) {
                 title="Example shortcode">{{example}}</button>
         <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','entry')"
                 title="Entry shortcode">{{entry}}</button>
+        <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','source')"
+                title="Cite a reference (see the References page)">{{source}}</button>
       </div>
       <textarea id="textarea-${id}" spellcheck="false"
                 style="border-radius:0 0 4px 4px;"></textarea>
@@ -459,6 +467,7 @@ async function loadSection(id) {
         <ul>
           <li><code>{{example: ID}}</code> — numbered example from "Examples from papers"</li>
           <li><code>{{entry: ID}}</code> — inline word chip from dictionary XML</li>
+          <li><code>{{source: key}}</code> — cite a reference: (Author, Year). Add <code>, p. 12</code> for a page, <code>, narrative</code> for Author (Year), or cite several with <code>;</code></li>
           <li><code>![caption](images/file.jpg)</code> — uploaded image</li>
         </ul>
         <li><code>{{cite: file.xml#sentId}}</code> — numbered example from a transcribed narrative</li>
@@ -541,6 +550,7 @@ const MARKUP = {
   table:   ()    => '\n| Column 1 | Column 2 | Column 3 |\n|---|---|---|\n| Cell | Cell | Cell |\n',
   example: ()    => '{{example: negation_example_01}}',
   entry:   ()    => '{{entry: speech}}',
+  source:  ()    => '{{source: key, p. 12}}',
 };
 
 function insertMarkup(id, type) {
@@ -778,6 +788,28 @@ function bindDictLinksInSection(container) {
   });
 }
 
+
+// ── hovering a {{source: …}} citation shows the full reference ──
+(function () {
+  let tt = null;
+  function show(a) {
+    if (!tt) {
+      tt = document.createElement('div');
+      tt.style.cssText = 'position:fixed;z-index:400;max-width:min(430px,86vw);background:#1c0f06;color:#f0dfc0;font:0.92rem/1.45 "EB Garamond",serif;' +
+                         'padding:8px 12px;border-radius:4px;box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none;display:none;overflow-wrap:anywhere;';
+      document.body.appendChild(tt);
+    }
+    tt.innerHTML = a.dataset.ref || '';
+    tt.querySelectorAll('a').forEach(l => { l.style.color = '#e8c887'; });
+    tt.style.display = 'block';
+    const r = a.getBoundingClientRect(), w = tt.offsetWidth, h = tt.offsetHeight;
+    let y = r.bottom + 6; if (y + h > innerHeight - 8) y = r.top - h - 6;
+    tt.style.left = Math.min(Math.max(8, r.left), innerWidth - w - 8) + 'px';
+    tt.style.top = Math.max(8, y) + 'px';
+  }
+  document.addEventListener('mouseover', e => { const a = e.target.closest && e.target.closest('.source-cite'); if (a) show(a); });
+  document.addEventListener('mouseout',  e => { if (tt && e.target.closest && e.target.closest('.source-cite')) tt.style.display = 'none'; });
+})();
 </script>
 
 <!-- ── Dictionary hover tooltip (for cited examples) ── -->
