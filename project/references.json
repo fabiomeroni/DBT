@@ -1,0 +1,30 @@
+{
+ "references": [
+  {
+   "id": "francois2026b",
+   "type": "chapter",
+   "authors": [
+    {
+     "family": "François",
+     "given": "Alexandre"
+    }
+   ],
+   "editors": [
+    {
+     "family": "Miestamo",
+     "given": "M."
+    },
+    {
+     "family": "Veselinova",
+     "given": "L."
+    }
+   ],
+   "year": "2026b",
+   "title": "Negation in Dorig",
+   "container": "Negation in the world’s languages III: Papunesia, Australia, and the Americas",
+   "pages": "73–128",
+   "publisher": "Language Science Press",
+   "doi": "10.5281/zenodo.18234067"
+  }
+ ]
+}
