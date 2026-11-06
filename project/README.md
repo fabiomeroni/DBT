@@ -87,6 +87,35 @@ list of their names (`<strong>Nume, Dorig</strong>, and <strong>Lakon</strong>`)
 
 Image files are named as they sit in the site folder for now (`gaua_map.png`).
 
+## The dictionary: entries, etymologies and senses per language
+
+One entry (`<EntréeLexicale>`) gathers the forms of a word in the project's languages. The dictionary shows it **in the headword
+language** that is chosen: only the entries that have a form in that language are listed, with that form as the headword.
+
+- **Etymology belongs to forms.** An entry may have several etymons (`<Étymologie><Étymon langues="drg lkn">`), each for the
+  languages whose forms it explains. In a headword language you see the etymon that applies to its form, followed by its
+  **cognates**: the other forms covered by the same etymon (all the languages, or only some). The remaining forms of the entry follow.
+  An etymon with no `langues` attribute (older data) applies to every language and is displayed as it always was.
+- **Senses belong to languages.** `<Sens langues="drg olr lkn">` is shown only for those languages; without the attribute a sense
+  applies to all of them. Senses are numbered 1, 2 … among those shown.
+- In the editor (author mode) each sense and each etymology has a tick per language, and **＋ Add an etymology** adds another
+  proto-form. A language belongs to one etymology of an entry only. For a project with one language there is nothing to tick.
+
+## `references.json` (the bibliography)
+
+The author adds, changes and deletes references on the **References** page (a form per work). They are stored here, as
+what was typed (type, authors, year, title, journal or book, pages, DOI ...); the APA 7 text is made when it is shown, so it
+can never go out of step. The grammar cites a reference by author and year, as one writes it in a text:
+`{{source: Smith 2020}}` gives (Smith, 2020), `{{source: Smith 2020, p. 12}}` adds the page, `{{source: Smith 2020, narrative}}`
+gives Smith (2020), and `{{source: Smith 2020; Jones 2019}}` cites two works. Two authors are written `Smith & Jones 2016`, three or
+more `Smith et al. 2016`, and a first-author initial separates two authors of the same surname (`A. Smith 2020`). Works by the same
+authors in the same year have the letters a, b ... (or the author types 2020b); without the letter the citation is refused as
+ambiguous, in a message that names the choices. Each reference also has a **key** (`smith2020`) that can be used in place of the
+author and year: it is the safe choice if a name is spelled in several ways. Changing a key on the page updates the citations
+in the grammar.
+
+The top-bar label of the page is `nav.references` in `project.json` (default: References).
+
 ## Where the data is
 
 Everything the project is made of sits in this folder:
@@ -97,6 +126,7 @@ Everything the project is made of sits in this folder:
       seed-phonetic-forms.json
       dictionary.xml          the dictionary (LEXICA XML)
       fieldnotes.xml          the fieldwork questionnaire (optional)
+      references.json         the bibliography (edited on the References page)
       grammar/                the grammar, one Markdown file per section
       texts/                  the transcribed texts (Pangloss XML) and "examples from papers";
                               it also receives what the authoring creates: glosses/, confirmed_glosses.json,
