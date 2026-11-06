@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>References — {{project.titleSuffix}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+.refs-main { padding: 2rem 4rem 5rem; max-width: 980px; margin: 0 auto; }
+.refs-hdr { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+.refs-hdr h1 { font-family: 'EB Garamond', serif; font-size: 2.1rem; font-weight: 500; margin: 0; color: var(--ink); }
+.refs-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.refs-search { font: inherit; font-size: 0.95rem; padding: 0.35rem 0.65rem; border: 1px solid var(--border); border-radius: 3px; background: #fff; width: 15rem; max-width: 100%; }
+.refs-btn { font-family: 'Crimson Pro', serif; font-size: 0.9rem; font-weight: 600; color: var(--ink); background: #efe4cd;
+  border: 1px solid var(--border); border-radius: 3px; padding: 0.3rem 0.8rem; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.refs-btn:hover { background: #e8d8b8; border-color: var(--gold); }
+.refs-count { color: var(--ink-light); font-size: 0.95rem; margin: 0 0 0.4rem; }
+.refs-hint { display: none; background: #faf6ef; border: 1px solid var(--border); border-left: 3px solid var(--gold); border-radius: 3px;
+  padding: 0.5rem 0.9rem; margin: 0 0 1rem; font-size: 0.95rem; color: var(--ink-light); }
+.refs-hint code, .ref-key { font-family: 'Source Code Pro', monospace; font-size: 0.82em; background: #efe6d3; padding: 0 0.3rem; border-radius: 2px; }
+body.is-author .refs-hint { display: block; }
+.refs-empty { color: var(--ink-light); font-style: italic; padding: 1.5rem 0; }
+
+.ref-entry { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--border-lt); }
+.ref-entry:target, .ref-entry.flash { background: #fbf1d6; }
+.ref-body { min-width: 0; }
+.ref-text { padding-left: 2.2rem; text-indent: -2.2rem; font-family: 'EB Garamond', serif; font-size: 1.14rem; line-height: 1.5; overflow-wrap: anywhere; }
+.ref-text a { color: var(--gold); }
+.ref-meta { display: none; margin: 0.15rem 0 0 2.2rem; font-size: 0.8rem; color: var(--ink-light); font-family: 'Crimson Pro', serif; }
+body.is-author .ref-meta { display: block; }
+.ref-key { cursor: pointer; border: none; }
+.ref-key:hover { background: #e3d3b0; }
+.ref-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+
+/* ── the form ── */
+.ref-form { max-width: 760px; width: 94vw; max-height: 92vh; display: flex; flex-direction: column; }
+.ref-form { padding: 1.2rem 1.8rem 1.1rem; }
+.ref-form h3 { margin: 0 0 0.3rem; font-size: 1.3rem; }
+.rf-scroll { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-right: 0.5rem; margin-right: -0.5rem; }
+.rf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.1rem 1rem; }
+.rf-grid > label, .rf-wide { display: flex; flex-direction: column; gap: 2px; font-size: 0.82rem; color: var(--ink-light); margin-top: 0.55rem; }
+.rf-wide { grid-column: 1 / -1; }
+.rf-grid input[type=text], .rf-grid select { font: inherit; font-size: 1rem; color: var(--ink); padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 3px; background: #fff; width: 100%; }
+.rf-grid small { color: var(--ink-light); font-size: 0.78rem; }
+.rf-people { display: flex; flex-direction: column; gap: 0.25rem; }
+.rf-person { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 0.35rem; align-items: center; }
+.rf-person label { flex-direction: row; align-items: center; gap: 4px; margin: 0; white-space: nowrap; font-size: 0.8rem; }
+.rf-person button, .rf-add { background: none; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; padding: 0.15rem 0.4rem; font-size: 0.8rem; color: var(--ink-light); }
+.rf-person .del { color: #c06060; }
+.rf-add { align-self: flex-start; margin-top: 0.2rem; background: #fff; }
+.rf-preview { margin-top: 0.8rem; max-height: 9.5rem; overflow-y: auto; flex: 0 0 auto; background: #faf6ef; border: 1px solid var(--border); border-radius: 4px; padding: 0.6rem 0.9rem; }
+.rf-preview h4 { margin: 0 0 0.15rem; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-light); font-weight: 600; }
+.rf-preview .out { font-family: 'EB Garamond', serif; font-size: 1.08rem; line-height: 1.45; min-height: 1.4rem; overflow-wrap: anywhere; padding-left: 2.2rem; text-indent: -2.2rem; }
+.rf-preview .out.plain { padding-left: 0; text-indent: 0; }
+.rf-preview .out.soft { color: var(--ink-light); font-style: italic; }
+@media (max-width: 720px) { .refs-main { padding: 1.2rem 1rem 4rem; } .rf-grid { grid-template-columns: 1fr; } .rf-person { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="grammar.html">Grammar</a></li>
+    <li><a href="texts.html">Texts</a></li>
+    <li><a href="dictionary.html">Dictionary</a></li>
+    <li><a href="references.html" class="active">References</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.references}}</div>
+</nav>
+
+<main class="refs-main">
+  <div class="refs-hdr">
+    <h1>References</h1>
+    <div class="refs-tools">
+      <input type="search" class="refs-search" id="refs-search" placeholder="Search the references…" aria-label="Search the references">
+      <a class="refs-btn" href="/api/references/export/bibtex" download>⬇ BibTeX</a>
+      <a class="refs-btn" href="/api/references/export/endnote" download>⬇ EndNote</a>
+      <button class="edit-tab" id="ref-add" title="Add a reference">＋ Add reference</button>
+    </div>
+  </div>
+  <p class="refs-hint">Cite a reference in the grammar with <code>{{source: key}}</code>, as in <code>{{source: smith2020, p. 12}}</code> for a page, or
+    <code>{{source: smith2020, narrative}}</code> for <i>Smith (2020)</i>. Several at once: <code>{{source: key1; key2}}</code>. Click a key to copy its shortcode.</p>
+  <p class="refs-count" id="refs-count"></p>
+  <div id="refs-list"></div>
+</main>
+
+<!-- ── the author's form ── -->
+<div class="dbt-modal-backdrop" id="ref-modal">
+  <div class="dbt-modal ref-form">
+    <h3 id="rf-heading">Add a reference</h3>
+    <div class="rf-scroll"><div class="rf-grid">
+      <label class="rf-wide">Type of reference <select id="rf-type"></select></label>
+
+      <div class="rf-wide" id="rf-authors-box">
+        <span id="rf-authors-label">Authors</span>
+        <div class="rf-people" id="rf-authors"></div>
+        <button type="button" class="rf-add" id="rf-add-author">＋ Add an author</button>
+      </div>
+      <div class="rf-wide" id="rf-editors-box">
+        <span>Editors of the book</span>
+        <div class="rf-people" id="rf-editors"></div>
+        <button type="button" class="rf-add" id="rf-add-editor">＋ Add an editor</button>
+      </div>
+
+      <label>Year <input type="text" id="rf-year" placeholder="2026, 2026b, n.d., in press"><small>A letter (2026b) tells works of one year apart; it is added for you otherwise.</small></label>
+      <label data-f="dateText"><span class="lbl">Date</span> <input type="text" id="rf-dateText" placeholder="October 28–29"></label>
+
+      <label class="rf-wide">Title <input type="text" id="rf-title-in"><small>In sentence case: a capital only for the first word, proper names and the first word after a colon.</small></label>
+
+      <label data-f="container"><span class="lbl">Journal</span> <input type="text" id="rf-container"><small class="hint-container"></small></label>
+      <label data-f="edition"><span class="lbl">Edition</span> <input type="text" id="rf-edition" placeholder="2 (for 2nd ed.)"></label>
+      <label data-f="volume"><span class="lbl">Volume</span> <input type="text" id="rf-volume"></label>
+      <label data-f="issue"><span class="lbl">Issue</span> <input type="text" id="rf-issue"></label>
+      <label data-f="pages"><span class="lbl">Pages</span> <input type="text" id="rf-pages" placeholder="73–128"></label>
+      <label data-f="level"><span class="lbl">Kind of thesis</span> <input type="text" id="rf-level" placeholder="Doctoral dissertation"></label>
+      <label data-f="institution"><span class="lbl">University</span> <input type="text" id="rf-institution"></label>
+      <label data-f="number"><span class="lbl">Number</span> <input type="text" id="rf-number"></label>
+      <label data-f="descriptor"><span class="lbl">Description</span> <input type="text" id="rf-descriptor" placeholder="Unpublished manuscript"></label>
+      <label data-f="publisher"><span class="lbl">Publisher</span> <input type="text" id="rf-publisher"></label>
+      <label data-f="place"><span class="lbl">Place</span> <input type="text" id="rf-place" placeholder="City, Country"></label>
+      <label data-f="accessed"><span class="lbl">Retrieved on</span> <input type="text" id="rf-accessed" placeholder="October 21, 2019"><small>Only for pages that change over time.</small></label>
+      <label data-f="note"><span class="lbl">Note</span> <input type="text" id="rf-note"></label>
+      <label data-f="doi">DOI <input type="text" id="rf-doi" placeholder="10.5281/zenodo.18234067"></label>
+      <label data-f="url">URL <input type="text" id="rf-url" placeholder="https://…"></label>
+
+      <label class="rf-wide">Key, to cite it with <input type="text" id="rf-id" spellcheck="false"><small id="rf-key-hint">Used in the grammar as <b>{{source: key}}</b>.</small></label>
+    </div></div>
+
+    <div class="rf-preview">
+      <h4>In the text</h4><div class="out plain soft" id="rf-prev-text"></div>
+      <h4 style="margin-top:0.55rem;">In the reference list</h4><div class="out soft" id="rf-prev-ref">Fill in the title to see the reference.</div>
+    </div>
+    <div class="dbt-modal-msg" id="rf-msg" style="margin:0.4rem 0 0.2rem;"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="rf-cancel">Cancel</button>
+      <button class="modal-btn primary" id="rf-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+let REFS = [], TYPES = [];
+
+// ── which fields each type of reference asks for, and what they are called ──
+const FIELDS = {
+  article:     ['container', 'volume', 'issue', 'pages', 'doi', 'url'],
+  book:        ['edition', 'volume', 'publisher', 'doi', 'url'],
+  edited:      ['edition', 'volume', 'publisher', 'doi', 'url'],
+  chapter:     ['editors', 'container', 'edition', 'volume', 'pages', 'publisher', 'doi', 'url'],
+  conference:  ['dateText', 'container', 'place', 'url'],
+  thesis:      ['level', 'institution', 'number', 'publisher', 'url'],
+  report:      ['number', 'publisher', 'doi', 'url'],
+  web:         ['dateText', 'container', 'accessed', 'url'],
+  dataset:     ['edition', 'publisher', 'doi', 'url', 'accessed'],
+  unpublished: ['descriptor', 'publisher', 'url'],
+  other:       ['note', 'publisher', 'doi', 'url'],
+};
+const LABEL = {
+  container: { article: 'Journal', chapter: 'Title of the book', conference: 'Name of the conference', web: 'Name of the website' },
+  publisher: { thesis: 'Database or archive', unpublished: 'Source (department, university)', report: 'Publisher or organisation', dataset: 'Publisher or repository', _: 'Publisher' },
+  edition:   { dataset: 'Version', _: 'Edition' },
+  number:    { thesis: 'Publication number, as printed', report: 'Report number, as printed', _: 'Number' },
+  dateText:  { web: 'Date (month and day)', conference: 'Date (month and days)', _: 'Date' },
+};
+const HINT = { chapter: 'Capital letters as in the book’s own title: sentence case.', article: 'Journal names keep their capitals.', web: '' };
+
+// ── the list ──
+async function loadRefs() {
+  const r = await fetch('/api/references');
+  const d = await r.json();
+  REFS = d.references; TYPES = d.types;
+  renderList();
+  if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({ block: 'center' });
+}
+function renderList() {
+  const box = document.getElementById('refs-list'), q = document.getElementById('refs-search').value.trim().toLowerCase();
+  const shown = REFS.filter(r => !q || (r.text + ' ' + r.id).toLowerCase().includes(q));
+  document.getElementById('refs-count').textContent = REFS.length ? `${REFS.length} reference${REFS.length === 1 ? '' : 's'}` + (q ? `, ${shown.length} shown` : '') : '';
+  if (!REFS.length) { box.innerHTML = '<p class="refs-empty">No references yet. The author can add them with “＋ Add reference”.</p>'; return; }
+  box.innerHTML = shown.map(r => `
+    <div class="ref-entry" id="${esc(r.id)}">
+      <div class="ref-body">
+        <div class="ref-text">${r.html}</div>
+        <div class="ref-meta"><button class="ref-key" data-key="${esc(r.id)}" title="Copy {{source: ${esc(r.id)}}}">${esc(r.id)}</button>
+          ${r.citedIn.length ? ' · cited in the grammar (' + r.citedIn.map(esc).join(', ') + ')' : ' · not cited yet'}</div>
+      </div>
+      <div class="ref-actions">
+        <button class="edit-tab${isLoggedIn ? ' visible' : ''}" data-edit="${esc(r.id)}">✏ Edit</button>
+        <button class="edit-tab${isLoggedIn ? ' visible' : ''}" data-del="${esc(r.id)}" style="color:#922810;">🗑 Delete</button>
+      </div>
+    </div>`).join('') || '<p class="refs-empty">Nothing matches your search.</p>';
+}
+document.getElementById('refs-search').addEventListener('input', renderList);
+document.getElementById('refs-list').addEventListener('click', async e => {
+  const key = e.target.closest('[data-key]'), ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
+  if (key) {
+    const code = `{{source: ${key.dataset.key}}}`;
+    try { await navigator.clipboard.writeText(code); } catch (err) { /* no clipboard access */ }
+    const old = key.textContent; key.textContent = 'copied: ' + code; setTimeout(() => key.textContent = old, 1400);
+  }
+  if (ed) openForm(REFS.find(r => r.id === ed.dataset.edit));
+  if (del) deleteRef(REFS.find(r => r.id === del.dataset.del));
+});
+async function deleteRef(r) {
+  const cited = r.citedIn.length ? `\n\nIt is cited in the grammar (${r.citedIn.join(', ')}): those citations will then show “Reference not found”.` : '';
+  if (!confirm(`Delete this reference?\n\n${r.text}${cited}`)) return;
+  const res = await fetch('/api/references/' + encodeURIComponent(r.id), { method: 'DELETE' });
+  if (res.ok) loadRefs(); else alert((await res.json()).error || 'Could not delete.');
+}
+function onAuthChange(loggedIn) {
+  document.body.classList.toggle('is-author', loggedIn);
+  document.querySelectorAll('.ref-actions .edit-tab').forEach(b => b.classList.toggle('visible', loggedIn));
+}
+
+// ── the author's form ──
+let editingId = null, keyTouched = false, previewTimer = null;
+function personRow(p = {}, kind) {
+  const org = !!p.org;
+  return `<div class="rf-person" data-kind="${kind}">
+    <input type="text" data-f="family" placeholder="${org ? 'Name of the organisation' : 'Family name'}" value="${esc(org ? p.org : (p.family || ''))}">
+    <input type="text" data-f="given" placeholder="Given names or initials" value="${esc(p.given || '')}" ${org ? 'disabled' : ''}>
+    <label><input type="checkbox" data-f="org" ${org ? 'checked' : ''}> organisation</label>
+    <span><button type="button" data-mv="-1" title="Move up">▲</button><button type="button" data-mv="1" title="Move down">▼</button><button type="button" class="del" data-rm="1" title="Remove">✕</button></span>
+  </div>`;
+}
+function readPeople(boxId) {
+  return [...document.querySelectorAll(`#${boxId} .rf-person`)].map(row => {
+    const org = row.querySelector('[data-f=org]').checked, fam = row.querySelector('[data-f=family]').value.trim(), giv = row.querySelector('[data-f=given]').value.trim();
+    return org ? { org: fam } : { family: fam, given: giv };
+  }).filter(p => p.org || p.family);
+}
+function applyType() {
+  const ty = document.getElementById('rf-type').value, show = new Set(FIELDS[ty] || []);
+  document.querySelectorAll('.rf-grid > label[data-f]').forEach(l => {
+    const f = l.dataset.f; l.style.display = show.has(f) ? '' : 'none';
+    const lbl = l.querySelector('.lbl'); if (lbl && LABEL[f]) lbl.textContent = LABEL[f][ty] || LABEL[f]._ || lbl.textContent;
+  });
+  document.getElementById('rf-editors-box').style.display = show.has('editors') ? '' : 'none';
+  document.getElementById('rf-authors-label').textContent = ty === 'edited' ? 'Editors' : 'Authors';
+  document.getElementById('rf-add-author').textContent = ty === 'edited' ? '＋ Add an editor' : '＋ Add an author';
+  document.querySelector('.hint-container').textContent = HINT[ty] || '';
+}
+function collect() {
+  const v = id => document.getElementById('rf-' + id).value.trim();
+  const ty = v('type'), show = new Set(FIELDS[ty] || []), d = { type: ty, authors: readPeople('rf-authors'), year: v('year'), title: v('title-in'), id: v('id'), editing: editingId || '' };
+  d.editors = show.has('editors') ? readPeople('rf-editors') : [];
+  ['dateText', 'container', 'edition', 'volume', 'issue', 'pages', 'level', 'institution', 'number', 'descriptor', 'publisher', 'place', 'accessed', 'note', 'doi', 'url']
+    .forEach(f => { d[f] = show.has(f) ? v(f) : ''; });
+  return d;
+}
+function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 250); }
+async function preview() {
+  const d = collect(), ref = document.getElementById('rf-prev-ref'), txt = document.getElementById('rf-prev-text');
+  if (!d.title) { ref.className = 'out soft'; ref.textContent = 'Fill in the title to see the reference.'; txt.textContent = ''; return; }
+  const r = await fetch('/api/references/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+  const j = await r.json();
+  if (!j.ok) { ref.className = 'out soft'; ref.textContent = j.error; txt.textContent = ''; return; }
+  ref.className = 'out'; ref.innerHTML = j.view.html;
+  txt.className = 'out plain'; txt.innerHTML = `${esc(j.view.intext)} &nbsp;·&nbsp; ${esc(j.view.narrative)}`;
+  if (!keyTouched) document.getElementById('rf-id').value = j.view.suggestedId;
+}
+function openForm(ref) {
+  editingId = ref ? ref.id : null; keyTouched = !!ref;
+  document.getElementById('rf-heading').textContent = ref ? 'Edit the reference' : 'Add a reference';
+  const sel = document.getElementById('rf-type');
+  if (!sel.options.length) sel.innerHTML = TYPES.map(t => `<option value="${t.id}">${esc(t.label)}</option>`).join('');
+  sel.value = ref ? ref.type : 'article';
+  const r = ref || { authors: [{}], editors: [{}] };
+  document.getElementById('rf-authors').innerHTML = (r.authors.length ? r.authors : [{}]).map(p => personRow(p, 'authors')).join('');
+  document.getElementById('rf-editors').innerHTML = (r.editors.length ? r.editors : [{}]).map(p => personRow(p, 'editors')).join('');
+  ['year', 'dateText', 'container', 'edition', 'volume', 'issue', 'pages', 'level', 'institution', 'number', 'descriptor', 'publisher', 'place', 'accessed', 'note', 'doi', 'url']
+    .forEach(f => { document.getElementById('rf-' + f).value = r[f] || ''; });
+  document.getElementById('rf-title-in').value = r.title || '';
+  document.getElementById('rf-id').value = ref ? ref.id : '';
+  document.getElementById('rf-key-hint').innerHTML = ref ? 'If you change the key, the citations in the grammar are updated for you.' : 'Used in the grammar as <b>{{source: key}}</b>.';
+  document.getElementById('rf-msg').textContent = ''; document.getElementById('rf-msg').className = 'dbt-modal-msg';
+  applyType(); preview();
+  document.getElementById('ref-modal').classList.add('visible');
+  setTimeout(() => document.querySelector('#rf-authors [data-f=family]')?.focus(), 60);
+}
+const closeForm = () => document.getElementById('ref-modal').classList.remove('visible');
+document.getElementById('ref-add').addEventListener('click', () => { if (!isLoggedIn) { showLoginModal(); return; } openForm(null); });
+document.getElementById('rf-cancel').addEventListener('click', closeForm);
+document.getElementById('ref-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeForm(); });
+document.getElementById('rf-type').addEventListener('change', () => { applyType(); schedulePreview(); });
+document.getElementById('rf-add-author').addEventListener('click', () => { document.getElementById('rf-authors').insertAdjacentHTML('beforeend', personRow({}, 'authors')); });
+document.getElementById('rf-add-editor').addEventListener('click', () => { document.getElementById('rf-editors').insertAdjacentHTML('beforeend', personRow({}, 'editors')); });
+document.getElementById('rf-id').addEventListener('input', () => { keyTouched = true; });
+document.querySelector('#ref-modal .rf-grid').addEventListener('input', e => {
+  if (e.target.id === 'rf-id') return;
+  const row = e.target.closest('.rf-person');
+  if (row && e.target.dataset.f === 'org') {                                  // an organisation has a single name
+    const on = e.target.checked; row.querySelector('[data-f=given]').disabled = on;
+    row.querySelector('[data-f=family]').placeholder = on ? 'Name of the organisation' : 'Family name';
+  }
+  schedulePreview();
+});
+document.querySelector('#ref-modal .rf-grid').addEventListener('click', e => {
+  const row = e.target.closest('.rf-person'); if (!row) return;
+  if (e.target.dataset.rm) { if (row.parentElement.children.length > 1) row.remove(); else row.querySelectorAll('input[type=text]').forEach(i => i.value = ''); }
+  if (e.target.dataset.mv) { const s = +e.target.dataset.mv, sib = s < 0 ? row.previousElementSibling : row.nextElementSibling; if (sib) s < 0 ? row.parentElement.insertBefore(row, sib) : row.parentElement.insertBefore(sib, row); }
+  schedulePreview();
+});
+document.getElementById('rf-save').addEventListener('click', async () => {
+  const msg = document.getElementById('rf-msg'), d = collect(); delete d.editing;
+  msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg';
+  try {
+    const r = await fetch(editingId ? '/api/references/' + encodeURIComponent(editingId) : '/api/references',
+      { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || 'HTTP ' + r.status);
+    closeForm(); await loadRefs();
+    document.getElementById(j.id)?.classList.add('flash');
+    if (j.updatedGrammarSections && j.updatedGrammarSections.length) alert('The key changed: the citations in the grammar were updated (' + j.updatedGrammarSections.join(', ') + ').');
+  } catch (e) { msg.textContent = e.message; msg.className = 'dbt-modal-msg error'; }
+});
+
+bindLoginModal();
+checkAuth();
+loadRefs();
+</script>
+</body>
+</html>
