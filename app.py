@@ -675,8 +675,11 @@ def _refs_save(refs):
 _SOURCE_RE = re.compile(r'\{\{\s*source\s*:\s*([^\}]+)\}\}')
 
 def _grammar_citations():
-    """{reference key: [grammar section ids that cite it]}"""
+    """{reference key: [grammar section ids that cite it]} (a citation by author and year counts for the reference it finds)"""
     found = {}
+    refs = _refs_load()
+    ctx = refs_lib.Context(refs)
+    keys = {r['id'] for r in refs}
     try:
         names = sorted(os.listdir(GRAMMAR_FOLDER))
     except OSError:
@@ -687,29 +690,35 @@ def _grammar_citations():
         with open(os.path.join(GRAMMAR_FOLDER, fn), encoding='utf-8') as f:
             text = f.read()
         for m in _SOURCE_RE.finditer(text):
-            for key, _loc, _nar in refs_lib.parse_source_spec(_html.unescape(m.group(1))):
-                if fn[:-3] not in found.setdefault(key, []):
-                    found[key].append(fn[:-3])
+            for key, _loc, _nar in refs_lib.parse_source_spec(_html.unescape(m.group(1)), keys):
+                ref, _why = refs_lib.find_reference(key, refs, ctx)
+                rid = ref['id'] if ref else key
+                if fn[:-3] not in found.setdefault(rid, []):
+                    found[rid].append(fn[:-3])
     return found
 
 def _resolve_sources(spec):
-    """Parse a {{source: …}} spec against the stored references. Returns (items, narrative, ctx, missing)."""
+    """Parse a {{source: …}} spec against the stored references: each item is a key, or the author(s) and year as one writes
+    them in the text (Smith 2020b). Returns (items, narrative, ctx, problems); a problem is a ready-made message."""
     refs = _refs_load()
-    byid = {r['id']: r for r in refs}
-    items, missing, narrative = [], [], False
-    for key, loc, nar in refs_lib.parse_source_spec(spec):
-        if key in byid:
-            items.append((byid[key], loc))
+    ctx = refs_lib.Context(refs)
+    items, problems, narrative = [], [], False
+    for what, loc, nar in refs_lib.parse_source_spec(spec, {r['id'] for r in refs}):
+        ref, why = refs_lib.find_reference(what, refs, ctx)
+        if ref:
+            items.append((ref, loc))
             narrative = narrative or nar
+        elif why.startswith('ambiguous'):
+            problems.append(f'Ambiguous reference: {what} ({why[len("ambiguous: "):]}): add the letter')
         else:
-            missing.append(key)
-    return items, narrative, refs_lib.Context(refs), missing
+            problems.append(f'Reference not found: {what}')
+    return items, narrative, ctx, problems
 
 def build_source_cite(spec):
     """{{source: smith2020, p. 12}} -> (Smith, 2020, p. 12), a link to the reference with the full APA entry on hover."""
     items, narrative, ctx, missing = _resolve_sources(spec)
     if missing and not items:
-        return f'<span class="shortcode-error">Reference not found: {_esc(", ".join(missing))}</span>'
+        return f'<span class="shortcode-error">{_esc("; ".join(missing))}</span>'
     text, parts = refs_lib.intext(items, ctx, narrative and len(items) == 1)
     byid = {r['id']: r for r, _ in items}
     def link(label, rid):
@@ -720,13 +729,13 @@ def build_source_cite(spec):
     else:
         out = '(' + '; '.join(link(t, rid) for t, rid in parts) + ')'
     if missing:
-        out += f' <span class="shortcode-error">Reference not found: {_esc(", ".join(missing))}</span>'
+        out += f' <span class="shortcode-error">{_esc("; ".join(missing))}</span>'
     return out
 
 def _source_latex(spec, cited):
     items, narrative, ctx, missing = _resolve_sources(spec)
     if missing and not items:
-        return f'\\textit{{[reference not found: {_le(", ".join(missing))}]}}'
+        return f'\\textit{{[{_le("; ".join(missing))}]}}'
     text, _parts = refs_lib.intext(items, ctx, narrative and len(items) == 1)
     cited.update(r['id'] for r, _ in items)
     return _le(text)
