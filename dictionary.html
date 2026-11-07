@@ -371,8 +371,6 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .sense-gloss { font-family: 'Source Code Pro', monospace; font-size: 0.7rem; letter-spacing: 0.04em;
   color: var(--ink-light); background: #f0e8d8; border-radius: 2px; padding: 1px 7px 2px; }
 .sense .entry-gloss { margin-top: 0.2rem; }
-.other-examples-label { font-family: 'Crimson Pro', serif; font-size: 0.7rem; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--ink-light); margin: 0.9rem 0 0.2rem; }
 
 /* Sense cards in the entry editor */
 .em-senses-head { display: flex; align-items: center; justify-content: space-between; margin: 0.2rem 0 0.4rem;
@@ -408,6 +406,13 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .sg-item { margin: 0.55rem 0 0.9rem 0.15rem; padding-left: 0.8rem; border-left: 2px solid var(--border); }
 .sg-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.1rem 0.45rem; }
 .sg-hw { font-family: 'EB Garamond', serif; font-size: 1.45rem; font-weight: 500; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
+.em-sub { font-weight: 400; color: var(--ink-light); font-size: 0.75rem; }
+.em-code { width: 100%; box-sizing: border-box; height: 3.3rem; resize: vertical; font-family: 'Source Code Pro', monospace; font-size: 0.8rem; }
+.em-attested { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.25rem 0 0.2rem; }
+.em-attested .lbl { font-family: 'Crimson Pro', serif; font-size: 0.78rem; color: var(--ink-light); }
+.em-ex-add { background: #fff; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; padding: 0.1rem 0.45rem; font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink); }
+.em-ex-add:hover:not(:disabled) { border-color: var(--gold); background: #faf1dc; }
+.em-ex-add:disabled { opacity: 0.45; cursor: default; }
 .em-hw-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem; }
 .em-hw-row select { width: auto; }
 .em-hw-label, .em-cog-head { font-family: 'Crimson Pro', serif; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; color: var(--ink-light); }
@@ -612,7 +617,10 @@ async function parseLexicaXML(url) {
       const shortGloss = sn.querySelector(':scope > gloss')?.textContent.trim() ?? '';
       const notes      = sn.querySelector(':scope > Notes > ReprésentationDeTexte[langue="eng"]')?.textContent.trim() ?? '';
       const num        = sn.querySelector(':scope > NuméroDeSens')?.textContent.trim();
-      return { ref, n: /^\d+$/.test(num || '') ? num : String(ref + 1), gloss, definition, shortGloss, notes, langs: langsAttr(sn) };
+      // the examples the author chose for this sense: {{cite: …}} lines, as in the grammar
+      const exampleText = sn.querySelector(':scope > Exemples')?.textContent.trim() ?? '';
+      const exampleKeys = [...exampleText.matchAll(/\{\{\s*cite\s*:\s*([^}]*?)\s*\}\}/g)].map(m => m[1].trim());
+      return { ref, n: /^\d+$/.test(num || '') ? num : String(ref + 1), gloss, definition, shortGloss, notes, langs: langsAttr(sn), exampleText, exampleKeys };
     });
     // the first sense is mirrored on the entry, for code that only needs "the" gloss
     const first = senses[0] || { gloss: '', definition: '', shortGloss: '', notes: '' };
@@ -705,6 +713,7 @@ function cognatesHTML(entry, langs) {
 
 // ── Examples drawn from confirmed sentences in the texts ─────────────────────
 let dictExamples = {};   // entry id -> [example, ...]  (from /api/dictionary/examples)
+let dictCited = {};      // "entry id|sense position" -> {examples, missing}: the examples the author chose (from /api/dictionary/cited-examples)
 let dictFormIndex = {};  // "code:cleanform" -> entry id (to link words inside examples)
 const CODE2LANG = DBT.nameByCode;
 const EX_VISIBLE = 3;    // examples shown before "show more"
@@ -728,6 +737,11 @@ async function loadDictExamples() {
     const d = r.ok ? await r.json() : {};
     dictExamples = d.error ? {} : d;
   } catch (e) { dictExamples = {}; }
+  try {
+    const r = await fetch('/api/dictionary/cited-examples');
+    const d = r.ok ? await r.json() : {};
+    dictCited = d.error ? {} : d;
+  } catch (e) { dictCited = {}; }
 }
 
 function exTokenCell(code, tok, isMatch, ownId) {
@@ -867,14 +881,29 @@ function exampleGlossIs(ex, target) {
   return !!target && (ex.match_cols || []).some(c => cleanForm((ex.glosses || [])[c]) === target);
 }
 function senseTarget(sn) { return cleanForm(sn.shortGloss || sn.gloss); }
-function examplesForSense(entry, sn, vis) {
-  const all = dictExamples[entry.id] || [];
-  return vis.length <= 1 ? all : all.filter(ex => exampleGlossIs(ex, senseTarget(sn)));
+// The citation key of an attested example, as written in {{cite: …}} (fieldnotes#group#sentence, papers#id, file.xml#sentence)
+const exKey = ex => ex.type === 'fieldnotes' ? `fieldnotes#${ex.index}#${ex.sentence_id}` : ex.type === 'papers' ? `papers#${ex.sentence_id}` : `${ex.file}#${ex.sentence_id}`;
+
+// The examples shown under a sense. If the author chose some for it, exactly those. Otherwise the attested ones: if the entry has
+// one sense only, all of them (they can only be about it); if it has several, only those whose word was glossed like this sense
+// (except the ones the author gave to another sense).
+function examplesForSense(entry, sn) {
+  if (sn.exampleKeys && sn.exampleKeys.length) return (dictCited[entry.id + '|' + sn.ref] || { examples: [] }).examples;
+  const claimed = new Set(entry.senses.flatMap(s => s.exampleKeys || []));        // an example the author gave to a sense is that sense's
+  const all = (dictExamples[entry.id] || []).filter(ex => !claimed.has(exKey(ex)));
+  return entry.senses.length <= 1 ? all : all.filter(ex => exampleGlossIs(ex, senseTarget(sn)));
 }
-function otherExamples(entry, vis) {          // attestations that match none of several senses
-  if (vis.length <= 1) return [];
-  const targets = vis.map(senseTarget);
-  return (dictExamples[entry.id] || []).filter(ex => !targets.some(t => exampleGlossIs(ex, t)));
+// For the author: attested examples of the entry that no sense shows
+function unassignedExamples(entry) {
+  const all = dictExamples[entry.id] || [];
+  if (!all.length) return [];
+  const shown = new Set();
+  entry.senses.forEach(s => examplesForSense(entry, s).forEach(ex => shown.add(exKey(ex))));
+  return all.filter(ex => !shown.has(exKey(ex)));
+}
+function missingExamplesHTML(entry, sn) {          // for the author: a chosen citation that does not exist
+  const miss = (dictCited[entry.id + '|' + sn.ref] || {}).missing || [];
+  return miss.length ? `<div class="entry-hidden-forms${isLoggedIn ? ' visible' : ''}">Chosen example not found: ${miss.map(escHTML).join(', ')}</div>` : '';
 }
 
 function senseHTML(entry, sn, multi, vis, number) {
@@ -886,7 +915,8 @@ function senseHTML(entry, sn, multi, vis, number) {
     ${head}
     <div class="entry-gloss">${sn.definition}</div>
     <div class="entry-notes">${sn.notes}</div>
-    ${textExamplesHTML(entry, examplesForSense(entry, sn, vis), 's' + sn.ref)}
+    ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
+    ${missingExamplesHTML(entry, sn)}
   </div>`;
 }
 
@@ -912,9 +942,10 @@ function entryHTML(entry) {
   const sensesHTML = vis.length
     ? vis.map((sn, i) => senseHTML(entry, sn, multi, vis, i + 1)).join('')
     : `<div class="entry-gloss no-sense">No sense for ${escHTML(activeLang)} yet.</div>`;
-  const other = otherExamples(entry, vis);
-  const otherHTML = other.length
-    ? `<div class="other-examples-label">Other examples</div>${textExamplesHTML(entry, other, 'o')}` : '';
+  const loose = unassignedExamples(entry).length;
+  const otherHTML = loose
+    ? `<div class="entry-hidden-forms${isLoggedIn ? ' visible' : ''}">${loose} attested example${loose > 1 ? 's are' : ' is'} not shown under any sense.
+       <button type="button" class="hf-set" onclick="openEditEntry('${entry.id}')">✎ choose examples</button></div>` : '';
   return `<div class="entry" id="${entry.id}">
     <div class="entry-header">
       <span class="entry-headword" style="color:${color};">${headwordHTML(entry)}</span>${ipaHTML(entry)}
@@ -984,7 +1015,8 @@ function senseItemHTML(entry, sn) {
     <div class="entry-gloss">${sn.definition}</div>
     ${etymBlock(entry).html}
     <div class="entry-notes">${sn.notes}</div>
-    ${textExamplesHTML(entry, examplesForSense(entry, sn, vis), 's' + sn.ref)}
+    ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
+    ${missingExamplesHTML(entry, sn)}
   </div>`;
 }
 function senseMatches(e, s) {
@@ -1381,7 +1413,7 @@ let _etyms  = [];      // the etymology cards of the open editor: {ref, lang, fo
 let _etymDirty = false;
 let _homTouched = false;
 
-const _blankSense = () => ({ ref: null, definition: '', shortGloss: '', notes: '', langs: LANGS.slice() });
+const _blankSense = () => ({ ref: null, definition: '', shortGloss: '', notes: '', langs: LANGS.slice(), examples: '' });
 
 // "This sense / this etymology applies to": one tick per language of the project, in its colour (nothing for a one-language project)
 function langTicks(selected, kind, label) {
@@ -1391,6 +1423,17 @@ function langTicks(selected, kind, label) {
   ).join('') + `</div>`;
 }
 
+// The examples already attested for the entry being edited, each with a button that adds its {{cite: …}} to the sense
+function attestedPicker(s) {
+  const list = _editingId ? (dictExamples[_editingId] || []) : [];
+  if (!list.length) return '';
+  const used = new Set([...(s.examples || '').matchAll(/\{\{\s*cite\s*:\s*([^}]*?)\s*\}\}/g)].map(m => m[1].trim()));
+  const short = ex => { const tr = (ex.translation || ex.sentence_id || '').trim(); return tr.length > 44 ? tr.slice(0, 43) + '…' : tr; };
+  return `<div class="em-attested"><span class="lbl">Attested for this entry:</span>` + list.map(ex => {
+    const k = exKey(ex);
+    return `<button type="button" class="em-ex-add" data-key="${escHTML(k)}"${used.has(k) ? ' disabled' : ''} title="${escHTML(k)}">＋ ${escHTML(short(ex))}</button>`;
+  }).join('') + `</div>`;
+}
 function renderSenseCards() {
   const box = document.getElementById('em-senses');
   box.innerHTML = _senses.map((s, i) => `
@@ -1412,9 +1455,15 @@ function renderSenseCards() {
       <label>Notes</label>
       <textarea class="em-input" data-f="notes" style="width:100%;box-sizing:border-box;height:3rem;resize:vertical;"
                 placeholder="Usage notes, cognate information…">${escHTML(s.notes)}</textarea>
+      <label>Examples <span class="em-sub">— the ones shown for this sense: one {{cite: …}} per line, as in the grammar</span></label>
+      <textarea class="em-input em-code" data-f="examples" spellcheck="false" placeholder="{{cite: fieldnotes#0#d01.Road:02}}">${escHTML(s.examples || '')}</textarea>
+      ${attestedPicker(s)}
       ${langTicks(s.langs, 'sense', 'This sense applies to')}
     </div>`).join('');
 }
+
+// An example line: one or more {{cite: …}}: fieldnotes#group#sentence, papers#id, or recording.xml#sentence
+const CITE_LINE = /^(?:\{\{\s*cite\s*:\s*(?:fieldnotes#\d+#[^\s}]+|papers#[^\s}]+|[^#\s}]+\.xml#[^\s}]+)\s*\}\}\s*)+$/;
 
 // ── The headword and its cognates ──
 // The entry is edited from its headword language (_hw). Its cognates are the languages of the etymon that contains it
@@ -1529,7 +1578,7 @@ function _openEntryModal(title, entry) {
     document.getElementById('ef-domain').value = entry.domain || '';
     document.getElementById('ef-hom').value    = entry.homonym || '';
     _senses = entry.senses.map(s => ({ ref: s.ref, definition: s.definition || '',
-                                       shortGloss: s.shortGloss || '', notes: s.notes || '', langs: s.langs ? s.langs.slice() : LANGS.slice() }));
+                                       shortGloss: s.shortGloss || '', notes: s.notes || '', langs: s.langs ? s.langs.slice() : LANGS.slice(), examples: s.exampleText || '' }));
     // an etymology with no language list applies to every language (legacyAll): it is left that way unless the author changes the ticks
     _etyms = (entry.etyms || []).map(e => ({ ...e, langs: e.langs ? e.langs.slice() : LANGS.slice(), legacyAll: !e.langs }));
   } else {
@@ -1564,7 +1613,7 @@ function _collectEntryData() {
     domain:  document.getElementById('ef-domain')?.value.trim() || '',
     homonym: document.getElementById('ef-hom')?.value.trim()    || '',
     senses:  _senses.map(s => ({ ref: s.ref, definition: s.definition.trim(),
-                                 shortGloss: s.shortGloss.trim(), notes: s.notes.trim(), langs: s.langs.map(l => LANG_CODE[l]) })),
+                                 shortGloss: s.shortGloss.trim(), notes: s.notes.trim(), langs: s.langs.map(l => LANG_CODE[l]), examples: s.examples || '' })),
     etyms,
   };
 }
@@ -1604,6 +1653,10 @@ async function _submitEntry() {
   if (bare) return fail(`Write the ${bare} form of the cognate, or untick ${bare}.`);
   const noLang = _senses.findIndex(s => (s.definition.trim() || s.shortGloss.trim() || s.notes.trim()) && !s.langs.length);
   if (noLang >= 0) return fail(`Tick at least one language for sense ${noLang + 1}.`);
+  for (let i = 0; i < _senses.length; i++) {                 // the examples are lines of {{cite: …}}, nothing else
+    const bad = (_senses[i].examples || '').split('\n').map(x => x.trim()).filter(Boolean).find(l => !CITE_LINE.test(l));
+    if (bad) return fail(`Sense ${i + 1}: “${bad.length > 50 ? bad.slice(0, 49) + '…' : bad}” is not a citation like {{cite: fieldnotes#0#d01.Road:02}}.`);
+  }
   msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg';
   try {
     const url    = _editingId
@@ -1678,6 +1731,13 @@ function _bindEntryModal() {
   box.addEventListener('input', e => {
     const card = e.target.closest('.em-sense'), fld = e.target.dataset.f;
     if (card && fld) _senses[+card.dataset.i][fld] = e.target.value;
+  });
+  box.addEventListener('click', e => {                        // add an attested example to the sense
+    const b = e.target.closest('.em-ex-add');
+    if (!b) return;
+    const s = _senses[+b.closest('.em-sense').dataset.i];
+    s.examples = (s.examples ? s.examples.replace(/\s+$/, '') + '\n' : '') + '{{cite: ' + b.dataset.key + '}}';
+    renderSenseCards();
   });
   box.addEventListener('change', e => {                       // the languages a sense applies to
     const tick = e.target.closest('input[data-kind="sense"]');
