@@ -173,6 +173,7 @@ VISITOR_PAGES = [
     ("viewer-papers",     "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase"),
     ("viewer-recording",  "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase"),
     ("references",        "references.html",                 ".ref-entry"),
+    ("dictionary-senses", "dictionary.html?lang=Koro&mode=senses", ".sense-group"),
 ]
 AUTHOR_PAGES = [
     ("author-grammar",           "grammar.html",                    "#sections-container .grammar-section"),
@@ -565,7 +566,7 @@ def suite_generality(browser, site, args):
         check(S, "other project: the dictionary opens on the project's headword language (Beta)", page.locator('[id="know"] .entry-headword').inner_text() == stored_drg, stored_drg)
         page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(500)
         labels = page.locator("#em-lang-grid label").all_inner_texts()
-        check(S, "other project: the entry editor has a row per language of the project", labels == [n for _, n, _, _ in ALT_LANGS], str(labels))
+        check(S, "other project: the entry editor has a row per language of the project (the headword and its cognates, as the labels say)", [x.split(" · ")[0] for x in labels] == [n for _, n, _, _ in ALT_LANGS] and sum("headword" in x for x in labels) == 1, str(labels))
         page.click("#em-cancel")
         open_page(page, asite, "grammar.html", "#sections-container .grammar-section", 1800)
         abbr = page.locator("#s1 .cite-fn-table").first.locator(".cite-fn-abbr").all_inner_texts()
@@ -686,12 +687,13 @@ def suite_languages(browser, args):
         ctx = new_context(browser, site, 1280, author=True); page = ctx.new_page(); watch(page, errs); api = ctx.request
         open_page(page, site, "dictionary.html", "#dict-content .entry", 1500)
         check(S, "eight languages: eight language buttons", page.locator(".hw-lang-pill").count() == 8)
-        check(S, "eight languages: seven other forms under a headword", page.locator('[id="know"] .entry-equivs .lang-badge-link').count() == 7, str(page.locator('[id="know"] .entry-equivs .lang-badge-link').count()))
+        check(S, "eight languages: an entry that names no cognates lists none of the seven other forms", page.locator('[id="know"] .entry-equivs').count() == 0, str(page.locator('[id="know"] .entry-equivs').count()))
         page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(500)
-        check(S, "eight languages: eight rows in the entry editor", page.locator("#em-lang-grid label").count() == 8)
+        check(S, "eight languages: eight language rows are built in the entry editor, the headword's showing, and seven cognate ticks are offered",
+              page.locator("#em-lang-grid label").count() == 8 and page.locator("#em-cog-ticks input").count() == 7 and page.evaluate("[...document.querySelectorAll('.em-lang-row')].filter(r => getComputedStyle(r).display !== 'none').length") == 1)
         page.click("#em-cancel")
         page.click("#add-entry-btn"); page.wait_for_timeout(300)
-        page.fill("#ef-ccc", "zzzc"); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("eighth-language test")
+        page.select_option("#em-hw-lang", eight[-1]["name"]); page.fill("#ef-ccc", "zzzc"); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("eighth-language test")
         page.click("#em-submit"); page.wait_for_timeout(1500)
         check(S, "eight languages: an entry with a form only in the eighth language is saved", xml_langs(site, "zzzc") == {"ccc": "zzzc"}, str(xml_langs(site, "zzzc")) if True else "")
         page.click("#settings-btn"); page.wait_for_timeout(900)
@@ -742,7 +744,7 @@ def suite_languages(browser, args):
             page.locator(".hw-lang-pill", has_text=nm).first.click(); page.wait_for_timeout(500)
         check(S, "odd names: every language can be chosen as the headword language", "active" in (page.locator(".hw-lang-pill", has_text="Ma'a").first.get_attribute("class") or ""))
         page.click("#add-entry-btn"); page.wait_for_timeout(300)
-        page.fill("#ef-lt-2", "toga"); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("odd-code test")
+        page.select_option("#em-hw-lang", "Lo-Toga"); page.fill("#ef-lt-2", "toga"); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("odd-code test")
         page.click("#em-submit"); page.wait_for_timeout(1500)
         check(S, "odd names: an entry in a language with a hyphenated code is saved", xml_langs(site, "toga") == {"lt-2": "toga"}, str(xml_langs(site, "toga")) if True else "")
         page.reload(wait_until="domcontentloaded"); page.wait_for_timeout(1500)
@@ -968,7 +970,7 @@ def suite_setup(browser, args):
         p2.fill("#login-pw", "a-good-password-1") if p2.locator("#login-pw").is_visible() else None
         if p2.locator("#login-submit").is_visible(): p2.click("#login-submit"); p2.wait_for_timeout(900)
         p2.click("#add-entry-btn"); p2.wait_for_timeout(300)
-        p2.fill("#ef-lot", "toga"); p2.fill("#ef-pos", "n."); p2.locator(".em-sense").first.locator('[data-f="definition"]').fill("first entry")
+        p2.select_option("#em-hw-lang", "Lo-Toga"); p2.fill("#ef-lot", "toga"); p2.fill("#ef-pos", "n."); p2.locator(".em-sense").first.locator('[data-f="definition"]').fill("first entry")
         p2.click("#em-submit"); p2.wait_for_timeout(1500)
         d = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
         check(S, "the first entry is saved into the project's own dictionary file", len(d.findall(".//EntréeLexicale")) == 1 and d.find('.//Lemme/ReprésentationDeForme[@langue="lot"]').text == "toga")
@@ -1416,7 +1418,7 @@ def suite_references(browser, args):
         site.stop()
 
 
-# ───────────────────────── 10. dictionary suite: entries in the headword language, etymology and senses per language ─────────────────────────
+# ───────────────────────── 10. dictionary suite: entries in the headword language, cognates, senses per language, the Senses list ─────────────────────────
 ALLC = ["num", "drg", "kro", "olr", "lkn"]
 
 def _entry_xml(site, eid):
@@ -1424,9 +1426,17 @@ def _entry_xml(site, eid):
     found = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == eid]
     return found[0] if found else None
 
+def _entry_by_form(site, code, form):
+    root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+    for e in root.iter("EntréeLexicale"):
+        if any(f.get("langue") == code and (f.text or "") == form for f in e.findall("Lemme/ReprésentationDeForme")):
+            return e
+    return None
+
 def _dict_with_languages(d):
     """speech: its etymology applies to Dorig and Lakon only; sense 1 is for Dorig, Olrat and Lakon, sense 2 for Nume and Koro.
-    multi: three senses, for Dorig / Dorig and Koro / Koro. art already has no Olrat and no Lakon form."""
+    multi: three senses, for Dorig / Dorig and Koro / Koro. knowtoo shares the gloss “know” with the entry know.
+    art already has no Olrat and no Lakon form."""
     p = d / "project" / "dictionary.xml"
     tree = etree.parse(str(p)); root = tree.getroot()
     sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
@@ -1434,54 +1444,104 @@ def _dict_with_languages(d):
     sp.find("Sens").set("langues", "drg olr lkn")
     sp.append(etree.fromstring('<Sens identifiant="speechⓢ2" langues="num kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">noise, sound</Glose>'
                                '<Définition><ReprésentationDeTexte langue="eng">noise, sound</ReprésentationDeTexte></Définition><gloss>noise</gloss></Sens>'))
-    root.find(".//Dictionnaire").append(etree.fromstring(
+    dic = root.find(".//Dictionnaire")
+    dic.append(etree.fromstring(
         '<EntréeLexicale identifiant="multi"><Lemme><ReprésentationDeForme langue="drg">mltdrg</ReprésentationDeForme><ReprésentationDeForme langue="kro">mltkro</ReprésentationDeForme></Lemme>'
         '<ClasseGrammaticale>n.</ClasseGrammaticale>'
         '<Sens identifiant="multiⓢ1" langues="drg"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">alpha</Glose><gloss>alpha</gloss></Sens>'
         '<Sens identifiant="multiⓢ2" langues="drg kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">beta</Glose><gloss>beta</gloss></Sens>'
         '<Sens identifiant="multiⓢ3" langues="kro"><NuméroDeSens>3</NuméroDeSens><Glose langue="eng">gamma</Glose><gloss>gamma</gloss></Sens></EntréeLexicale>'))
+    dic.append(etree.fromstring(
+        '<EntréeLexicale identifiant="knowtoo"><Lemme><ReprésentationDeForme langue="drg">knwdrg</ReprésentationDeForme><ReprésentationDeForme langue="kro">knwkro</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>v.tr.</ClasseGrammaticale>'
+        '<Sens identifiant="knowtooⓢ1"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">be aware</Glose><Définition><ReprésentationDeTexte langue="eng">be aware of</ReprésentationDeTexte></Définition><gloss>know</gloss></Sens></EntréeLexicale>'))
     tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_two_groups(d):
+    """speech has two etymons: *qaliŋa- for Dorig and Lakon, *bbb for Nume and Koro."""
+    _dict_with_languages(d)
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
+    sp.find("Étymologie").append(etree.fromstring('<Étymon langues="num kro"><Langue>PNCV</Langue><Forme>*bbb</Forme><Glose langue="eng">other</Glose></Étymon>'))
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_domains(d):
+    """The project names its own grammatical domains (not 'Grammar'): Cognition, and 'function words' in any case or spacing."""
+    _dict_two_groups(d)
+    pj = d / "project" / "project.json"
+    p = json.loads(pj.read_text(encoding="utf-8")); p["grammaticalDomains"] = ["cognition", "FUNCTION WORDS"]
+    pj.write_text(json.dumps(p, ensure_ascii=False, indent=2), encoding="utf-8")
+    pth = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(pth)); root = tree.getroot()
+    [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "properly"][0].find("DomaineSémantique").text = "  Function Words "
+    tree.write(str(pth), encoding="UTF-8", xml_declaration=True, pretty_print=True)
 
 def _dict_hostile(d):
     p = d / "project" / "dictionary.xml"
     tree = etree.parse(str(p)); root = tree.getroot()
-    et = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0].find("Étymologie/Étymon")
+    sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
+    et = sp.find("Étymologie/Étymon")
     et.find("Forme").text = "<img src=x onerror=alert(1)>"
     et.find("LienTLOPO").text = "javascript:alert(2)"
     et.find("LienEtymograph").text = "https://example.org/ok"
+    etree.SubElement(sp.find("Sens"), "gloss").text = "<img src=x onerror=alert(3)>"
     tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
 
 _VIEW_JS = """(id) => { const e = document.getElementById(id); if (!e) return null;
   const t = s => [...e.querySelectorAll(s)].map(x => x.innerText.trim());
   const abbr = s => [...e.querySelectorAll(s + ' .étiquette_lang')].map(x => x.innerText.trim().toLowerCase());
+  const vis = el => !!el && getComputedStyle(el).display !== 'none';
   return { etym: t('.etym-form'), pre: t('.etym-pre'), cogLabel: e.querySelectorAll('.cog-label').length, cognates: abbr('.entry-cognates'),
            others: abbr('.entry-equivs:not(.entry-cognates)'), senses: t('.entry-gloss'), numbers: t('.sense-n'), nosense: e.querySelectorAll('.no-sense').length,
+           hidden: vis(e.querySelector('.entry-hidden-forms')) ? e.querySelector('.entry-hidden-forms').innerText.trim() : '',
            links: [...e.querySelectorAll('.etym-badge a')].map(a => a.getAttribute('href')), imgs: e.querySelectorAll('.etym-badge img').length }; }"""
 
 def suite_dictionary(browser, args):
     S = "dictionary"
-    section("dictionary: entries in the headword language, the etymology of a form, the senses of a language")
+    section("dictionary: entries in the headword language, cognates, senses per language, the list of senses")
     proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
     NAME = {l["code"]: l["name"] for l in proj["languages"]}
     ABBR = {l["code"]: l["abbr"].lower() for l in proj["languages"]}
     ET = "*[qa]liŋa- 'voice'"
+    CLOSED = "!document.getElementById('entry-modal').classList.contains('visible')"
 
-    def view(page, site, lang_code, eid):
-        open_page(page, site, f"dictionary.html?lang={NAME[lang_code]}", "#dict-content .entry", 500)
+    def view(page, site, lang_code, eid, extra=""):
+        open_page(page, site, f"dictionary.html?lang={NAME[lang_code]}{extra}", "#dict-content .entry", 500)
         return page.evaluate(_VIEW_JS, eid)
 
-    # ── old data: no language list anywhere, nothing changes ──
+    def editor(page, site, lang_code, eid):
+        open_page(page, site, f"dictionary.html?lang={NAME[lang_code]}", "#dict-content .entry", 500)
+        page.evaluate(f"openEditEntry('{eid}')"); page.wait_for_selector("#entry-modal.visible"); page.wait_for_timeout(250)
+
+    def rows(page): return page.evaluate("[...document.querySelectorAll('.em-lang-row')].filter(r => getComputedStyle(r).display !== 'none').map(r => r.dataset.lang)")
+    def cog_ticks(page): return page.evaluate("[...document.querySelectorAll('#em-cog-ticks input:checked')].map(c => c.dataset.lang)")
+    def save(page):
+        page.click("#em-submit"); page.wait_for_function(CLOSED, timeout=8000); page.wait_for_timeout(300)
+
+    # ── old data: an etymology for every language lists the others as cognates; an entry with none lists nothing ──
     site = Site()
     try:
         vis = new_context(browser, site, 1280); page = vis.new_page(); errs = []; watch(page, errs)
-        same = []
+        bad = []
         for c in ALLC:
             v = view(page, site, c, "speech")
-            if not (v and v["etym"] == [ET] and v["cogLabel"] == 0 and len(v["others"]) == 4): same.append(c)
-        check(S, "an etymology without a language list applies to every language and looks as before (no cognates row)", not same, str(same))
-        check(S, "…and so does a sense without a language list: every language shows it", all((view(page, site, c, "speech") or {}).get("senses", [""])[0].startswith("speech") for c in ALLC))
+            if not (v and v["etym"] == [ET] and v["cogLabel"] == 1 and len(v["cognates"]) == 4 and v["others"] == []): bad.append(c)
+        check(S, "an etymology that names no languages applies to all of them: the other four forms are its cognates", not bad, str(bad))
+        bad = []
+        for c in ALLC:
+            v = view(page, site, c, "know")
+            if v and (v["cogLabel"] or v["cognates"] or v["others"] or v["etym"] or v["hidden"]): bad.append(c)
+        check(S, "an entry with no etymology lists no forms of the other languages (words that merely mean the same are not its parallels), and a visitor is not told about them", not bad, str(bad))
+        check(S, "…and a sense without a language list is shown in every language", all((view(page, site, c, "speech") or {}).get("senses", [""])[0].startswith("speech") for c in ALLC))
         check(S, "no JavaScript or loading error on old data", not errs, "; ".join(errs[:2]))
         vis.close()
+        au = new_context(browser, site, 1280, author=True); pa = au.new_page(); errs = []; watch(pa, errs)
+        v = view(pa, site, "kro", "know")
+        check(S, "the author is told which forms are not shown, with a way to set the cognates", v["hidden"].startswith("Not cognates, so not shown here:") and all(x in v["hidden"] for x in ("Num", "Drg", "Olr", "Lkn")) and "set cognates" in v["hidden"], v["hidden"][:90])
+        pa.locator("#know .hf-set").click(); pa.wait_for_selector("#entry-modal.visible")
+        check(S, "…and that link opens the entry's window", pa.locator("#em-title").inner_text() == "Edit entry")
+        au.close()
     finally:
         site.stop()
 
@@ -1490,46 +1550,64 @@ def suite_dictionary(browser, args):
     try:
         vis = new_context(browser, site, 1280); page = vis.new_page(); errs = []; watch(page, errs)
         v = view(page, site, "drg", "speech")
-        check(S, "Dorig: the etymology of the Dorig form, followed by its cognates (Lakon only), then the other forms", v["etym"] == [ET] and [x.lower() for x in v["pre"]] == ["poc"] and v["cogLabel"] == 1 and v["cognates"] == [ABBR["lkn"]] and sorted(v["others"]) == sorted(ABBR[c] for c in ("num", "kro", "olr")), str(v))
+        check(S, "Dorig: the etymology of the Dorig form, then its cognates (Lakon only), and nothing else from the other languages", v["etym"] == [ET] and [x.lower() for x in v["pre"]] == ["poc"] and v["cogLabel"] == 1 and v["cognates"] == [ABBR["lkn"]] and v["others"] == [], str(v))
         check(S, "Dorig: only the senses ticked for Dorig (sense 1), not numbered when there is one", v["senses"] == ["speech, language, word"] and v["numbers"] == [], str(v["senses"]))
         v = view(page, site, "lkn", "speech")
-        check(S, "Lakon: the same etymology, with Dorig as its cognate", v["etym"] == [ET] and v["cognates"] == [ABBR["drg"]] and v["senses"] == ["speech, language, word"], str(v))
+        check(S, "Lakon: the same etymology, with Dorig as its cognate", v["etym"] == [ET] and v["cognates"] == [ABBR["drg"]] and v["others"] == [] and v["senses"] == ["speech, language, word"], str(v))
         v = view(page, site, "num", "speech")
-        check(S, "Nume: no etymology (it applies to Dorig and Lakon only), no cognates, every other form listed", v["etym"] == [] and v["cogLabel"] == 0 and len(v["others"]) == 4, str(v))
+        check(S, "Nume: no etymology and no cognates, and the Dorig, Koro, Olrat and Lakon words are not listed as parallels", v["etym"] == [] and v["cogLabel"] == 0 and v["cognates"] == [] and v["others"] == [], str(v))
         check(S, "Nume: only sense 2 (“noise, sound”), the one ticked for Nume and Koro", v["senses"] == ["noise, sound"], str(v["senses"]))
-        v = view(page, site, "kro", "speech"); k = v["senses"]
-        v2 = view(page, site, "olr", "speech")
-        check(S, "Koro shows sense 2 and Olrat sense 1, each without the other's", k == ["noise, sound"] and v2["senses"] == ["speech, language, word"] and v2["etym"] == [], f"{k} / {v2['senses']}")
+        k = view(page, site, "kro", "speech")["senses"]; o = view(page, site, "olr", "speech")
+        check(S, "Koro shows sense 2 and Olrat sense 1, each without the other's", k == ["noise, sound"] and o["senses"] == ["speech, language, word"] and o["etym"] == [] and o["others"] == [], f"{k} / {o['senses']}")
         d = view(page, site, "drg", "multi"); k = view(page, site, "kro", "multi")
         check(S, "senses are numbered 1, 2 … among those shown (Koro: stored senses 2 and 3 show as 1 and 2)", d["senses"] == ["alpha", "beta"] and d["numbers"] == ["1", "2"] and k["senses"] == ["beta", "gamma"] and k["numbers"] == ["1", "2"], f"{d} {k}")
-        # entries per language
         counts = {}
         for c in ALLC:
             open_page(page, site, f"dictionary.html?lang={NAME[c]}", "#dict-content .entry", 400)
             counts[c] = (page.locator("#dict-content .entry").count(), page.locator("#art").count(), page.locator("#result-bar").inner_text().split()[0])
         check(S, "a language lists the entries that have a form in it: art (no Olrat, no Lakon form) is not listed under Olrat or Lakon", counts["olr"][1] == 0 and counts["lkn"][1] == 0 and all(counts[c][1] == 1 for c in ("num", "drg", "kro")), str(counts))
-        check(S, "…and the entry count follows (multi has forms in Dorig and Koro only)", [counts[c][0] for c in ALLC] == [8, 9, 9, 7, 7] and [counts[c][2] for c in ALLC] == ["8", "9", "9", "7", "7"], str(counts))
-        # search follows the senses of the language
+        check(S, "…and the entry count follows (multi and knowtoo have forms in Dorig and Koro only)", [counts[c][0] for c in ALLC] == [8, 10, 10, 7, 7] and [counts[c][2] for c in ALLC] == ["8", "10", "10", "7", "7"], str(counts))
         open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 400); page.fill("#search-input", "noise"); page.wait_for_timeout(500)
         in_dorig = page.locator("#dict-content .entry").count()
         open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 400); page.fill("#search-input", "noise"); page.wait_for_timeout(500)
         in_nume = page.locator("#dict-content .entry").count()
         check(S, "a word found only in a sense that is not shown for the language does not find the entry there (Dorig: 0, Nume: 1)", (in_dorig, in_nume) == (0, 1), f"{in_dorig}, {in_nume}")
-        # a badge for a language without a form does not leave the entry
-        open_page(page, site, "dictionary.html?lang=Nume", "#art", 400)
-        page.locator(f"#art .étiquette_lang[data-lang='{NAME['olr']}'] a").click(); page.wait_for_timeout(600)
-        check(S, "clicking the badge of a language in which the entry has no form changes nothing", page.locator("#art").count() == 1 and NAME["num"] in page.locator("#result-bar").inner_text())
-        page.locator(f"#speech .étiquette_lang[data-lang='{NAME['drg']}'] a").click(); page.wait_for_timeout(600)
-        check(S, "…while the badge of a language that has the form switches to it, with its etymology", NAME["drg"] in page.locator("#result-bar").inner_text() and page.locator("#speech .etym-form").count() == 1)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#speech", 400)
+        page.locator(f"#speech .étiquette_lang[data-lang='{NAME['lkn']}'] a").click(); page.wait_for_timeout(600)
+        v = page.evaluate(_VIEW_JS, "speech")
+        check(S, "the badge of a cognate switches to its language, where the entry shows the same etymology", NAME["lkn"] in page.locator("#result-bar").inner_text() and v["etym"] == [ET] and v["cognates"] == [ABBR["drg"]], str(v))
         check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+
+        # ── the list of senses ──
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 400)
+        labels = [x.strip() for x in page.locator(".sg-label").all_inner_texts()]
+        check(S, "Senses mode lists the senses of the headword language, in alphabetical order (3PL, ART, know … speech)", labels.index("3PL") < labels.index("ART") < labels.index("know") < labels.index("speech, language, word") and "noise" not in labels and {"alpha", "beta"} <= set(labels), str(labels))
+        check(S, "…with its count, and a sense for the headwords that share it (know: two entries)", page.inner_text("#result-bar").startswith(f"{len(labels)} senses") and page.locator(".sense-group", has=page.locator(".sg-label", has_text="know")).locator(".sg-hw").count() == 2)
+        open_page(page, site, "dictionary.html?lang=Nume&mode=senses", ".sense-group", 400)
+        nl = [x.strip() for x in page.locator(".sg-label").all_inner_texts()]
+        check(S, "…and it follows the language: Nume has “noise”, not the Dorig sense", "noise" in nl and "speech, language, word" not in nl and "alpha" not in nl, str(nl))
+        check(S, "the index in the sidebar lists the senses, each linking to its place", sorted(x.strip() for x in page.locator("#hw-index a").all_inner_texts()) == sorted(nl) and page.locator("#hw-index a").first.get_attribute("href").startswith("#sg-"))
+        page.fill("#search-input", "beta"); page.wait_for_timeout(400)
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 400); page.fill("#search-input", "beta"); page.wait_for_timeout(500)
+        check(S, "searching narrows the senses (beta: one sense, with its headword)", [x.strip() for x in page.locator(".sg-label").all_inner_texts()] == ["beta"] and page.locator(".sg-hw").count() == 1)
+        page.fill("#search-input", ""); page.wait_for_timeout(300)
+        page.locator(".sg-hw", has_text="mltdrg").first.click(); page.wait_for_selector("#multi", timeout=6000)
+        check(S, "a headword in the senses list opens its entry (the page goes back to Entries)", page.evaluate("viewMode") == "entries" and page.locator("#multi").count() == 1 and "mode=entries" in page.url)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 400)
+        page.click("#mode-switch [data-mode=senses]"); page.wait_for_selector(".sense-group", timeout=6000)
+        check(S, "the Entries / Senses switch changes the list and the address", "mode=senses" in page.url and page.locator("#dict-content .entry").count() == 0)
+        open_page(page, site, "dictionary.html?lang=Koro", ".sense-group", 400)
+        check(S, "…and the choice is remembered when the page is opened again without it", page.evaluate("viewMode") == "senses" and page.locator(".sense-group").count() > 0)
+        page.click("#mode-switch [data-mode=entries]"); page.wait_for_selector("#dict-content .entry", timeout=6000)
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 400)
+        check(S, "…and so is going back to Entries", page.evaluate("viewMode") == "entries" and page.locator(".sense-group").count() == 0)
+        check(S, "no JavaScript or loading error in the senses list", not errs, "; ".join(errs[:2]))
         vis.close()
 
-        # ── the entries API names the language of a restricted sense only ──
+        # ── the server, through the API ──
         api = new_context(browser, site, 1280, author=False).request
         ents = {e["id"]: e for e in api.get(site.url + "api/dictionary/entries").json()["entries"]}
         check(S, "the entries API gives the languages of a restricted sense, and nothing for a free one", ents["speech"]["senses"][1].get("langs") == ["num", "kro"] and "langs" not in ents["know"]["senses"][0], str(ents["speech"]["senses"]))
-
-        # ── the server, through the API ──
         au = new_context(browser, site, 1280, author=True); aa = au.request
         def send(method, path, body): r = getattr(aa, method)(site.url + path, headers=_H, data=json.dumps(body)); return r.status, (r.json() if r.headers.get("content-type", "").startswith("application/json") else {})
         base = dict(forms={"drg": "zzdrg", "lkn": "zzlkn", "num": "zznum"}, pos="n.", domain="")
@@ -1546,9 +1624,16 @@ def suite_dictionary(browser, args):
         send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 1, "lang": "PNCV", "form": "*bbb", "gloss": "y2", "langs": ["num", "kro"]}]))
         ets = [(e.findtext("Forme"), e.findtext("Glose"), e.get("langues")) for e in _entry_xml(site, eid).findall("Étymologie/Étymon")]
         check(S, "an etymon is edited in place by its position, the others of the list are removed", ets == [("*bbb", "y2", "num kro")], str(ets))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 0, "lang": "", "form": "", "gloss": "", "langs": ["drg", "lkn"]}]))
+        e0 = _entry_xml(site, eid).find("Étymologie/Étymon")
+        check(S, "an etymon may name cognates without a proto-form: it keeps only its languages", e0.get("langues") == "drg lkn" and len(e0) == 0, etree.tostring(e0).decode()[:120])
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 0, "lang": "", "form": "", "gloss": "", "langs": ["drg"]}]))
+        check(S, "…but one language alone, with no proto-form, says nothing and is dropped", _entry_xml(site, eid).find("Étymologie") is None)
         send("put", f"api/dictionary/entry/{eid}", dict(payload, etym={"lang": "POc", "form": "*ccc", "gloss": "z"}))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 0, "lang": "POc", "form": "*ccc", "gloss": "z", "langs": ["num", "kro"]}]))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etym={"lang": "POc", "form": "*ddd", "gloss": "z"}))
         e1 = _entry_xml(site, eid).find("Étymologie/Étymon")
-        check(S, "an older caller that sends one etymology rewrites the first etymon and keeps its languages", e1.findtext("Forme") == "*ccc" and e1.get("langues") == "num kro" and len(_entry_xml(site, eid).findall("Étymologie/Étymon")) == 1)
+        check(S, "an older caller that sends one etymology rewrites the first etymon and keeps its languages", e1.findtext("Forme") == "*ddd" and e1.get("langues") == "num kro" and len(_entry_xml(site, eid).findall("Étymologie/Étymon")) == 1)
         send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[]))
         check(S, "an empty list removes the etymology", _entry_xml(site, eid).find("Étymologie") is None)
         send("delete", f"api/dictionary/entry/{eid}", {})
@@ -1556,58 +1641,133 @@ def suite_dictionary(browser, args):
     finally:
         site.stop()
 
-    # ── the author's window ──
+    # ── the author's window: the headword and its cognates ──
     site = Site()
     try:
         au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
-        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
-        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible")
-        ticks = lambda sel: page.evaluate("(sel) => [...document.querySelectorAll(sel + ' input[type=checkbox]')].filter(c => c.checked).map(c => c.dataset.lang)", sel)
-        check(S, "the window offers, for each sense, a tick per language of the project (all ticked for an old sense)", len(page.locator(".em-sense:not(.em-etym) .em-lang-tick").all()) == 5 and ticks(".em-sense:not(.em-etym)") == list(NAME.values()))
-        check(S, "…and for the etymology (an old one shows every language ticked)", ticks(".em-etym") == list(NAME.values()) and page.locator("#em-etym-box").evaluate("e => e.open"))
-        page.fill('.em-etym [data-f="tlopo"]', "https://tlopo.example/changed"); page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
+        editor(page, site, "drg", "speech")
+        check(S, "the window opens on the headword (Dorig) with a row for it and one for each cognate (an etymology for all languages: four)", sorted(rows(page)) == sorted(NAME.values()), str(rows(page)))
+        check(S, "the cognates are ticked, the headword language is not offered as a cognate", sorted(cog_ticks(page)) == sorted(n for n in NAME.values() if n != NAME["drg"]) and page.locator('#em-cog-ticks input[data-lang="Dorig"]').count() == 0)
+        check(S, "…and the proto-form of the etymology is there, the section open", page.locator('#em-etym-box [data-ef="form"]').input_value() == "*[qa]liŋa-" and page.locator("#em-etym-box").evaluate("e => e.open"))
+        page.fill('#em-etym-box [data-ef="tlopo"]', "https://tlopo.example/changed"); save(page)
         et = _entry_xml(site, "speech").find("Étymologie/Étymon")
         check(S, "changing only a link of an old etymology does not give it a language list", et.get("langues") is None and et.findtext("LienTLOPO") == "https://tlopo.example/changed")
-        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible")
-        for l in ("Nume", "Koro", "Olrat"): page.locator(f'.em-etym input[data-lang="{l}"]').uncheck()
-        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
-        check(S, "unticking languages on the etymology writes the list of the forms it applies to", _entry_xml(site, "speech").find("Étymologie/Étymon").get("langues") == "drg lkn")
-        check(S, "…and the entry now shows it in Dorig, with Lakon as its cognate, and not in Nume", view(page, site, "drg", "speech")["cognates"] == [ABBR["lkn"]] and view(page, site, "num", "speech")["etym"] == [])
-        # a second etymology for the other forms
-        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
-        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible"); page.click("#em-add-etym")
-        second = ticks(".em-etym:nth-child(2)")
-        check(S, "a new etymology starts with the languages that have a form and belong to no other etymology", second == [NAME["num"], NAME["kro"], NAME["olr"]] and ticks(".em-etym:nth-child(1)") == [NAME["drg"], NAME["lkn"]], str(second))
-        page.locator('.em-etym:nth-child(2) input[data-lang="Dorig"]').check()
-        check(S, "ticking a language on one etymology takes it from the other", ticks(".em-etym:nth-child(1)") == [NAME["lkn"]] and NAME["drg"] in ticks(".em-etym:nth-child(2)"))
-        page.locator('.em-etym:nth-child(2) input[data-lang="Dorig"]').uncheck(); page.locator('.em-etym:nth-child(1) input[data-lang="Dorig"]').check()
-        page.fill('.em-etym:nth-child(2) [data-f="form"]', "*bbb"); page.fill('.em-etym:nth-child(2) [data-f="gloss"]', "other"); page.fill('.em-etym:nth-child(2) [data-f="lang"]', "PNCV")
-        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
-        ets = [(e.findtext("Forme"), e.get("langues")) for e in _entry_xml(site, "speech").findall("Étymologie/Étymon")]
-        check(S, "two etymologies are saved, each with its own languages", ets == [(ET.split(" ")[0], "drg lkn"), ("*bbb", "num kro olr")], str(ets))
-        n = view(page, site, "num", "speech")
-        check(S, "Nume shows the second one, with Koro and Olrat as its cognates; Dorig still shows the first", n["etym"] == ["*bbb 'other'"] and [x.lower() for x in n["pre"]] == ["pncv"] and n["cognates"] == [ABBR["kro"], ABBR["olr"]] and view(page, site, "drg", "speech")["etym"] == [ET])
-        page.evaluate("openEditEntry('speech')"); page.wait_for_selector("#entry-modal.visible")
-        page.locator('.em-etym:nth-child(2) [data-act="del"]').click(); page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
-        check(S, "an etymology can be removed from the window", len(_entry_xml(site, "speech").findall("Étymologie/Étymon")) == 1)
-        # senses: a sense with no language is refused
-        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
-        page.evaluate("openEditEntry('know')"); page.wait_for_selector("#entry-modal.visible"); before = etree.tostring(_entry_xml(site, "know"))
-        for l in NAME.values(): page.locator(f'.em-sense:not(.em-etym) input[data-lang="{l}"]').uncheck()
+        editor(page, site, "drg", "speech")
+        for l in ("Nume", "Koro", "Olrat"): page.locator(f'#em-cog-ticks input[data-lang="{l}"]').uncheck()
+        check(S, "unticking a language removes its row from the window and lists its form in a note", rows(page) == [NAME["drg"], NAME["lkn"]] and all(x in page.inner_text("#em-others") for x in ("luwluw", "valvalaw", "ususraa")), page.inner_text("#em-others")[:100])
+        save(page)
+        sp = _entry_xml(site, "speech")
+        forms = {f.get("langue"): f.text for f in sp.findall("Lemme/ReprésentationDeForme")}
+        check(S, "unticking writes the languages of the cognates, and no form is lost: the Nume, Koro and Olrat forms are still in the entry", sp.find("Étymologie/Étymon").get("langues") == "drg lkn" and all(forms.get(c) for c in ALLC), str(forms))
+        check(S, "…so Dorig shows its cognate (Lakon) and not the others, and Nume still has its own entry-headword with no etymology",
+              view(page, site, "drg", "speech")["cognates"] == [ABBR["lkn"]] and view(page, site, "drg", "speech")["others"] == [] and view(page, site, "num", "speech")["etym"] == [] and view(page, site, "num", "speech")["senses"] != [])
+        # an entry that never declared its cognates
+        editor(page, site, "kro", "know")
+        check(S, "an entry with no etymology: only the headword row, no cognate ticked, and the other forms listed as not shown", rows(page) == [NAME["kro"]] and cog_ticks(page) == [] and all(x in page.inner_text("#em-others") for x in ("Nume", "Dorig", "Olrat", "Lakon")), page.inner_text("#em-others")[:110])
+        before = etree.tostring(_entry_xml(site, "know"))
+        page.locator('#em-cog-ticks input[data-lang="Olrat"]').check(); page.fill("#ef-olr", ""); page.click("#em-submit"); page.wait_for_timeout(500)
+        check(S, "a cognate ticked without its form is refused, with the reason, and nothing is written", "Write the Olrat form of the cognate, or untick Olrat." in page.inner_text("#em-msg") and etree.tostring(_entry_xml(site, "know")) == before, page.inner_text("#em-msg"))
+        page.locator('#em-cog-ticks input[data-lang="Olrat"]').uncheck()
+        page.locator('#em-cog-ticks input[data-lang="Dorig"]').check()
+        check(S, "ticking a language shows its row, filled with the form the entry already has", rows(page) == [NAME["drg"], NAME["kro"]] and page.input_value("#ef-drg") != "")
+        save(page)
+        e = _entry_xml(site, "know").find("Étymologie/Étymon")
+        check(S, "cognates without a proto-form are saved as an etymon with only its languages", e is not None and e.get("langues") == "drg kro" and len(e) == 0, etree.tostring(e).decode()[:120] if e is not None else "no etymon")
+        vk, vd = view(page, site, "kro", "know"), view(page, site, "drg", "know")
+        check(S, "…and each of the two languages lists the other as its cognate, with no etymology badge", vk["cognates"] == [ABBR["drg"]] and vd["cognates"] == [ABBR["kro"]] and vk["etym"] == [] and vk["others"] == [], f"{vk['cognates']} {vd['cognates']}")
+        editor(page, site, "kro", "know"); page.click("#em-etym-box summary"); page.fill('#em-etym-box [data-ef="form"]', "*kno"); page.fill('#em-etym-box [data-ef="gloss"]', "to know"); save(page)
+        e = _entry_xml(site, "know").find("Étymologie/Étymon")
+        check(S, "a proto-form typed later goes to the same etymon, which keeps its languages", e.findtext("Forme") == "*kno" and e.get("langues") == "drg kro" and len(_entry_xml(site, "know").findall("Étymologie/Étymon")) == 1)
+        # senses: the language ticks
+        editor(page, site, "drg", "know")
+        ticks = lambda sel: page.evaluate("(sel) => [...document.querySelectorAll(sel + ' input[type=checkbox]')].filter(c => c.checked).map(c => c.dataset.lang)", sel)
+        check(S, "the window offers, for each sense, a tick per language of the project (all ticked for an old sense)", len(page.locator(".em-sense .em-lang-tick").all()) == 5 and ticks(".em-sense") == list(NAME.values()))
+        before = etree.tostring(_entry_xml(site, "know"))
+        for l in NAME.values(): page.locator(f'.em-sense input[data-lang="{l}"]').uncheck()
         page.click("#em-submit"); page.wait_for_timeout(500)
         check(S, "a sense with no language ticked is refused, with the reason, and nothing is written", "Tick at least one language for sense 1" in page.inner_text("#em-msg") and etree.tostring(_entry_xml(site, "know")) == before)
-        page.locator('.em-sense:not(.em-etym) input[data-lang="Koro"]').check(); page.locator('.em-sense:not(.em-etym) input[data-lang="Olrat"]').check()
-        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000)
-        check(S, "ticking some languages for a sense saves them (and the entry disappears from the others)", _entry_xml(site, "know").find("Sens").get("langues") == "kro olr" and view(page, site, "kro", "know") is not None)
-        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 600)
-        v = page.evaluate(_VIEW_JS, "know")
+        page.locator('.em-sense input[data-lang="Koro"]').check(); page.locator('.em-sense input[data-lang="Olrat"]').check(); save(page)
+        check(S, "ticking some languages for a sense saves them", _entry_xml(site, "know").find("Sens").get("langues") == "kro olr")
+        v = view(page, site, "drg", "know")
         check(S, "…in Dorig the entry is still listed (it has a Dorig form) but says it has no sense there", v["nosense"] == 1 and v["senses"] == ["No sense for Dorig yet."], str(v["senses"]))
-        # a new entry whose only form is in another language: the page follows it
-        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 600)
+        # adding entries
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 500)
         page.click("#add-entry-btn"); page.wait_for_selector("#entry-modal.visible")
-        page.fill("#ef-num", "zznume"); page.locator(".em-sense textarea").first.fill("only in Nume"); page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); page.wait_for_timeout(900)
-        check(S, "a new entry that has no form in the language being viewed: the page moves to a language where it exists and shows it", NAME["num"] in page.locator("#result-bar").inner_text() and page.locator("#zznume").count() == 1, page.locator("#result-bar").inner_text())
+        check(S, "a new entry starts from the headword language being viewed, offers the other languages as cognates and asks for no parallels", page.input_value("#em-hw-lang") == NAME["kro"] and rows(page) == [NAME["kro"]] and cog_ticks(page) == [])
+        page.click("#em-submit"); page.wait_for_timeout(400)
+        check(S, "…and the headword is required", f"Please write the headword ({NAME['kro']})." in page.inner_text("#em-msg"))
+        page.fill("#ef-kro", "zzkoro"); page.locator('#em-cog-ticks input[data-lang="Dorig"]').check(); page.fill("#ef-drg", "zzdorig")
+        page.locator(".em-sense textarea").first.fill("a new word"); save(page)
+        ne = _entry_by_form(site, "kro", "zzkoro")
+        check(S, "a new entry with a headword and one cognate is saved as one entry whose etymon names the two languages", ne is not None and ne.find("Étymologie/Étymon").get("langues") == "drg kro" and {f.get("langue") for f in ne.findall("Lemme/ReprésentationDeForme")} == {"kro", "drg"})
+        check(S, "…and both languages list it, each with the other as cognate", view(page, site, "kro", ne.get("identifiant"))["cognates"] == [ABBR["drg"]] and view(page, site, "drg", ne.get("identifiant"))["cognates"] == [ABBR["kro"]])
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 500)
+        page.click("#add-entry-btn"); page.wait_for_selector("#entry-modal.visible"); page.select_option("#em-hw-lang", "Nume")
+        check(S, "choosing another headword language for a new entry moves the headword row to it", rows(page) == [NAME["num"]])
+        page.fill("#ef-num", "zznume"); page.locator(".em-sense textarea").first.fill("only in Nume"); save(page); page.wait_for_timeout(700)
+        check(S, "a new entry that has no form in the language being viewed: the page moves to a language where it exists, and a reload stays there", NAME["num"] in page.locator("#result-bar").inner_text() and page.locator("#zznume").count() == 1 and "lang=Nume" in page.url, page.url)
         check(S, "the window and the list raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── two etymologies in one entry: a language belongs to one ──
+    site = Site(prepare=_dict_two_groups)
+    try:
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
+        editor(page, site, "drg", "speech")
+        check(S, "the window of Dorig shows the Dorig group only: its cognate (Lakon) and its proto-form, not the other etymology", rows(page) == [NAME["drg"], NAME["lkn"]] and cog_ticks(page) == [NAME["lkn"]] and page.locator('#em-etym-box [data-ef="form"]').input_value() == "*[qa]liŋa-")
+        page.locator('#em-cog-ticks input[data-lang="Koro"]').check()
+        check(S, "ticking Koro, which belongs to the other etymology, takes it from there", rows(page) == [NAME["drg"], NAME["kro"], NAME["lkn"]])
+        save(page)
+        ets = [(e.findtext("Forme"), e.get("langues")) for e in _entry_xml(site, "speech").findall("Étymologie/Étymon")]
+        check(S, "the other etymology is kept for its other language, the Dorig one has Koro", ets == [("*[qa]liŋa-", "drg kro lkn"), ("*bbb", "num")], str(ets))
+        n, k = view(page, site, "num", "speech"), view(page, site, "kro", "speech")
+        check(S, "Nume shows its etymology (now with no cognates); Koro shows the Dorig one with Dorig and Lakon as cognates", n["etym"] == ["*bbb 'other'"] and n["cognates"] == [] and k["etym"] == [ET] and k["cognates"] == [ABBR["drg"], ABBR["lkn"]], f"{n['etym']} {n['cognates']} {k['etym']} {k['cognates']}")
+        check(S, "the window raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the chips of the grammar: cognates for lexical material, every form for grammatical material ──
+    def chips(aa, site, ids):
+        src = "## §9 Chips\n\n" + "\n\n".join("{{entry: %s}}" % i for i in ids) + "\n"
+        r = aa.post(site.url + "api/grammar/zz_chips", headers=_H, data=json.dumps({"source": src}))
+        out = {}
+        for m in re.finditer(r'<a href="dictionary\.html#([^"]+)" class="entry-chip".*?</a>', r.json().get("html", ""), re.S):
+            out[m.group(1)] = [html_lib.unescape(x) for x in re.findall(r'class="chip-form"[^>]*>([^<]*)<', m.group(0))]
+        return out
+    def forms_of(site, eid, codes):
+        got = {f.get("langue"): (f.text or "").strip() for f in _entry_xml(site, eid).findall("Lemme/ReprésentationDeForme")}
+        return [got.get(c) or "—" for c in codes]
+    def latex_langs(aa, site, n):
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        groups = re.findall(r"\\textit\{[^}]*\} \[([^\]]*)\]", tex)[-n:]
+        return [re.findall(r"(\w+)\.~", g) for g in groups]
+    ids = ["speech", "know", "nondum1", "art", "properly", "3pl"]
+    for label, prep, expect in (
+        ("default domain", _dict_two_groups, {"speech": ["num", "drg", "kro", "lkn"], "know": ["kro"], "properly": ["kro"], "nondum1": ALLC, "art": ALLC, "3pl": ALLC}),
+        ("the project's own domains", _dict_domains, {"speech": ["num", "drg", "kro", "lkn"], "know": ALLC, "properly": ALLC, "nondum1": ["kro"], "art": ["kro"], "3pl": ["kro"]})):
+        site = Site(prepare=prep)
+        try:
+            au = new_context(browser, site, 1280, author=True); aa = au.request
+            got = chips(aa, site, ids)
+            bad = [i for i in ids if got.get(i) != forms_of(site, i, expect[i])]
+            check(S, f"{label}: a chip shows every form of grammatical material, the cognates of lexical material (the union of its etymons), or the headword language's form when none is named",
+                  not bad, "; ".join(f"{i}: {got.get(i)} vs {forms_of(site, i, expect[i])}" for i in bad[:2]))
+            abbr = {l["code"]: l["abbr"] for l in proj["languages"]}
+            lx = latex_langs(aa, site, len(ids))
+            check(S, f"{label}: the LaTeX export lists the same forms (a language with no form is left out there)",
+                  [x for x in lx] == [[abbr[c] for c in expect[i] if forms_of(site, i, [c])[0] != "—"] for i in ids], str(lx[:3]))
+            aa.delete(site.url + "api/grammar/zz_chips")
+            au.close()
+        finally:
+            site.stop()
+    site = Site()
+    try:
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        got = chips(aa, site, ["speech"])
+        check(S, "an etymology that names no languages (older data) covers all of them: its chip shows every form", got["speech"] == forms_of(site, "speech", ALLC))
         au.close()
     finally:
         site.stop()
@@ -1619,6 +1779,8 @@ def suite_dictionary(browser, args):
         page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
         v = view(page, site, "drg", "speech")
         check(S, "an etymology with markup in its form is shown as text; a link that is not http(s) is not made a link, a good one is", v["imgs"] == 1 and page.locator("#speech .etym-badge img[src=x]").count() == 0 and v["links"] == ["https://example.org/ok"] and "<img" in v["etym"][0], str(v["links"]))
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 500)
+        check(S, "…and so is a sense with markup in the senses list", page.locator(".sg-label img, .sense-group img").count() == 0 and any("<img" in x for x in page.locator(".sg-label").all_inner_texts()))
         check(S, "nothing ran", not [e for e in errs if "DIALOG" in e or "PAGEERROR" in e], str(errs[:2]))
         c.close()
     finally:
@@ -1632,13 +1794,15 @@ def suite_dictionary(browser, args):
         site.wait_restart()
         a = new_context(browser, site, 1280); _login(a.request, site, "a-good-password-1"); page = a.new_page(); errs = []; watch(page, errs)
         open_page(page, site, "dictionary.html", "#dict-content .entry", 800)
-        page.evaluate("openEditEntry('house')"); page.wait_for_selector("#entry-modal.visible"); page.click("#em-etym-box summary"); page.click("#em-add-etym")
-        page.fill('.em-etym [data-f="form"]', "*one"); page.fill('.em-etym [data-f="gloss"]', "dwelling")
-        check(S, "with one language the window shows no language ticks, for senses or etymologies", page.locator(".em-lang-tick").count() == 0)
-        page.click("#em-submit"); page.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); page.wait_for_timeout(500)
+        page.evaluate("openEditEntry('house')"); page.wait_for_selector("#entry-modal.visible"); page.click("#em-etym-box summary")
+        page.fill('#em-etym-box [data-ef="form"]', "*one"); page.fill('#em-etym-box [data-ef="gloss"]', "dwelling")
+        check(S, "with one language the window shows no language ticks, no cognates and no headword-language choice", page.locator(".em-lang-tick").count() == 0 and not page.locator("#em-cog").is_visible() and not page.locator(".em-hw-row").is_visible())
+        save(page)
         root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
         et = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "house"][0].find("Étymologie/Étymon")
         check(S, "…and an etymology added there carries no language list, and is shown", et is not None and et.get("langues") is None and page.locator("#house .etym-form").inner_text() == "*one 'dwelling'")
+        page.click("#mode-switch [data-mode=senses]"); page.wait_for_selector(".sense-group", timeout=6000)
+        check(S, "the senses list works for one language too", page.locator(".sense-group").count() >= 1 and page.locator(".sg-hw").count() >= 1)
         check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
         ctx.close(); a.close()
     finally:
