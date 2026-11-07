@@ -1568,6 +1568,24 @@ def _set_langs_attr(el, codes, keep_all=False):
     else:
         el.set('langues', ' '.join(chosen))
 
+# ── Examples chosen for a sense ──────────────────────────────────────────────────────────
+# <Sens><Exemples>{{cite: fieldnotes#0#d01.Road:02}} …</Exemples></Sens>: the examples the author wants shown for that sense, written
+# with the same {{cite: …}} markup as the grammar (fieldnotes#group#sentence, papers#id, or recording.xml#sentence).
+_CITE_RE = re.compile(r'\{\{\s*cite\s*:\s*([^}]*?)\s*\}\}')
+_CITE_KEY_RE = re.compile(r'(?:fieldnotes#\d+#\S+|papers#\S+|[^#\s]+\.xml#\S+)')
+
+def _example_keys(text):
+    """The valid citation keys of a text, in order and without repeats."""
+    keys = []
+    for m in _CITE_RE.finditer(str(text or '')):
+        k = m.group(1).strip()
+        if _CITE_KEY_RE.fullmatch(k) and k not in keys:
+            keys.append(k)
+    return keys
+
+def _examples_text(text):
+    return '\n'.join('{{cite: %s}}' % k for k in _example_keys(text))
+
 def _sense_current(s):
     """The values the editor shows for an existing <Sens> (kept in step with the page's parser)."""
     gl = s.find('Glose[@langue="eng"]')
@@ -1575,13 +1593,13 @@ def _sense_current(s):
     definition = _text_of(df) or _text_of(gl)
     short = _text_of(s.find('gloss'))          # the real short gloss only (blank if none)
     notes = _text_of(s.find('Notes/ReprésentationDeTexte[@langue="eng"]'))
-    return {'definition': definition, 'short': short, 'notes': notes}
+    return {'definition': definition, 'short': short, 'notes': notes, 'examples': _examples_text(_text_of(s.find('Exemples')))}
 
 def _fill_sense(node, sd, existing):
     definition = (sd.get('definition') or '').strip()
     short      = (sd.get('shortGloss') or '').strip()
     notes      = (sd.get('notes') or '').strip()
-    cur = _sense_current(node) if existing else {'definition': '', 'short': '', 'notes': ''}
+    cur = _sense_current(node) if existing else {'definition': '', 'short': '', 'notes': '', 'examples': ''}
     if node.find('NuméroDeSens') is None:
         node.insert(0, etree.Element('NuméroDeSens'))
     nsens = node.find('NuméroDeSens')
@@ -1625,6 +1643,17 @@ def _fill_sense(node, sd, existing):
             _set_text(rt, notes)
         elif n_el is not None:
             node.remove(n_el)
+    # the examples chosen for the sense (an unchanged choice rewrites nothing; none removes the element)
+    if isinstance(sd.get('examples'), str):
+        want = _examples_text(sd['examples'])
+        if want != cur['examples']:
+            ex_el = node.find('Exemples')
+            if want:
+                if ex_el is None:
+                    ex_el = etree.SubElement(node, 'Exemples')
+                _set_text(ex_el, want)
+            elif ex_el is not None:
+                node.remove(ex_el)
     # the languages the sense applies to (sent whole by the editor; an unchanged choice rewrites nothing)
     if isinstance(sd.get('langs'), list):
         _set_langs_attr(node, sd['langs'])
@@ -2368,6 +2397,103 @@ def _clean_form(s):
     """Lower-case a form and strip morpheme-boundary and punctuation marks."""
     s = unicodedata.normalize('NFC', (s or '').strip())     # ō typed as o + macron == ō
     return re.sub(r'^[-=]+|[-=.,;!?]+$', '', s).lower()
+
+def _entry_forms_clean(el):
+    forms = {}
+    for node in el.findall('Lemme/ReprésentationDeForme'):
+        code, c = node.get('langue', ''), _clean_form(node.text)
+        if code in LANG_CODES and c and c != '\u2014':
+            forms[code] = c
+    return forms
+
+def _cited_example(key, ef):
+    """{{cite: key}} -> the example object the dictionary page draws (as in /api/dictionary/examples), or None if it does not exist.
+    `ef` = the entry's cleaned forms {code: form}: the columns that hold the entry's word are marked."""
+    def parallel(typ, idx, title, sid, tokens, glosses, transl):
+        n_cols = max((len(tokens.get(c, [])) for c in LANG_CODES), default=0)
+        cols = []
+        for ci in range(n_cols):
+            col = {c: _clean_form(tokens.get(c, [])[ci] if ci < len(tokens.get(c, [])) else '') for c in LANG_CODES}
+            if ef and sum(1 for c, v in ef.items() if col.get(c) == v) >= min(2, len(ef)):
+                cols.append(ci)
+        return {'type': typ, 'index': idx, 'title': title, 'sentence_id': sid, 'tokens': tokens,
+                'glosses': glosses, 'translation': transl, 'match_cols': cols}
+    if key.startswith('papers#'):
+        sid = key.split('#', 1)[1].strip()
+        ex = _paper_example(sid)
+        if ex is None:
+            return None
+        tokens, glosses, _n, transl = _paper_state(ex)
+        return parallel('papers', 0, PAPERS_TITLE, sid, tokens, glosses, transl)
+    if key.startswith('fieldnotes#'):
+        parts = key.split('#', 2)
+        xml = get_fieldnotes_xml()
+        if xml is None or len(parts) < 3 or not parts[1].isdigit():
+            return None
+        tgs = xml.findall('.//tiGroup')
+        idx, sid = int(parts[1]), parts[2].strip()
+        if idx >= len(tgs):
+            return None
+        rfg = next((r for r in tgs[idx].findall('rfGroup') if (r.findtext('rf') or '').strip() == sid), None)
+        if rfg is None:
+            return None
+        grp = rfg.find('bslGroup') if rfg.find('bslGroup') is not None else rfg.find('frGroup')
+        prompt = (grp.findtext('bsl') or grp.findtext('fr') or '').strip() if grp is not None else ''
+        stored = _load_stored_glosses(f'fieldnotes_{idx}').get(sid)
+        if isinstance(stored, dict) and isinstance(stored.get('tokens'), dict) and stored.get('tokens'):
+            tokens, glosses = stored['tokens'], stored.get('glosses', [])
+        else:
+            tokens = {}
+            for code in LANG_CODES:
+                vals = [nd.text.strip() for nd in (grp.findall(code) if grp is not None else []) if nd.text and nd.text.strip()]
+                tokens[code] = _tokenize_form(' '.join(vals)) if vals else []
+            glosses = []
+        transl = stored.get('translation') if isinstance(stored, dict) and stored.get('translation') is not None else prompt
+        return parallel('fieldnotes', idx, (tgs[idx].findtext('ti') or '').strip(), sid, tokens, glosses, transl)
+    if '#' in key:
+        fn, sid = (x.strip() for x in key.split('#', 1))
+        path = os.path.join(TRANSCRIPTIONS_FOLDER, os.path.basename(fn))
+        if not os.path.isfile(path):
+            return None
+        try:
+            data = _parse_tx(path)
+        except Exception:
+            return None
+        sent = next((s for s in data['sentences'] if s['id'] == sid), None)
+        code = _TX_LANG_TO_CODE.get((data.get('lang') or '').strip())
+        if sent is None or not code:
+            return None
+        stored = _load_stored_glosses(os.path.basename(fn)).get(sid)
+        if isinstance(stored, dict) and stored.get('tokens'):
+            toks, glosses = _stored_tokens(stored, code), stored.get('glosses', [])
+            transl = stored.get('translation') if stored.get('translation') is not None else sent['transl']
+        else:
+            toks, glosses, transl = _tokenize_form(sent['form']), [], sent['transl']
+        cols = [i for i, t in enumerate(map(_clean_form, toks)) if code in ef and t == ef[code]]
+        return {'type': 'narrative', 'file': os.path.basename(fn), 'title': data['title'], 'lang': code, 'sentence_id': sid,
+                'tokens': toks, 'glosses': glosses, 'translation': transl, 'match_cols': cols}
+    return None
+
+@app.route('/api/dictionary/cited-examples')
+def dictionary_cited_examples():
+    """The examples the author chose for senses: {"entry id|sense position": {examples: [...], missing: [keys that do not exist]}}."""
+    d = get_dict_xml()
+    out = {}
+    if d is None:
+        return jsonify(out)
+    for el in d.findall('.//EntréeLexicale'):
+        ef = None
+        for ref, sn in enumerate(el.findall('Sens')):
+            keys = _example_keys(_text_of(sn.find('Exemples')))
+            if not keys:
+                continue
+            ef = _entry_forms_clean(el) if ef is None else ef
+            found, missing = [], []
+            for k in keys:
+                obj = _cited_example(k, ef)
+                (found if obj else missing).append(obj if obj else k)
+            out[f"{el.get('identifiant', '')}|{ref}"] = {'examples': found, 'missing': missing}
+    return jsonify(out)
 
 @app.route('/api/dictionary/examples')
 def dictionary_examples():
