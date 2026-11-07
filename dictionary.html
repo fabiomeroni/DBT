@@ -405,9 +405,9 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .mode-switch button.active { background: #e8c887; color: #1c0f06; font-weight: 700; }
 .sense-group { padding: 0.55rem 0 0.7rem; border-bottom: 1px solid var(--border-lt); }
 .sg-label { font-family: 'EB Garamond', serif; font-size: 1.45rem; font-weight: 500; color: var(--ink); line-height: 1.2; }
-.sg-item { margin: 0.25rem 0 0 0.15rem; font-size: 1.02rem; line-height: 1.5; }
-.sg-hw { font-family: 'EB Garamond', serif; font-size: 1.25rem; font-weight: 500; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
-.sg-def { color: var(--ink-light); }
+.sg-item { margin: 0.55rem 0 0.9rem 0.15rem; padding-left: 0.8rem; border-left: 2px solid var(--border); }
+.sg-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.1rem 0.45rem; }
+.sg-hw { font-family: 'EB Garamond', serif; font-size: 1.45rem; font-weight: 500; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
 .em-hw-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem; }
 .em-hw-row select { width: auto; }
 .em-hw-label, .em-cog-head { font-family: 'Crimson Pro', serif; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; color: var(--ink-light); }
@@ -890,17 +890,23 @@ function senseHTML(entry, sn, multi, vis, number) {
   </div>`;
 }
 
-function entryHTML(entry) {
-  const color = COLORS[activeLang];
-  // The etymology of this form and its cognates: the forms, in other languages, that share the etymology. Nothing else
-  // from the other languages is shown: the words that merely mean the same are not parallels of the entry (they depend on the sense).
+// The etymology of the form in the headword language and its cognates: the forms, in other languages, that share the etymology.
+// Nothing else from the other languages is shown: the words that merely mean the same are not parallels of the entry
+// (they depend on the sense). Used by the list of entries and by the list of senses, so that both say the same.
+function etymBlock(entry) {
   const cognate = new Set();
-  const etymRow = etymsFor(entry).map(et => {
-    let h = et.form ? `<div style="margin-bottom:0.45rem;">${etymHTML(et)}</div>` : '';
+  const html = etymsFor(entry).map(et => {
+    const h = et.form ? `<div style="margin-bottom:0.45rem;">${etymHTML(et)}</div>` : '';
     const cogs = LANGS.filter(l => l !== activeLang && (!et.langs || et.langs.includes(l)) && hasForm(entry, l));
     cogs.forEach(l => cognate.add(l));
     return h + cognatesHTML(entry, cogs);
   }).join('');
+  return { html, cognate };
+}
+
+function entryHTML(entry) {
+  const color = COLORS[activeLang];
+  const { html: etymRow, cognate } = etymBlock(entry);
   const vis   = visibleSenses(entry);
   const multi = vis.length > 1;
   const sensesHTML = vis.length
@@ -946,10 +952,12 @@ let viewMode = (() => {
   try { return localStorage.getItem('dbt.dictionary.mode') === 'senses' ? 'senses' : 'entries'; } catch (e) { return 'entries'; }
 })();
 function render() { if (viewMode === 'senses') renderSenses(); else renderEntries(); }
+// Where an entry is in the list being shown: its card, or (in the list of senses) its first sense item
+const entryAnchor = id => document.getElementById(id) || [...document.querySelectorAll('.sg-item')].find(x => x.dataset.entry === id) || null;
 
-function setMode(mode) {
+function setMode(mode, remember = true) {
   viewMode = mode === 'senses' ? 'senses' : 'entries';
-  try { localStorage.setItem('dbt.dictionary.mode', viewMode); } catch (e) { /* private mode: the choice just is not remembered */ }
+  if (remember) try { localStorage.setItem('dbt.dictionary.mode', viewMode); } catch (e) { /* private mode: the choice just is not remembered */ }
   document.querySelectorAll('#mode-switch button').forEach(b => b.classList.toggle('active', b.dataset.mode === viewMode));
   const u = new URL(window.location); u.searchParams.set('mode', viewMode); history.replaceState(null, '', u);
   render();
@@ -962,6 +970,22 @@ function senseLabel(s) {
   if (short) return short;
   const gl = stripTags(s.gloss);
   return gl || stripTags(s.definition).split(' ').slice(0, 3).join(' ') || '—';
+}
+// One sense of one entry, with everything the entry says about it: the headword (a link to the entry), its IPA, part of speech and
+// domain, the definition, the etymology and cognates, the notes and the examples attested for this sense.
+function senseItemHTML(entry, sn) {
+  const color = COLORS[activeLang], vis = visibleSenses(entry);
+  return `<div class="sg-item" data-entry="${entry.id}">
+    <div class="sg-head">
+      <a class="sg-hw" href="#${entry.id}" data-entry="${entry.id}" style="color:${color};" title="Open the entry">${headwordHTML(entry)}</a>${ipaHTML(entry)}
+      <span class="entry-pos">${entry.pos}</span>
+      <span class="entry-domain">${entry.domain}</span>
+    </div>
+    <div class="entry-gloss">${sn.definition}</div>
+    ${etymBlock(entry).html}
+    <div class="entry-notes">${sn.notes}</div>
+    ${textExamplesHTML(entry, examplesForSense(entry, sn, vis), 's' + sn.ref)}
+  </div>`;
 }
 function senseMatches(e, s) {
   if (!searchQ) return true;
@@ -988,11 +1012,7 @@ function renderSenses() {
       <div class="letter-heading" style="border-color:${color};">${escHTML(l)}</div>
       ${byLetter[l].map(g => `<div class="sense-group" id="${g.id}">
         <div class="sg-label">${escHTML(g.label)}</div>
-        ${g.items.map(({ e, s }) => `<div class="sg-item">
-          <a class="sg-hw" href="#${e.id}" data-entry="${e.id}" style="color:${color};" title="Open the entry">${headwordHTML(e)}</a>
-          <span class="entry-pos">${e.pos}</span>
-          <span class="sg-def">${stripTags(s.definition) && stripTags(s.definition) !== g.label ? escHTML(stripTags(s.definition)) : ''}</span>
-        </div>`).join('')}
+        ${g.items.map(({ e, s }) => senseItemHTML(e, s)).join('')}
       </div>`).join('')}
     </div>`).join('') || '<p class="dict-status">No sense to list.</p>';
   document.getElementById('hw-index').innerHTML = letters.map(l =>
@@ -1004,7 +1024,7 @@ document.addEventListener('click', e => {        // a headword in the senses lis
   if (!a) return;
   e.preventDefault();
   const id = a.dataset.entry;
-  setMode('entries');
+  setMode('entries', false);               // opening one entry is not a change of the preferred list
   requestAnimationFrame(() => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     document.querySelectorAll('.hw-index a').forEach(x => x.classList.toggle('active', x.dataset.id === id));
@@ -1205,7 +1225,7 @@ function bindLexlinkClicks() {
 
     // Scroll to the target entry and sync sidebar
     requestAnimationFrame(() => {
-      const el = document.getElementById(dictId);
+      const el = entryAnchor(dictId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         document.querySelectorAll('.hw-index a').forEach(a2 =>
@@ -1244,7 +1264,7 @@ function bindBadgeClicks() {
 
     // Scroll to the entry the user was looking at
     requestAnimationFrame(() => {
-      const el = entryId && document.getElementById(entryId);
+      const el = entryId && entryAnchor(entryId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         // Sync sidebar highlight
@@ -2008,7 +2028,7 @@ async function init() {
     const hash = window.location.hash.slice(1);
     if (hash) {
       requestAnimationFrame(() => {
-        const el = document.getElementById(hash);
+        const el = entryAnchor(hash);
         if (el) {
           el.scrollIntoView({ block: 'start' });
           // Highlight in sidebar
@@ -2190,8 +2210,8 @@ function onAuthChange(loggedIn) {
   document.querySelectorAll('.entry-actions, .entry-hidden-forms').forEach(el =>
     el.classList.toggle('visible', loggedIn));
   // the IPA badges differ for the author (✓ on confirmed forms, clickable ones): redraw them in place
-  document.querySelectorAll('#dict-content .entry').forEach(el => {
-    const entry = DICT_MAP[el.id], w = el.querySelector('.ipa-wrap');
+  document.querySelectorAll('#dict-content .entry, #dict-content .sg-item').forEach(el => {
+    const entry = DICT_MAP[el.id || el.dataset.entry], w = el.querySelector('.ipa-wrap');
     if (entry && w) w.outerHTML = ipaHTML(entry);
   });
   if (typeof renderProposedEntries === 'function') renderProposedEntries();
