@@ -283,6 +283,7 @@ PUBLIC_API = [
     ("grammar-s1", "api/grammar/s1"),
     ("colors-js", "colors.js"),
     ("project-js", "project.js"),
+    ("dictionary-cited-examples", "api/dictionary/cited-examples"),
     ("references", "api/references"),
     ("references-bibtex", "api/references/export/bibtex"),
     ("references-endnote", "api/references/export/endnote"),
@@ -1457,6 +1458,24 @@ def _dict_with_languages(d):
         '<Sens identifiant="knowtooⓢ1"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">be aware</Glose><Définition><ReprésentationDeTexte langue="eng">be aware of</ReprésentationDeTexte></Définition><gloss>know</gloss></Sens></EntréeLexicale>'))
     tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
 
+def _dict_examples(d):
+    """The user's case: qon (Qōn̄) is afternoon in Dorig, Koro and Lakon, night in Nume, Dorig and Lakon, day in Nume; only the
+    sense afternoon chose the example “Good afternoon” (fieldnotes#0#d01.Road:02). speech has two senses, neither glossed
+    like the word in the paper example; know has a second sense."""
+    _dict_with_languages(d)
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    root.find(".//Dictionnaire").append(etree.fromstring(
+        '<EntréeLexicale identifiant="qon"><Lemme><ReprésentationDeForme langue="num">Qōn̄</ReprésentationDeForme><ReprésentationDeForme langue="drg">Qōn̄</ReprésentationDeForme>'
+        '<ReprésentationDeForme langue="kro">Qōn̄</ReprésentationDeForme><ReprésentationDeForme langue="lkn">Qēn̄</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale><DomaineSémantique>Time</DomaineSémantique><Étymologie><Étymon langues="num drg kro lkn"/></Étymologie>'
+        '<Sens identifiant="qonⓢ1" langues="drg kro lkn"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">afternoon</Glose><gloss>afternoon</gloss><Exemples>{{cite: fieldnotes#0#d01.Road:02}}</Exemples></Sens>'
+        '<Sens identifiant="qonⓢ2" langues="num drg lkn"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">night</Glose><gloss>night</gloss></Sens>'
+        '<Sens identifiant="qonⓢ3" langues="num"><NuméroDeSens>3</NuméroDeSens><Glose langue="eng">day</Glose><gloss>day</gloss></Sens></EntréeLexicale>'))
+    kn = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "know"][0]
+    kn.append(etree.fromstring('<Sens identifiant="knowⓢ2"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">recognise</Glose><gloss>recognise</gloss></Sens>'))
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
 def _dict_two_groups(d):
     """speech has two etymons: *qaliŋa- for Dorig and Lakon, *bbb for Nume and Koro."""
     _dict_with_languages(d)
@@ -1814,8 +1833,8 @@ def suite_dictionary(browser, args):
         open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
         g = page.locator(".sense-group", has=page.locator(".sg-label", has_text="speech, language, word")).first
         it = g.locator(".sg-item").first
-        check(S, "the sense “speech, language, word” in Dorig shows its headword (a link), part of speech, definition, the etymology, the cognates and the examples", it.locator(".sg-hw").count() == 1 and it.locator(".entry-pos").inner_text().strip().lower() == "n." and it.locator(".entry-gloss").first.inner_text().strip() == "speech, language, word"
-              and it.locator(".etym-form").inner_text().strip() == ET and it.locator(".cog-label").count() == 1 and [x.lower() for x in it.locator(".entry-cognates .étiquette_lang").all_inner_texts()] == [ABBR["lkn"]] and it.locator(".entry-example-block").count() >= 1, it.inner_text()[:120])
+        check(S, "the sense “speech, language, word” in Dorig shows its headword (a link), part of speech, definition, the etymology and the cognates", it.locator(".sg-hw").count() == 1 and it.locator(".entry-pos").inner_text().strip().lower() == "n." and it.locator(".entry-gloss").first.inner_text().strip() == "speech, language, word"
+              and it.locator(".etym-form").inner_text().strip() == ET and it.locator(".cog-label").count() == 1 and [x.lower() for x in it.locator(".entry-cognates .étiquette_lang").all_inner_texts()] == [ABBR["lkn"]], it.inner_text()[:120])
         # navigation from inside the list of senses
         it.locator(f".étiquette_lang[data-lang='{NAME['lkn']}'] a").click(); page.wait_for_timeout(700)
         check(S, "a cognate badge in the list of senses switches the language and stays in that list", page.evaluate("viewMode") == "senses" and NAME["lkn"] in page.locator("#result-bar").inner_text() and page.locator(".sg-item[data-entry='speech']").count() == 1)
@@ -1830,6 +1849,100 @@ def suite_dictionary(browser, args):
         open_page(page, site, "dictionary.html?lang=Koro", ".sense-group, #dict-content .entry", 500)
         check(S, "opening an entry from the list of senses does not change the list you chose: it is still the list of senses next time", page.evaluate("viewMode") == "senses")
         check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the examples of a sense: chosen by the author, never shown under another sense ──
+    EX_SENSES = """(id) => { const e = document.getElementById(id); if (!e) return null;
+      const per = [...e.querySelectorAll('.sense')].map(s => [(s.querySelector('.sense-gloss') || {innerText: ''}).innerText.trim(), s.querySelectorAll('.entry-example-block').length]);
+      return { per, total: e.querySelectorAll('.entry-example-block').length, other: e.querySelectorAll('.other-examples-label').length,
+               hint: [...e.querySelectorAll('.entry-hidden-forms')].filter(x => getComputedStyle(x).display !== 'none').map(x => x.innerText.trim()) }; }"""
+    site = Site(prepare=_dict_examples)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request; page = vis.new_page(); errs = []; watch(page, errs)
+        ce = va.get(site.url + "api/dictionary/cited-examples").json()
+        one = (ce.get("qon|0") or {}).get("examples") or [{}]
+        check(S, "the server resolves a {{cite: fieldnotes#0#d01.Road:02}} to the example, with the columns that hold the entry's word marked",
+              one[0].get("type") == "fieldnotes" and one[0].get("sentence_id") == "d01.Road:02" and one[0].get("tokens", {}).get("drg", [""])[0] == "Qōn̄" and one[0].get("match_cols") == [0] and "qon|1" not in ce, str(one[0])[:160])
+        for code, want in (("drg", [("afternoon", 1), ("night", 0)]), ("lkn", [("afternoon", 1), ("night", 0)])):
+            open_page(page, site, f"dictionary.html?lang={NAME[code]}", "#dict-content .entry", 500)
+            v = page.evaluate(EX_SENSES, "qon")
+            check(S, f"{NAME[code]}: “Good afternoon” is shown under the sense afternoon only, not under night", [tuple(x) for x in v["per"]] == want and v["total"] == 1, str(v))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 500); v = page.evaluate(EX_SENSES, "qon")
+        check(S, "Koro (where afternoon is the only sense): the example is shown", v["total"] == 1 and v["per"] == [], str(v))
+        open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 500); v = page.evaluate(EX_SENSES, "qon")
+        check(S, "Nume (night, day): no example, because none was chosen for those senses", v["total"] == 0 and [tuple(x) for x in v["per"]] == [("night", 0), ("day", 0)], str(v))
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 500)
+        grp = {g.locator(".sg-label").inner_text().strip(): g for g in page.locator(".sense-group").all()}
+        check(S, "the list of senses agrees: the example is under afternoon, not under night", grp["afternoon"].locator(".entry-example-block").count() == 1 and grp["night"].locator(".entry-example-block").count() == 0)
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        vis.close()
+
+        au = new_context(browser, site, 1280, author=True); aa = au.request; page = au.new_page(); errs = []; watch(page, errs)
+        def send(method, path, body): r = getattr(aa, method)(site.url + path, headers=_H, data=json.dumps(body)); return r.status, (r.json() if r.headers.get("content-type", "").startswith("application/json") else {})
+        base = dict(forms={"drg": "xxdrg", "kro": "xxkro"}, pos="n.", domain="")
+        st, j = send("post", "api/dictionary/entry", dict(base, senses=[{"ref": None, "definition": "one", "shortGloss": "one", "examples": "{{cite: fieldnotes#0#d01.Road:02}}\nnot a citation\n{{ cite : fieldnotes#0#d01.Road:02 }}\n{{cite: nonsense}}\n{{cite: papers#negation_example_01}} {{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}\n{{cite: fieldnotes#0#d99.None:1}}"},
+                                                                          {"ref": None, "definition": "two", "shortGloss": "two"}]))
+        eid = j["id"]; sens = _entry_xml(site, eid).findall("Sens")
+        check(S, "the server keeps the citations only: junk and repeated lines are dropped, one {{cite: …}} per line", sens[0].findtext("Exemples") == "{{cite: fieldnotes#0#d01.Road:02}}\n{{cite: papers#negation_example_01}}\n{{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}\n{{cite: fieldnotes#0#d99.None:1}}" and sens[1].find("Exemples") is None, str(sens[0].findtext("Exemples")))
+        ce = aa.get(site.url + "api/dictionary/cited-examples").json()[f"{eid}|0"]
+        kinds = [(x["type"], x["sentence_id"]) for x in ce["examples"]]
+        check(S, "all three kinds of citation resolve (fieldnotes, papers, a recording), and one that does not exist is reported", kinds == [("fieldnotes", "d01.Road:02"), ("papers", "negation_example_01"), ("narrative", "en_fr_Drg_Farfadets_02")] and ce["missing"] == ["fieldnotes#0#d99.None:1"], f"{kinds} {ce['missing']}")
+        before = etree.tostring(_entry_xml(site, eid))
+        payload = dict(base, senses=[{"ref": 0, "definition": "one", "shortGloss": "one", "examples": sens[0].findtext("Exemples")}, {"ref": 1, "definition": "two", "shortGloss": "two", "examples": ""}])
+        send("put", f"api/dictionary/entry/{eid}", payload)
+        check(S, "saving the same examples again leaves the entry byte for byte as it was", etree.tostring(_entry_xml(site, eid)) == before)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, senses=[dict(payload["senses"][0], examples=""), payload["senses"][1]]))
+        check(S, "an empty list removes the examples of the sense", _entry_xml(site, eid).find("Sens/Exemples") is None)
+        send("delete", f"api/dictionary/entry/{eid}", {})
+
+        # which attested examples a sense shows when none was chosen
+        open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        page.locator(".gloss-badge").first.click(); page.wait_for_timeout(1500)
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 800)
+        kn, sp, pr = (page.evaluate(EX_SENSES, i) for i in ("know", "speech", "properly"))
+        check(S, "with no choice made, an attested example goes to the sense it is glossed as (know: sense 1, not recognise), and an entry with one sense shows all its examples", kn["per"] == [["know", 1], ["recognise", 0]] and pr["total"] >= 1 and not kn["other"], f"{kn} {pr}")
+        check(S, "an entry's examples are no longer gathered under “Other examples”", all(page.evaluate(EX_SENSES, i)["other"] == 0 for i in ("know", "speech", "qon", "multi", "art")))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        sp = page.evaluate(EX_SENSES, "speech")
+        check(S, "an attested example that matches no sense of its entry is shown under none; the author is told, with a way to choose", sp["total"] == 0 and any("attested example is not shown under any sense" in h for h in sp["hint"]), str(sp))
+        vis = new_context(browser, site, 1280); pv = vis.new_page(); open_page(pv, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        check(S, "…and a visitor is not told", pv.evaluate(EX_SENSES, "speech")["hint"] == [])
+        vis.close()
+
+        # choosing an example for the sense that the automatic rule leaves without one: it shows in both lists
+        sp_forms = {c: (_entry_xml(site, "speech").find(f'Lemme/ReprésentationDeForme[@langue="{c}"]').text or "") for c in ALLC}
+        send("put", "api/dictionary/entry/speech", dict(forms=sp_forms, pos="n.", domain="Language", senses=[
+            {"ref": 0, "definition": "speech, language, word", "shortGloss": "", "langs": ["drg", "olr", "lkn"], "examples": "{{cite: papers#negation_example_01}}"},
+            {"ref": 1, "definition": "noise, sound", "shortGloss": "noise", "langs": ["num", "kro"], "examples": ""}]))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800); e1 = page.evaluate(EX_SENSES, "speech")
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
+        s1 = page.locator(".sense-group", has=page.locator(".sg-label", has_text="speech, language, word")).first.locator(".entry-example-block").count()
+        check(S, "once the author chooses the example for the sense “speech, language, word”, Dorig shows it in the entry and in the list of senses, and the hint is gone", e1["total"] == 1 and s1 == 1 and not any("attested example" in h for h in e1["hint"]), f"{e1} {s1}")
+
+        # the author's window: choosing the examples of a sense
+        editor(page, site, "kro", "know")
+        card = page.locator(".em-sense").first
+        check(S, "each sense card has an Examples box, and a button for each example attested for the entry (the paper example)", card.locator('textarea[data-f="examples"]').count() == 1 and card.locator(".em-ex-add").count() >= 1, card.locator(".em-attested").inner_text()[:90] if card.locator(".em-attested").count() else "no picker")
+        page.locator(".em-sense").nth(1).locator('textarea[data-f="examples"]').fill("see the first example")
+        page.click("#em-submit"); page.wait_for_timeout(500)
+        check(S, "a line that is not a citation is refused, with the reason, and nothing is written", "Sense 2" in page.inner_text("#em-msg") and "is not a citation" in page.inner_text("#em-msg") and _entry_xml(site, "know").find("Sens/Exemples") is None, page.inner_text("#em-msg"))
+        page.locator(".em-sense").nth(1).locator('textarea[data-f="examples"]').fill("")
+        key = page.locator(".em-sense").nth(1).locator(".em-ex-add").first.get_attribute("data-key")
+        page.locator(".em-sense").nth(1).locator(".em-ex-add").first.click()
+        check(S, "a button adds the example's {{cite: …}} to the sense, and is then disabled", "{{cite: %s}}" % key in page.locator(".em-sense").nth(1).locator('textarea[data-f="examples"]').input_value() and page.locator(".em-sense").nth(1).locator(".em-ex-add").first.is_disabled(), key)
+        save(page)
+        senses = _entry_xml(site, "know").findall("Sens")
+        check(S, "saving writes the choice to the second sense only", senses[0].find("Exemples") is None and senses[1].findtext("Exemples") == "{{cite: %s}}" % key)
+        v = view_ex = None
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 800); v = page.evaluate(EX_SENSES, "know")
+        check(S, "the example now shows under that sense, where the author put it, and no longer under sense 1 (what the author gives to a sense is that sense's)", v["per"] == [["know", 0], ["recognise", 1]], str(v))
+        send("put", "api/dictionary/entry/know", dict(forms={c: (_entry_xml(site, "know").find(f'Lemme/ReprésentationDeForme[@langue="{c}"]').text or "") for c in ALLC}, pos="v.tr.", domain="Cognition",
+                                                      senses=[{"ref": 0, "definition": "know, be familiar with", "shortGloss": "know", "examples": ""}, {"ref": 1, "definition": "recognise", "shortGloss": "recognise", "examples": "{{cite: fieldnotes#0#d99.None:1}}"}]))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 800); v = page.evaluate(EX_SENSES, "know")
+        check(S, "a chosen citation that does not exist shows nothing under its sense, and tells the author", v["per"] == [["know", 1], ["recognise", 0]] and any("Chosen example not found: fieldnotes#0#d99.None:1" in h for h in v["hint"]), str(v["hint"]))
+        check(S, "the window and the lists raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
         au.close()
     finally:
         site.stop()
