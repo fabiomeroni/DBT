@@ -391,6 +391,31 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .em-hint.visible { display: block; }
 
 /* ── Cognates, senses for one language, and the language ticks of the editor ── */
+.entry-hidden-forms { display: none; font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink-light); margin: 0.1rem 0 0.4rem;
+  padding: 0.15rem 0.5rem; border-left: 2px dashed var(--border); }
+.entry-hidden-forms.visible { display: block; }
+.entry-hidden-forms .hf-set { background: none; border: none; color: var(--gold); cursor: pointer; font: inherit; text-decoration: underline; padding: 0 0 0 0.4rem; }
+.em-etym-grid label { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink-light); margin: 0; }
+.sidebar-mode { padding: 0.65rem 0.85rem 0.7rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar-mode .sidebar-head-label { margin-bottom: 0.35rem; }
+.mode-switch { display: flex; margin-top: 0.15rem; border: 1px solid var(--gold); border-radius: 3px; overflow: hidden; }
+.mode-switch button { flex: 1; background: transparent; color: var(--ink-light); border: none; padding: 0.28rem 0.4rem; cursor: pointer;
+  font-family: 'Crimson Pro', serif; font-size: 0.82rem; letter-spacing: 0.04em; }
+.mode-switch button + button { border-left: 1px solid var(--gold); }
+.mode-switch button.active { background: #e8c887; color: #1c0f06; font-weight: 700; }
+.sense-group { padding: 0.55rem 0 0.7rem; border-bottom: 1px solid var(--border-lt); }
+.sg-label { font-family: 'EB Garamond', serif; font-size: 1.45rem; font-weight: 500; color: var(--ink); line-height: 1.2; }
+.sg-item { margin: 0.25rem 0 0 0.15rem; font-size: 1.02rem; line-height: 1.5; }
+.sg-hw { font-family: 'EB Garamond', serif; font-size: 1.25rem; font-weight: 500; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
+.sg-def { color: var(--ink-light); }
+.em-hw-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem; }
+.em-hw-row select { width: auto; }
+.em-hw-label, .em-cog-head { font-family: 'Crimson Pro', serif; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; color: var(--ink-light); }
+.em-cog { margin: -0.3rem 0 0.9rem; padding: 0.45rem 0.7rem; background: #faf6ef; border: 1px solid var(--border); border-radius: 3px; }
+.em-cog-sub { font-weight: 400; letter-spacing: 0; }
+.em-cog .em-langs { margin: 0.25rem 0 0; }
+.em-others { font-family: 'Crimson Pro', serif; font-size: 0.82rem; color: var(--ink-light); margin: 0 0 0.9rem; }
+.em-lang-row { display: contents; }
 .cog-label { font-family: 'Crimson Pro', serif; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-light); margin-right: 0.55rem; }
 .entry-cognates { margin-bottom: 0.3rem; }
@@ -471,6 +496,13 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
     <div class="sidebar-head">
       <span class="sidebar-head-label">Headword language</span>
       <div class="hw-lang-pills" id="lang-pills"></div>
+    </div>
+    <div class="sidebar-mode">
+      <span class="sidebar-head-label">List</span>
+      <div class="mode-switch" id="mode-switch" role="group" aria-label="What to list">
+        <button type="button" data-mode="entries" title="List the entries: each headword with its etymology, cognates and senses">Entries</button>
+        <button type="button" data-mode="senses" title="List the senses: each meaning with the headwords that have it">Senses</button>
+      </div>
     </div>
     <div class="sidebar-search">
       <input type="search" id="search-input" placeholder="Search…" autocomplete="off">
@@ -657,10 +689,13 @@ function formBadges(entry, langs) {
     }).join('');
 }
 
-// The other languages' forms (all of them, or the ones that are not cognates of an etymology)
-function equivsHTML(entry, langs) {
-  const items = formBadges(entry, langs || LANGS.filter(lang => lang !== activeLang));
-  return items ? `<div class="entry-equivs">${items}</div>` : '';        // nothing to show for a one-language project
+// For the author only: the forms stored in the entry that are not cognates of this headword (they are not shown here)
+function hiddenFormsHTML(entry, cognate) {
+  const rest = LANGS.filter(l => l !== activeLang && !cognate.has(l) && hasForm(entry, l));
+  if (!rest.length) return '';
+  const forms = rest.map(l => `<span style="color:${COLORS[l]};font-weight:600;">${escHTML(ABBRS[l])}</span> ${escHTML(entry.langs[l])}`).join(' · ');
+  return `<div class="entry-hidden-forms${isLoggedIn ? ' visible' : ''}">Not cognates, so not shown here: ${forms}
+    <button type="button" class="hf-set" onclick="openEditEntry('${entry.id}')">✎ set cognates</button></div>`;
 }
 // The forms that share the entry's etymology: in all the languages or in part of them, as the author decided
 function cognatesHTML(entry, langs) {
@@ -857,16 +892,14 @@ function senseHTML(entry, sn, multi, vis, number) {
 
 function entryHTML(entry) {
   const color = COLORS[activeLang];
-  // the etymology of this form, each followed by its cognates; the remaining forms come after
+  // The etymology of this form and its cognates: the forms, in other languages, that share the etymology. Nothing else
+  // from the other languages is shown: the words that merely mean the same are not parallels of the entry (they depend on the sense).
   const cognate = new Set();
   const etymRow = etymsFor(entry).map(et => {
-    let h = `<div style="margin-bottom:0.45rem;">${etymHTML(et)}</div>`;
-    if (et.langs) {
-      const cogs = LANGS.filter(l => l !== activeLang && et.langs.includes(l) && hasForm(entry, l));
-      cogs.forEach(l => cognate.add(l));
-      h += cognatesHTML(entry, cogs);
-    }
-    return h;
+    let h = et.form ? `<div style="margin-bottom:0.45rem;">${etymHTML(et)}</div>` : '';
+    const cogs = LANGS.filter(l => l !== activeLang && (!et.langs || et.langs.includes(l)) && hasForm(entry, l));
+    cogs.forEach(l => cognate.add(l));
+    return h + cognatesHTML(entry, cogs);
   }).join('');
   const vis   = visibleSenses(entry);
   const multi = vis.length > 1;
@@ -887,7 +920,7 @@ function entryHTML(entry) {
       <button class="entry-action-btn danger" onclick="deleteEntry('${entry.id}')">🗑 Delete</button>
     </div>
     ${etymRow}
-    ${equivsHTML(entry, LANGS.filter(l => l !== activeLang && !cognate.has(l)))}
+    ${hiddenFormsHTML(entry, cognate)}
     <div class="${multi ? 'senses' : ''}">${sensesHTML}</div>
     ${otherHTML}
       </div>`;
@@ -905,7 +938,80 @@ function filtered() {
   });
 }
 
-function render() {
+// What the list shows: the entries (a headword with its etymology, cognates and senses) or the senses (a meaning with the
+// headwords that have it). The choice is kept in the address (?mode=senses) and remembered in the browser.
+let viewMode = (() => {
+  const p = new URLSearchParams(window.location.search).get('mode');
+  if (p === 'senses' || p === 'entries') return p;
+  try { return localStorage.getItem('dbt.dictionary.mode') === 'senses' ? 'senses' : 'entries'; } catch (e) { return 'entries'; }
+})();
+function render() { if (viewMode === 'senses') renderSenses(); else renderEntries(); }
+
+function setMode(mode) {
+  viewMode = mode === 'senses' ? 'senses' : 'entries';
+  try { localStorage.setItem('dbt.dictionary.mode', viewMode); } catch (e) { /* private mode: the choice just is not remembered */ }
+  document.querySelectorAll('#mode-switch button').forEach(b => b.classList.toggle('active', b.dataset.mode === viewMode));
+  const u = new URL(window.location); u.searchParams.set('mode', viewMode); history.replaceState(null, '', u);
+  render();
+}
+
+// ── The senses of the headword language ──
+const stripTags = h => String(h || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+function senseLabel(s) {
+  const short = (s.shortGloss || '').trim();
+  if (short) return short;
+  const gl = stripTags(s.gloss);
+  return gl || stripTags(s.definition).split(' ').slice(0, 3).join(' ') || '—';
+}
+function senseMatches(e, s) {
+  if (!searchQ) return true;
+  return [senseLabel(s), stripTags(s.definition), stripTags(s.notes), e.langs[activeLang]].some(x => (x || '').toLowerCase().includes(searchQ));
+}
+function renderSenses() {
+  const color = COLORS[activeLang];
+  const groups = new Map();                       // the same label gathers the headwords that share a sense
+  DICTIONARY.filter(e => hasForm(e, activeLang)).forEach(e => visibleSenses(e).forEach(s => {
+    if (!senseMatches(e, s)) return;
+    const label = senseLabel(s), key = label.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { label, items: [] });
+    groups.get(key).items.push({ e, s });
+  }));
+  const list = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
+  list.forEach((g, i) => { g.id = 'sg-' + i; g.items.sort((a, b) => (a.e.langs[activeLang] || '').localeCompare(b.e.langs[activeLang] || '')); });
+  document.getElementById('result-bar').innerHTML =
+    `${list.length} sense${list.length === 1 ? '' : 's'} &nbsp;·&nbsp; headword: <span class="rbar-lang" style="color:${color};">${activeLang}</span>`;
+  const byLetter = {};
+  list.forEach(g => { const l = (g.label[0] || '—').toUpperCase(); (byLetter[l] = byLetter[l] || []).push(g); });
+  const letters = Object.keys(byLetter).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  document.getElementById('dict-content').innerHTML = letters.map(l => `
+    <div class="letter-section">
+      <div class="letter-heading" style="border-color:${color};">${escHTML(l)}</div>
+      ${byLetter[l].map(g => `<div class="sense-group" id="${g.id}">
+        <div class="sg-label">${escHTML(g.label)}</div>
+        ${g.items.map(({ e, s }) => `<div class="sg-item">
+          <a class="sg-hw" href="#${e.id}" data-entry="${e.id}" style="color:${color};" title="Open the entry">${headwordHTML(e)}</a>
+          <span class="entry-pos">${e.pos}</span>
+          <span class="sg-def">${stripTags(s.definition) && stripTags(s.definition) !== g.label ? escHTML(stripTags(s.definition)) : ''}</span>
+        </div>`).join('')}
+      </div>`).join('')}
+    </div>`).join('') || '<p class="dict-status">No sense to list.</p>';
+  document.getElementById('hw-index').innerHTML = letters.map(l =>
+    `<div class="hw-letter-divider">${escHTML(l)}</div>` + byLetter[l].map(g => `<a href="#${g.id}" data-id="${g.id}">${escHTML(g.label)}</a>`).join('')).join('');
+  document.getElementById('dict-main').scrollTop = 0;
+}
+document.addEventListener('click', e => {        // a headword in the senses list opens its entry
+  const a = e.target.closest('.sg-hw');
+  if (!a) return;
+  e.preventDefault();
+  const id = a.dataset.entry;
+  setMode('entries');
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.hw-index a').forEach(x => x.classList.toggle('active', x.dataset.id === id));
+  });
+});
+
+function renderEntries() {
   const entries = filtered();
   const color   = COLORS[activeLang];
 
@@ -1290,31 +1396,34 @@ function renderSenseCards() {
     </div>`).join('');
 }
 
-// The languages that have a form in the editor and belong to no other etymology: what a new etymology starts with
-function freeLangsForEtym() {
-  const taken = new Set(_etyms.flatMap(e => e.langs));
-  const withForm = LANGS.filter(l => { const v = (document.getElementById('ef-' + LANG_CODE[l])?.value || '').trim(); return v && v !== '\u2014'; });
-  const pick = withForm.filter(l => !taken.has(l));
-  return pick.length ? pick : LANGS.filter(l => !taken.has(l));
+// ── The headword and its cognates ──
+// The entry is edited from its headword language (_hw). Its cognates are the languages of the etymon that contains it
+// (an etymon may know its proto-form or not). Forms in other languages stay in the entry, hidden, and are listed in a note.
+let _hw = null;
+const edVal      = l => (document.getElementById('ef-' + LANG_CODE[l])?.value || '').trim();
+const edHasForm  = l => { const v = edVal(l); return !!v && v !== '\u2014'; };
+const groupIdx   = () => _etyms.findIndex(e => e.langs.includes(_hw));
+const groupLangs = () => { const g = _etyms[groupIdx()]; return g ? LANGS.filter(l => l !== _hw && g.langs.includes(l)) : []; };
+const protoField = f => document.querySelector(`#em-etym-box [data-ef="${f}"]`);
+function newGroup() {
+  const v = f => (protoField(f)?.value || '').trim();
+  return { ref: null, lang: v('lang') || 'POc', form: v('form'), gloss: v('gloss'), tlopo: v('tlopo'), etymograph: v('etymograph'), langs: [_hw], legacyAll: false };
 }
-const _blankEtym = () => ({ ref: null, lang: 'POc', form: '', gloss: '', tlopo: '', etymograph: '', langs: freeLangsForEtym(), legacyAll: false });
-
-function renderEtymCards() {
-  document.getElementById('em-etyms').innerHTML = _etyms.map((e, i) => `
-    <div class="em-sense em-etym" data-i="${i}">
-      <div class="em-sense-bar">
-        <b>Etymology${_etyms.length > 1 ? ' ' + (i + 1) : ''}</b>
-        <span class="em-sense-btns"><button type="button" data-act="del" class="del" title="Remove this etymology">✕</button></span>
-      </div>
-      <div class="em-etym-grid">
-        <label>Proto-language</label><input class="em-input" data-f="lang" value="${escHTML(e.lang)}" placeholder="POc">
-        <label>Form</label><input class="em-input" data-f="form" value="${escHTML(e.form)}" placeholder="*qaliŋa-" spellcheck="false">
-        <label>Meaning</label><input class="em-input" data-f="gloss" value="${escHTML(e.gloss)}" placeholder="voice">
-        <label>TLOPO link</label><input class="em-input" data-f="tlopo" value="${escHTML(e.tlopo)}" placeholder="https://tlopo…">
-        <label>Etymograph</label><input class="em-input" data-f="etymograph" value="${escHTML(e.etymograph)}" placeholder="https://evosem…">
-      </div>
-      ${langTicks(e.langs, 'etym', 'This etymology applies to the forms in')}
-    </div>`).join('');
+function showEditorRows() {
+  const group = new Set(groupLangs());
+  LANGS.forEach(l => {
+    const row = document.querySelector(`.em-lang-row[data-lang="${CSS.escape(l)}"]`);
+    row.style.display = (l === _hw || group.has(l)) ? 'contents' : 'none';
+    row.querySelector('label').textContent = l + (LANGS.length > 1 ? (l === _hw ? ' · headword' : ' · cognate') : '');
+  });
+  document.getElementById('em-cog').style.display = LANGS.length > 1 ? '' : 'none';
+  document.getElementById('em-cog-ticks').innerHTML = LANGS.filter(l => l !== _hw).map(l =>
+    `<label class="em-lang-tick" style="color:${COLORS[l]};"><input type="checkbox" data-lang="${escHTML(l)}"${group.has(l) ? ' checked' : ''}>${escHTML(l)}</label>`).join('');
+  const others = LANGS.filter(l => l !== _hw && !group.has(l) && edHasForm(l));
+  document.getElementById('em-others').innerHTML = others.length
+    ? `Also stored in this entry, not cognates, so not shown with it: ${others.map(l => `<b style="color:${COLORS[l]};">${escHTML(l)}</b> ${escHTML(edVal(l))}`).join(' · ')}. They stay in the dictionary under their own language.` : '';
+  const g = _etyms[groupIdx()];
+  ['lang', 'form', 'gloss', 'tlopo', 'etymograph'].forEach(f => { protoField(f).value = g ? (g[f] || '') : (f === 'lang' ? 'POc' : ''); });
 }
 
 // Homonyms: entries that share a form with the one being edited
@@ -1371,6 +1480,11 @@ function suggestIpa(code) {
 function _openEntryModal(title, entry) {
   _editingId = entry ? entry.id : null;
   _etymDirty = false; _homTouched = false;
+  _hw = activeLang;                                        // the entry is edited from the headword language being viewed
+  const hwSel = document.getElementById('em-hw-lang');
+  hwSel.innerHTML = LANGS.map(l => `<option value="${escHTML(l)}">${escHTML(l)}</option>`).join('');
+  hwSel.value = _hw; hwSel.disabled = !!entry;
+  document.querySelector('.em-hw-row').style.display = LANGS.length > 1 ? '' : 'none';
   document.getElementById('em-title').textContent = title;
   document.getElementById('em-msg').textContent = '';
 
@@ -1402,19 +1516,19 @@ function _openEntryModal(title, entry) {
     _senses = [_blankSense()];
     _etyms = [];
   }
-  document.getElementById('em-etym-box').open = _etyms.length > 0;
-  renderEtymCards();
+  showEditorRows();
+  document.getElementById('em-etym-box').open = groupIdx() >= 0 && !!_etyms[groupIdx()].form;
   renderSenseCards();
   updateHomHint();
   document.getElementById('entry-modal').classList.add('visible');
-  document.getElementById('ef-' + DBT.codes[0]).focus();      // the first language of the project
+  document.getElementById('ef-' + LANG_CODE[_hw]).focus();      // the headword
 }
 
 function _collectEntryData() {
   const forms = {};
   LANGS.forEach(lang => { const c = LANG_CODE[lang]; forms[c] = document.getElementById('ef-'+c)?.value.trim() || ''; });
   // Etymologies: untouched -> null (left exactly as they are); edited -> the whole list is written (an emptied one is removed)
-  const etyms = !_etymDirty ? null : _etyms.filter(e => e.form.trim()).map(e => ({
+  const etyms = !_etymDirty ? null : _etyms.filter(e => e.form.trim() || e.langs.length >= 2).map(e => ({
     ref: e.ref, lang: e.lang.trim() || 'POc', form: e.form.trim(), gloss: e.gloss.trim(), tlopo: e.tlopo.trim(), etymograph: e.etymograph.trim(),
     // "all the languages" on an etymology that never named any stays unspecified
     langs: (LANGS.length < 2 || (e.legacyAll && e.langs.length === LANGS.length)) ? undefined : e.langs.map(l => LANG_CODE[l]),
@@ -1464,16 +1578,12 @@ async function deleteEntry(entryId) {
 async function _submitEntry() {
   const msg  = document.getElementById('em-msg');
   const data = _collectEntryData();
-  if (!Object.values(data.forms).some(v => v)) {
-    msg.textContent = 'Please fill in at least one language form.';
-    msg.className = 'dbt-modal-msg error'; return;
-  }
+  const fail = text => { msg.textContent = text; msg.className = 'dbt-modal-msg error'; };
+  if (!edHasForm(_hw)) return fail(`Please write the headword (${_hw}).`);
+  const bare = groupLangs().find(l => !edHasForm(l));
+  if (bare) return fail(`Write the ${bare} form of the cognate, or untick ${bare}.`);
   const noLang = _senses.findIndex(s => (s.definition.trim() || s.shortGloss.trim() || s.notes.trim()) && !s.langs.length);
-  const noLangE = _etyms.findIndex(e => e.form.trim() && !e.langs.length);
-  if (noLang >= 0 || noLangE >= 0) {
-    msg.textContent = noLang >= 0 ? `Tick at least one language for sense ${noLang + 1}.` : `Tick at least one language for the etymology${_etyms.length > 1 ? ' ' + (noLangE + 1) : ''}.`;
-    msg.className = 'dbt-modal-msg error'; return;
-  }
+  if (noLang >= 0) return fail(`Tick at least one language for sense ${noLang + 1}.`);
   msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg';
   try {
     const url    = _editingId
@@ -1518,10 +1628,10 @@ function buildLangRows() {
   const grid = document.getElementById('em-lang-grid');
   if (grid.dataset.built) return;
   grid.dataset.built = '1';
-  grid.insertAdjacentHTML('beforeend', DBT.langs.map(l => `
+  grid.insertAdjacentHTML('beforeend', DBT.langs.map(l => `<div class="em-lang-row" data-lang="${escHTML(l.name)}">
       <label style="font-family:'Crimson Pro',serif;font-size:0.8rem;font-weight:600;color:var(--c-${l.code});">${escHTML(l.name)}</label>
       <input id="ef-${l.code}" class="em-input" style="border-bottom-color:var(--c-${l.code});" placeholder="orthography" spellcheck="false">
-      <input id="ef-ipa-${l.code}" class="em-input em-ipa" style="border-bottom-color:var(--c-${l.code});" placeholder="IPA" spellcheck="false" title="Phonetic form, shown as [ ] next to the headword">`).join(''));
+      <input id="ef-ipa-${l.code}" class="em-input em-ipa" style="border-bottom-color:var(--c-${l.code});" placeholder="IPA" spellcheck="false" title="Phonetic form, shown as [ ] next to the headword"></div>`).join(''));
 }
 
 function _bindEntryModal() {
@@ -1586,32 +1696,39 @@ function _bindEntryModal() {
   });
   document.getElementById('ef-hom').addEventListener('input', () => { _homTouched = true; });
 
-  // etymologies: typing updates the card; ticking a language gives it to this etymology and takes it from the others
-  const ebox = document.getElementById('em-etyms');
-  ebox.addEventListener('input', e => {
-    const card = e.target.closest('.em-etym'), fld = e.target.dataset.f;
-    if (card && fld) { _etyms[+card.dataset.i][fld] = e.target.value; _etymDirty = true; }
-  });
-  ebox.addEventListener('change', e => {
-    const tick = e.target.closest('input[data-kind="etym"]');
+  // cognates: ticking a language puts its form in the headword's etymon (made if there is none); a language belongs to one etymon only
+  document.getElementById('em-cog-ticks').addEventListener('change', e => {
+    const tick = e.target.closest('input[type=checkbox]');
     if (!tick) return;
-    const i = +tick.closest('.em-etym').dataset.i, lang = tick.dataset.lang;
+    const lang = tick.dataset.lang;
     _etymDirty = true;
-    _etyms[i].langs = LANGS.filter(l => l === lang ? tick.checked : _etyms[i].langs.includes(l));
-    if (tick.checked) _etyms.forEach((x, j) => { if (j !== i) x.langs = x.langs.filter(l => l !== lang); });
-    renderEtymCards();
+    let gi = groupIdx();
+    if (tick.checked) {
+      if (gi < 0) { _etyms.push(newGroup()); gi = _etyms.length - 1; }
+      const g = _etyms[gi];
+      g.langs = LANGS.filter(l => g.langs.includes(l) || l === lang); g.legacyAll = false;
+      _etyms.forEach((x, j) => { if (j !== gi) x.langs = x.langs.filter(l => l !== lang); });
+    } else if (gi >= 0) {
+      const g = _etyms[gi];
+      g.langs = g.langs.filter(l => l !== lang); g.legacyAll = false;
+    }
+    _etyms = _etyms.filter(x => x.langs.length || x.form.trim());
+    showEditorRows();
+    if (tick.checked) document.getElementById('ef-' + LANG_CODE[lang]).focus();
   });
-  ebox.addEventListener('click', e => {
-    const b = e.target.closest('button[data-act="del"]');
-    if (!b) return;
-    const i = +b.closest('.em-etym').dataset.i;
-    if (!confirm('Remove this etymology?')) return;
-    _etyms.splice(i, 1); _etymDirty = true; renderEtymCards();
+  // the proto-form of the headword's etymon
+  document.getElementById('em-etym-box').addEventListener('input', e => {
+    const f = e.target.dataset.ef;
+    if (!f) return;
+    _etymDirty = true;
+    let gi = groupIdx();
+    if (gi < 0) {
+      if (!e.target.value.trim() || (f === 'lang' && e.target.value.trim() === 'POc')) return;
+      _etyms.push(newGroup()); gi = _etyms.length - 1;
+    }
+    _etyms[gi][f] = e.target.value;
   });
-  document.getElementById('em-add-etym').addEventListener('click', () => {
-    _etyms.push(_blankEtym()); _etymDirty = true; renderEtymCards();
-    ebox.lastElementChild?.querySelector('input[data-f="form"]')?.focus();
-  });
+  document.getElementById('em-hw-lang').addEventListener('change', e => { _hw = e.target.value; showEditorRows(); document.getElementById('ef-' + LANG_CODE[_hw]).focus(); });
 }
 
 
@@ -1876,6 +1993,8 @@ async function init() {
     await Promise.all([loadProposedEntries(), loadDictExamples()]);
     buildPills();
     bindSearch();
+    document.getElementById('mode-switch').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+    document.querySelectorAll('#mode-switch button').forEach(b => b.classList.toggle('active', b.dataset.mode === viewMode));
     render();
     renderProposedEntries();
     bindScrollspy();
@@ -1919,8 +2038,18 @@ init();
   <div class="dbt-modal" style="max-width:560px;width:94vw;max-height:90vh;overflow-y:auto;">
     <h3 id="em-title">Add entry</h3>
 
+    <div class="em-hw-row">
+      <span class="em-hw-label">Headword language</span>
+      <select id="em-hw-lang" class="em-input"></select>
+    </div>
+
     <div class="em-lang-grid" id="em-lang-grid">
       <span></span><span class="em-colhead">Orthography</span><span class="em-colhead">IPA [ ]</span>
+    </div>
+
+    <div class="em-cog" id="em-cog">
+      <div class="em-cog-head">Cognates <span class="em-cog-sub">— forms in other languages that are cognate with the headword. Tick a language, then write its form.</span></div>
+      <div class="em-langs" id="em-cog-ticks"></div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;margin-bottom:0.9rem;">
@@ -1941,10 +2070,17 @@ init();
 
     <details id="em-etym-box" style="margin-bottom:0.9rem;">
       <summary style="font-family:'Crimson Pro',serif;font-size:0.82rem;color:var(--ink-light);
-                      cursor:pointer;letter-spacing:0.05em;">Etymology (optional)</summary>
-      <div id="em-etyms" style="margin-top:0.5rem;"></div>
-      <button type="button" class="fn-col-add" id="em-add-etym">＋ Add an etymology</button>
+                      cursor:pointer;letter-spacing:0.05em;">Etymology of the headword and its cognates (optional)</summary>
+      <div class="em-etym-grid" style="margin-top:0.5rem;">
+        <label>Proto-language</label><input class="em-input" data-ef="lang" value="POc" placeholder="POc">
+        <label>Form</label><input class="em-input" data-ef="form" placeholder="*qaliŋa-" spellcheck="false">
+        <label>Meaning</label><input class="em-input" data-ef="gloss" placeholder="voice">
+        <label>TLOPO link</label><input class="em-input" data-ef="tlopo" placeholder="https://tlopo…">
+        <label>Etymograph</label><input class="em-input" data-ef="etymograph" placeholder="https://evosem…">
+      </div>
+      <div class="em-hint visible" style="margin-top:0.4rem;">Leave the form empty if the proto-form is unknown: the cognates are still listed.</div>
     </details>
+    <div class="em-others" id="em-others"></div>
 
     <div class="dbt-modal-msg" id="em-msg"></div>
     <div class="dbt-modal-row">
@@ -2051,7 +2187,7 @@ init();
 </div>
 <script>
 function onAuthChange(loggedIn) {
-  document.querySelectorAll('.entry-actions').forEach(el =>
+  document.querySelectorAll('.entry-actions, .entry-hidden-forms').forEach(el =>
     el.classList.toggle('visible', loggedIn));
   // the IPA badges differ for the author (✓ on confirmed forms, clickable ones): redraw them in place
   document.querySelectorAll('#dict-content .entry').forEach(el => {
