@@ -74,6 +74,7 @@ def _load_project():
     p['footer'] = str(p.get('footer') or '')
     p['redirects'] = p.get('redirects') or {}
     p['legacyFiles'] = p.get('legacyFiles') or {}
+    p['grammaticalDomains'] = [str(x) for x in (p.get('grammaticalDomains') or ['Grammar'])]
     p['headwordLanguage'] = p.get('headwordLanguage') if p.get('headwordLanguage') in seen else langs[0]['code']
     files = {'dictionary': 'project/dictionary.xml', 'fieldnotes': 'project/fieldnotes.xml',
              'grammarDir': 'project/grammar', 'recordingsDir': 'project/texts', 'imagesDir': 'project/images',
@@ -90,6 +91,7 @@ GRAMMAR_FOLDER = PROJECT['files']['grammarDir']
 
 DICT_FILE             = PROJECT['files']['dictionary']
 REFERENCES_FILE       = PROJECT['files']['references']
+GRAMMATICAL_DOMAINS   = {d.strip().lower() for d in PROJECT['grammaticalDomains']}
 FIELDNOTES_FILE       = PROJECT['files']['fieldnotes']
 IMAGES_FOLDER         = PROJECT['files']['imagesDir']
 TRANSCRIPTIONS_FOLDER = PROJECT['files']['recordingsDir']
@@ -603,6 +605,38 @@ def build_example_table(ex_id, n=None):
 </div>'''
 
 
+def _entry_is_grammatical(el):
+    """Grammatical material (markers, pronouns, TAMP forms …) is marked by its semantic domain, set in the project's
+    `grammaticalDomains` (default: Grammar). Everything else is lexical."""
+    return (el.findtext('DomaineSémantique') or '').strip().lower() in GRAMMATICAL_DOMAINS
+
+def _chip_forms(el):
+    """The forms of an entry a grammar chip shows, {language code: form}.
+    Grammatical material: every form. Lexical material: only the cognates, i.e. the languages of the entry's etymons (an etymon
+    that names no languages covers all of them). An entry that names no cognates shows its form in the project's headword
+    language (or, lacking it, the first form), since the words that merely mean the same are not its parallels."""
+    forms = {}
+    for node in el.findall('Lemme/ReprésentationDeForme'):
+        code, text = node.get('langue', ''), (node.text or '').strip()
+        if code in LANG_MAP and text and text != '\u2014':
+            forms[code] = text
+    if _entry_is_grammatical(el):
+        return forms
+    cognate, everywhere = set(), False
+    for et in el.findall('Étymologie/Étymon'):
+        codes = _langs_attr(et)
+        if codes is None:
+            everywhere = True
+        else:
+            cognate.update(codes)
+    if everywhere:
+        return forms
+    if cognate:
+        return {c: f for c, f in forms.items() if c in cognate}
+    own = PROJECT.get('headwordLanguage')
+    first = own if own in forms else next((c for c in LANG_CODES if c in forms), None)
+    return {first: forms[first]} if first else {}
+
 def build_entry_chip(entry_id):
     """
     Resolve {{entry: ID}} — builds a compact inline citation chip
@@ -617,19 +651,17 @@ def build_entry_chip(entry_id):
     if entry is None:
         return f'<span class="shortcode-error">Dictionary entry not found: <code>{entry_id}</code></span>'
 
-    forms = {}
-    for node in entry.findall('Lemme/ReprésentationDeForme'):
-        code = node.get('langue', '')
-        if code in LANG_MAP:
-            forms[LANG_MAP[code]] = (node.text or '').strip()
-
+    shown = _chip_forms(entry)                         # code -> form
+    forms = {LANG_MAP[c]: f for c, f in shown.items()}
     gloss = (entry.findtext('Sens/Glose[@langue="eng"]', '') or '').strip()
     pos   = (entry.findtext('ClasseGrammaticale', '') or '').strip()
 
+    # grammatical material shows a slot for every language (— where there is no form); lexical material only its cognates
+    langs = LANG_NAMES if _entry_is_grammatical(entry) else [l for l in LANG_NAMES if l in forms]
     forms_html = ' · '.join(
         f'<span class="chip-form" style="color:{LANG_COLORS[lang]};">'
         f'{forms.get(lang, "—")}</span>'
-        for lang in LANG_NAMES
+        for lang in langs
     )
 
     return (f'<a href="dictionary.html#{entry_id}" class="entry-chip" '
@@ -1644,11 +1676,17 @@ def _fill_etymon(ety, ed):
             ety.remove(node)
         elif node is not None:
             _set_text(node, '')
-    put('Langue', str(ed.get('lang') or 'POc').strip())
-    put('Forme', str(ed.get('form') or '').strip())
-    put('Glose', str(ed.get('gloss') or '').strip(), {'langue': 'eng'})
-    put('LienTLOPO', str(ed.get('tlopo') or '').strip(), keep_blank=False)
-    put('LienEtymograph', str(ed.get('etymograph') or '').strip(), keep_blank=False)
+    if not str(ed.get('form') or '').strip():
+        # cognates declared, proto-form unknown: the etymon then keeps only the list of its languages
+        for tag in ('Langue', 'Forme', 'Glose', 'LienTLOPO', 'LienEtymograph'):
+            for n in ety.findall(tag):
+                ety.remove(n)
+    else:
+        put('Langue', str(ed.get('lang') or 'POc').strip())
+        put('Forme', str(ed.get('form') or '').strip())
+        put('Glose', str(ed.get('gloss') or '').strip(), {'langue': 'eng'})
+        put('LienTLOPO', str(ed.get('tlopo') or '').strip(), keep_blank=False)
+        put('LienEtymograph', str(ed.get('etymograph') or '').strip(), keep_blank=False)
     if isinstance(ed.get('langs'), list):
         _set_langs_attr(ety, ed['langs'], keep_all=True)
 
@@ -1658,7 +1696,9 @@ def _apply_etymons(el, payload):
     ety_el = _entry_child(el, 'Étymologie')
     existing = ety_el.findall('Étymon') if ety_el is not None else []
     used, ordered, taken = set(), [], set()
-    items = [d for d in payload[:20] if isinstance(d, dict) and str(d.get('form') or '').strip()]
+    def declared(d):           # a proto-form, or at least two languages named as cognates
+        return bool(str(d.get('form') or '').strip()) or (isinstance(d.get('langs'), list) and len({c for c in d['langs'] if c in LANG_CODES}) >= 2)
+    items = [d for d in payload[:20] if isinstance(d, dict) and declared(d)]
     for ed in items:
         if isinstance(ed.get('langs'), list):
             mine = [c for c in LANG_CODES if c in {str(x) for x in ed['langs']} and c not in taken]
@@ -2554,11 +2594,11 @@ def _entry_latex(entry_id):
         return f'\\textit{{{_le(entry_id)}}}'
     gloss = (el.findtext('Sens/Glose[@langue="eng"]') or entry_id).strip()
     parts = []
+    shown = _chip_forms(el)                            # the same forms as the chip in the grammar page
     for code in LANG_CODES:
         lang = LANG_MAP[code]
         abbr = LANG_ABBR[lang]
-        node = el.find(f'Lemme/ReprésentationDeForme[@langue="{code}"]')
-        form = (node.text or '').strip() if node is not None else ''
+        form = shown.get(code, '')
         if form:
             parts.append(f'{_le(abbr)}.~\\textit{{{_le(form)}}}')
     forms_str = ', '.join(parts)
