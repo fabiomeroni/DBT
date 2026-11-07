@@ -102,6 +102,12 @@ chosen: only the entries that have a form in that language are listed, with that
   An entry may have several etymons for different groups of languages; a language belongs to one of them only.
 - **Senses belong to languages.** `<Sens langues="aa cc">` is shown only for those languages; without the attribute a sense
   applies to all of them. Senses are numbered 1, 2 … among those shown.
+- **Examples belong to senses.** The author chooses the examples shown under a sense with the same markup as in the grammar, one
+  per line, in the sense's *Examples* box of the editor (stored in the sense's `<Exemples>`): `{{cite: fieldnotes#0#d01.Road:02}}`,
+  `{{cite: papers#id}}`, `{{cite: recording.xml#sentence}}`. The editor lists the examples already attested for the entry, with a
+  button to add each one. A sense with a chosen list shows exactly those examples, and no other sense shows them. A sense with
+  none shows the attested examples whose word was glossed like it (an entry with a single sense shows all of its examples).
+  Nothing is gathered at the entry level: the author is told, on the entry, when an attested example is shown under no sense.
 - **Chips in the grammar.** `{{entry: id}}` shows, for **grammatical** material (an entry whose semantic domain is one of
   `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
   shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
