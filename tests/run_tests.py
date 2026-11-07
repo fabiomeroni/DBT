@@ -1772,6 +1772,68 @@ def suite_dictionary(browser, args):
     finally:
         site.stop()
 
+    # ── the list of senses is as informative as the list of entries ──
+    ENTRY_JS = """() => [...document.querySelectorAll('#dict-content .entry')].map(e => ({ id: e.id,
+        hw: e.querySelector('.entry-headword')?.innerText.trim(), pos: e.querySelector('.entry-pos')?.innerText.trim(), domain: e.querySelector('.entry-domain')?.innerText.trim(),
+        ipa: e.querySelector('.ipa-wrap')?.innerText.trim() || '', etym: [...e.querySelectorAll('.etym-form')].map(x => x.innerText.trim()),
+        cog: [...e.querySelectorAll('.entry-cognates .étiquette_lang')].map(x => x.innerText.trim()), defs: [...e.querySelectorAll('.entry-gloss')].map(x => x.innerText.trim()),
+        notes: [...e.querySelectorAll('.entry-notes')].map(x => x.innerText.trim()).filter(Boolean), examples: e.querySelectorAll('.entry-example-block').length,
+        senses: e.querySelectorAll('.sense, .entry-gloss').length }))"""
+    ITEM_JS = """() => [...document.querySelectorAll('#dict-content .sg-item')].map(e => ({ id: e.dataset.entry, group: e.closest('.sense-group').querySelector('.sg-label').innerText.trim(),
+        hw: e.querySelector('.sg-hw')?.innerText.trim(), pos: e.querySelector('.entry-pos')?.innerText.trim(), domain: e.querySelector('.entry-domain')?.innerText.trim(),
+        ipa: e.querySelector('.ipa-wrap')?.innerText.trim() || '', etym: [...e.querySelectorAll('.etym-form')].map(x => x.innerText.trim()),
+        cog: [...e.querySelectorAll('.entry-cognates .étiquette_lang')].map(x => x.innerText.trim()), defs: [...e.querySelectorAll('.entry-gloss')].map(x => x.innerText.trim()),
+        notes: [...e.querySelectorAll('.entry-notes')].map(x => x.innerText.trim()).filter(Boolean), examples: e.querySelectorAll('.entry-example-block').length }))"""
+    site = Site(prepare=_dict_with_languages)
+    try:
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs); aa = au.request
+        open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        page.locator(".gloss-badge").first.click(); page.wait_for_timeout(1500)
+        ex = aa.get(site.url + "api/dictionary/examples").json()
+        check(S, "(set-up) the paper example is now attested for entries of the dictionary", all(ex.get(k) for k in ("speech", "know", "properly")), str(sorted(k for k, v in ex.items() if v)))
+        for code in ("drg", "kro", "num"):
+            open_page(page, site, f"dictionary.html?lang={NAME[code]}", "#dict-content .entry", 800)
+            entries = {e["id"]: e for e in page.evaluate(ENTRY_JS)}
+            open_page(page, site, f"dictionary.html?lang={NAME[code]}&mode=senses", ".sense-group", 800)
+            items = page.evaluate(ITEM_JS)
+            bad = []
+            for eid, e in entries.items():
+                mine = [i for i in items if i["id"] == eid]
+                if not mine:
+                    if e["defs"] and e["defs"] != ["No sense for %s yet." % NAME[code]]: bad.append(f"{eid}: no item")
+                    continue
+                for i in mine:
+                    for k in ("hw", "pos", "domain", "ipa", "etym", "cog"):
+                        if i[k] != e[k]: bad.append(f"{eid}.{k}: {i[k]!r} vs {e[k]!r}")
+                if sorted(d for i in mine for d in i["defs"]) != sorted(d for d in e["defs"] if d != "No sense for %s yet." % NAME[code]): bad.append(f"{eid}: definitions")
+                if sorted(n for i in mine for n in i["notes"]) != sorted(e["notes"]): bad.append(f"{eid}: notes")
+                if len(mine) == 1 and sum(i["examples"] for i in mine) != e["examples"]: bad.append(f"{eid}: examples {sum(i['examples'] for i in mine)} vs {e['examples']}")
+            with_ex = sum(1 for e in entries.values() if e["examples"])
+            check(S, f"{NAME[code]}: each sense in the list of senses says what its entry says: headword, IPA, part of speech, domain, definition, etymology, cognates, notes and the same examples", not bad and with_ex >= 3, f"{bad[:3]} (entries with examples: {with_ex})")
+        # the case of the user: Dorig, speech
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
+        g = page.locator(".sense-group", has=page.locator(".sg-label", has_text="speech, language, word")).first
+        it = g.locator(".sg-item").first
+        check(S, "the sense “speech, language, word” in Dorig shows its headword (a link), part of speech, definition, the etymology, the cognates and the examples", it.locator(".sg-hw").count() == 1 and it.locator(".entry-pos").inner_text().strip().lower() == "n." and it.locator(".entry-gloss").first.inner_text().strip() == "speech, language, word"
+              and it.locator(".etym-form").inner_text().strip() == ET and it.locator(".cog-label").count() == 1 and [x.lower() for x in it.locator(".entry-cognates .étiquette_lang").all_inner_texts()] == [ABBR["lkn"]] and it.locator(".entry-example-block").count() >= 1, it.inner_text()[:120])
+        # navigation from inside the list of senses
+        it.locator(f".étiquette_lang[data-lang='{NAME['lkn']}'] a").click(); page.wait_for_timeout(700)
+        check(S, "a cognate badge in the list of senses switches the language and stays in that list", page.evaluate("viewMode") == "senses" and NAME["lkn"] in page.locator("#result-bar").inner_text() and page.locator(".sg-item[data-entry='speech']").count() == 1)
+        open_page(page, site, "dictionary.html?lang=Koro&mode=senses", ".sense-group", 800)
+        lex = page.locator(".sg-item a.lexlink:visible").first
+        target = lex.get_attribute("data-dict-id") or (lex.get_attribute("href") or "")[1:]
+        lex.click(); page.wait_for_timeout(700)
+        check(S, "a word link inside an example in the list of senses works, without leaving the list", page.evaluate("viewMode") == "senses" and page.locator(".sense-group").count() > 0 and bool(target), target)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 500)
+        page.click("#mode-switch [data-mode=senses]"); page.wait_for_selector(".sense-group", timeout=6000)
+        page.locator(".sg-hw").first.click(); page.wait_for_selector("#dict-content .entry", timeout=6000)
+        open_page(page, site, "dictionary.html?lang=Koro", ".sense-group, #dict-content .entry", 500)
+        check(S, "opening an entry from the list of senses does not change the list you chose: it is still the list of senses next time", page.evaluate("viewMode") == "senses")
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
     # ── what the author types is never run ──
     site = Site(prepare=_dict_hostile)
     try:
@@ -1780,7 +1842,7 @@ def suite_dictionary(browser, args):
         v = view(page, site, "drg", "speech")
         check(S, "an etymology with markup in its form is shown as text; a link that is not http(s) is not made a link, a good one is", v["imgs"] == 1 and page.locator("#speech .etym-badge img[src=x]").count() == 0 and v["links"] == ["https://example.org/ok"] and "<img" in v["etym"][0], str(v["links"]))
         open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 500)
-        check(S, "…and so is a sense with markup in the senses list", page.locator(".sg-label img, .sense-group img").count() == 0 and any("<img" in x for x in page.locator(".sg-label").all_inner_texts()))
+        check(S, "…and so is a sense with markup in the senses list", page.locator(".sg-label img, .sense-group img[src='x']").count() == 0 and any("<img" in x for x in page.locator(".sg-label").all_inner_texts()))
         check(S, "nothing ran", not [e for e in errs if "DIALOG" in e or "PAGEERROR" in e], str(errs[:2]))
         c.close()
     finally:
