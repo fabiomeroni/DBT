@@ -21,6 +21,7 @@ you change this folder and your data, not the code.
 | `redirects` | old page names that now live elsewhere, e.g. `{"gaua.html": "about.html"}` |
 | `files` | (optional) where the data lives, if it is not in the standard places below: `dictionary`, `fieldnotes`, `grammarDir`, `recordingsDir`, `imagesDir`, `pagesDir`, `orthography`, `seedPhonetic` |
 | `legacyFiles` | (optional) the places where an older version of the project kept some of its data, as `{"dictionary": "dbt_dictionary.xml", "recordingsDir": "transcribed_narratives"}`. The first time the server starts and finds one of them, it moves that data into the project folder (see "Where the data is") |
+| `grammaticalDomains` | (optional) the semantic domains that mark **grammatical** entries (markers, pronouns, TAMP forms …), e.g. `["Grammar"]`: the default. In the grammar, the chip of such an entry shows all its forms; see "The dictionary" below |
 
 Each language has:
 
@@ -87,19 +88,32 @@ list of their names (`<strong>Nume, Dorig</strong>, and <strong>Lakon</strong>`)
 
 Image files are named as they sit in the site folder for now (`gaua_map.png`).
 
-## The dictionary: entries, etymologies and senses per language
+## The dictionary: entries, cognates, etymologies and senses
 
-One entry (`<EntréeLexicale>`) gathers the forms of a word in the project's languages. The dictionary shows it **in the headword
-language** that is chosen: only the entries that have a form in that language are listed, with that form as the headword.
+One entry (`<EntréeLexicale>`) is a **headword with its cognates**. The dictionary shows it in the **headword language** that is
+chosen: only the entries that have a form in that language are listed, with that form as the headword.
 
-- **Etymology belongs to forms.** An entry may have several etymons (`<Étymologie><Étymon langues="drg lkn">`), each for the
-  languages whose forms it explains. In a headword language you see the etymon that applies to its form, followed by its
-  **cognates**: the other forms covered by the same etymon (all the languages, or only some). The remaining forms of the entry follow.
-  An etymon with no `langues` attribute (older data) applies to every language and is displayed as it always was.
-- **Senses belong to languages.** `<Sens langues="drg olr lkn">` is shown only for those languages; without the attribute a sense
+- **Cognates, not parallels.** An entry shows, from the other languages, only the forms that are cognate with the headword: the
+  languages of its etymology (`<Étymologie><Étymon langues="aa cc">`). Words that merely mean the same are not parallels of the
+  entry (they are parallels for one sense only): they are found in the examples, and each stays an entry of its own language.
+  An etymon may name its cognates without knowing the proto-form (it then has only `langues`). An etymon with no `langues`
+  attribute (older data) applies to every language. An entry that names no cognates shows none.
+- **Etymology belongs to forms.** The etymon that applies to the headword's language is shown, followed by its **cognates**.
+  An entry may have several etymons for different groups of languages; a language belongs to one of them only.
+- **Senses belong to languages.** `<Sens langues="aa cc">` is shown only for those languages; without the attribute a sense
   applies to all of them. Senses are numbered 1, 2 … among those shown.
-- In the editor (author mode) each sense and each etymology has a tick per language, and **＋ Add an etymology** adds another
-  proto-form. A language belongs to one etymology of an entry only. For a project with one language there is nothing to tick.
+- **Chips in the grammar.** `{{entry: id}}` shows, for **grammatical** material (an entry whose semantic domain is one of
+  `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
+  shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
+  language. The LaTeX export lists the same forms. To make a word's chip show its cognates, set its cognates in the dictionary.
+- **Two ways to list.** The *List* switch in the sidebar shows the dictionary as **Entries** (each headword with its etymology,
+  cognates and senses) or as **Senses** (each meaning, with the headwords of the language that have it). The choice is kept in
+  the address (`?mode=senses`) and remembered in the browser.
+- **In the editor** (author mode) the window opens on the headword: its form and IPA, then **Cognates**: tick a language and write
+  its form; then the senses (each with a tick per language) and, optionally, the proto-form. Forms that are not cognates are not
+  asked for: a form already stored in the entry stays in the data, is listed in a note, and shows under its own language (the
+  author sees a line "Not cognates, so not shown here" on the entry, with a link to set the cognates). For a project with one
+  language there is nothing to tick.
 
 ## `references.json` (the bibliography)
 
