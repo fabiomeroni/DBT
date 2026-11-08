@@ -121,6 +121,23 @@ chosen: only the entries that have a form in that language are listed, with that
   author sees a line "Not cognates, so not shown here" on the entry, with a link to set the cognates). For a project with one
   language there is nothing to tick.
 
+## Searching the texts (the concordance)
+
+The **Search the texts** tab of the Texts page searches every sentence of the corpus (the fieldnotes, the recordings and the examples
+from papers, in every language, also those the project does not list) for a string, and shows each occurrence in its context
+(key word in context), with the translation and a link to the sentence in its text.
+
+- **The query is a plain string** (a dot is a dot), a word, a morpheme or a phrase. It can be searched **in** the words of the texts, in
+  the glosses or in the translations, and matched **anywhere**, as **a whole word** or as **a whole morpheme** (between spaces, `-` or `=`).
+  *Ignore case* is on by default; *ignore diacritics* is off, because in the orthography `n` and `n̄` are different letters. A letter and
+  its combining-mark spelling count as the same.
+- The hits can be narrowed to a language and to some sources, shown with 1 to 25 words of context, sorted by the word before or after,
+  and downloaded as a CSV file. The address holds the whole search, so a link can be shared.
+- For a word that is glossed, the hit also gives its gloss and, when its form is in the dictionary, the entry and the part of speech.
+  The server keeps the corpus as a list of sentences whose words carry such annotations (`concordance.py`): a search on the part of
+  speech or on a gloss is the next step, and a tagger or NLTK / spaCy can feed the same list.
+- The corpus is read again whenever a text, a gloss file or the questionnaire changes: nothing to rebuild.
+
 ## `references.json` (the bibliography)
 
 The author adds, changes and deletes references on the **References** page (a form per work). They are stored here, as
