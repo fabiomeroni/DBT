@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search the texts — {{project.titleSuffix}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+.texts-tabs { display: flex; align-items: stretch; background: var(--nav-bg); border-bottom: 2px solid #3a2010; padding: 0 2rem; gap: 0; overflow-x: auto; scrollbar-width: none; }
+.texts-tabs::-webkit-scrollbar { display: none; }
+.tab-btn { font-family: 'Crimson Pro', serif; font-size: 1rem; font-weight: 500; color: rgba(240,223,192,0.5); text-decoration: none; display: flex; align-items: center; line-height: normal;
+  border-bottom: 3px solid transparent; padding: 0.85rem 1.6rem 0.7rem; margin-bottom: -2px; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
+.tab-btn:hover { color: #c9a458; }
+.tab-btn.active { color: #f0dfc0; border-bottom-color: var(--gold); }
+
+.cc-main { padding: 1.6rem 4rem 5rem; max-width: 1240px; margin: 0 auto; }
+.cc-main h1 { font-family: 'EB Garamond', serif; font-size: 2rem; font-weight: 500; margin: 0 0 0.2rem; color: var(--ink); }
+.cc-corpus { color: var(--ink-light); font-size: 0.92rem; margin: 0 0 1rem; }
+.cc-form { background: #faf6ef; border: 1px solid var(--border); border-radius: 4px; padding: 0.9rem 1.1rem 0.7rem; }
+.cc-row { display: flex; gap: 0.6rem; }
+.cc-row input[type=search] { flex: 1; min-width: 0; font: inherit; font-size: 1.25rem; padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--ink); }
+.cc-btn { font-family: 'Crimson Pro', serif; font-size: 1rem; font-weight: 600; background: #efe4cd; color: var(--ink); border: 1px solid var(--border); border-radius: 3px; padding: 0.35rem 1.1rem; cursor: pointer; white-space: nowrap; }
+.cc-btn:hover { background: #e8d8b8; border-color: var(--gold); }
+.cc-btn.primary { background: #8a5f18; border-color: #8a5f18; color: #fff; }
+.cc-btn.primary:hover { background: #a2721f; }
+.cc-opts { display: flex; flex-wrap: wrap; gap: 0.5rem 1.3rem; align-items: center; margin-top: 0.7rem; font-size: 0.92rem; color: var(--ink-light); }
+.cc-opts label { display: inline-flex; align-items: center; gap: 0.35rem; }
+.cc-opts select, .cc-opts input[type=number] { font: inherit; font-size: 0.92rem; padding: 0.2rem 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--ink); }
+.cc-opts input[type=number] { width: 3.6rem; }
+.cc-sources { margin-top: 0.5rem; font-size: 0.88rem; color: var(--ink-light); display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; align-items: center; }
+.cc-sources label { display: inline-flex; align-items: center; gap: 0.3rem; }
+.cc-summary { margin: 1rem 0 0.3rem; color: var(--ink); font-size: 1rem; min-height: 1.4rem; }
+.cc-summary .cc-error { color: #922810; }
+.cc-summary .cc-count { color: var(--ink-light); font-size: 0.9rem; }
+.cc-tools { display: none; gap: 0.7rem; align-items: center; margin: 0.2rem 0 0.5rem; font-size: 0.9rem; color: var(--ink-light); flex-wrap: wrap; }
+.cc-tools.visible { display: flex; }
+.cc-tools select { font: inherit; font-size: 0.9rem; padding: 0.15rem 0.35rem; border: 1px solid var(--border); border-radius: 3px; background: #fff; }
+
+.cc-hit { display: grid; grid-template-columns: 3.1rem minmax(0, 1fr) auto minmax(0, 1fr) 13rem; column-gap: 0.7rem; align-items: baseline;
+  padding: 0.38rem 0.3rem 0.1rem; border-top: 1px solid var(--border-lt); font-family: 'EB Garamond', serif; font-size: 1.14rem; line-height: 1.45; }
+.cc-hit:hover { background: #fbf6ea; }
+.cc-lang { font-family: 'Crimson Pro', serif; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; text-align: center; border-radius: 3px; padding: 0.05rem 0.25rem; align-self: center; }
+.cc-left { text-align: right; color: #4a3520; overflow-wrap: anywhere; }
+.cc-right { text-align: left; color: #4a3520; overflow-wrap: anywhere; }
+.cc-match { background: #f4dfa4; color: #1c0f06; font-weight: 600; border-radius: 2px; padding: 0 0.12rem; white-space: pre-wrap; }
+.cc-hit .adj-l { padding-right: 0; margin-right: -0.7rem; }
+.cc-hit .adj-r { padding-left: 0; margin-left: -0.7rem; }
+.cc-src { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink-light); text-align: right; overflow-wrap: anywhere; }
+.cc-src a { color: var(--gold); text-decoration: none; border-bottom: 1px dotted var(--gold); }
+.cc-transl { grid-column: 2 / -1; font-family: 'Crimson Pro', serif; font-size: 0.92rem; color: var(--ink-light); font-style: italic; padding: 0 0 0.25rem; overflow-wrap: anywhere; }
+.cc-transl .cc-form { font-style: normal; color: #4a3520; font-family: 'EB Garamond', serif; margin-right: 0.5rem; }
+.cc-transl .cc-gloss { font-style: normal; font-family: 'Source Code Pro', monospace; font-size: 0.74rem; background: #efe6d3; border-radius: 2px; padding: 0 0.3rem; margin-left: 0.5rem; }
+.cc-empty { color: var(--ink-light); font-style: italic; padding: 1rem 0; }
+
+@media (max-width: 900px) { .cc-main { padding: 1.2rem 1.2rem 4rem; } .texts-tabs { padding: 0 0.6rem; } .tab-btn { padding: 0.75rem 1rem 0.6rem; font-size: 0.92rem; } }
+@media (max-width: 720px) {
+  .cc-hit { display: block; padding: 0.5rem 0.2rem; }
+  .cc-lang { display: inline-block; margin-right: 0.4rem; vertical-align: baseline; }
+  .cc-left, .cc-right { display: inline; text-align: left; }
+  .cc-hit .adj-l, .cc-hit .adj-r { margin: 0; }
+  .cc-src { text-align: left; margin-top: 0.15rem; }
+  .cc-transl { padding-top: 0.15rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="grammar.html">Grammar</a></li>
+    <li><a href="texts.html" class="active">Texts</a></li>
+    <li><a href="dictionary.html">Dictionary</a></li>
+    <li><a href="references.html">References</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.texts}}</div>
+</nav>
+
+<div class="texts-tabs">
+  <a class="tab-btn" href="texts.html">🎧 Texts from recordings</a>
+  <a class="tab-btn" href="texts.html#fieldnotes">📋 Texts from fieldnotes</a>
+  <a class="tab-btn active" href="concordance.html">🔍 Search the texts</a>
+</div>
+
+<main class="cc-main">
+  <h1>Search the texts</h1>
+  <p class="cc-corpus" id="cc-corpus">Loading the corpus…</p>
+
+  <form class="cc-form" id="cc-form" autocomplete="off">
+    <div class="cc-row">
+      <input type="search" id="cc-q" placeholder="A word, a morpheme or a phrase…" aria-label="The string to search for" spellcheck="false" autofocus>
+      <button type="submit" class="cc-btn primary" id="cc-go">Search</button>
+    </div>
+    <div class="cc-opts">
+      <label>Search in
+        <select id="cc-scope">
+          <option value="forms">the words of the texts</option>
+          <option value="glosses">the glosses</option>
+          <option value="translation">the translations</option>
+        </select></label>
+      <label>Match
+        <select id="cc-match">
+          <option value="anywhere">anywhere in the text</option>
+          <option value="word">a whole word</option>
+          <option value="morpheme">a whole morpheme</option>
+        </select></label>
+      <label><input type="checkbox" id="cc-case" checked> ignore case</label>
+      <label><input type="checkbox" id="cc-diac"> ignore diacritics</label>
+      <label>Language <select id="cc-lang"><option value="">All languages</option></select></label>
+      <label>Context <input type="number" id="cc-width" min="1" max="25" value="6"> words</label>
+    </div>
+    <div class="cc-sources" id="cc-sources"></div>
+  </form>
+
+  <div class="cc-summary" id="cc-summary" aria-live="polite"></div>
+  <div class="cc-tools" id="cc-tools">
+    <label>Sort by
+      <select id="cc-sort">
+        <option value="corpus">the order of the texts</option>
+        <option value="left">the word before</option>
+        <option value="right">the word after</option>
+        <option value="match">the match</option>
+        <option value="lang">the language</option>
+      </select></label>
+    <button type="button" class="cc-btn" id="cc-csv" title="Download the hits as a spreadsheet file (CSV)">⬇ CSV</button>
+  </div>
+  <div id="cc-results"></div>
+</main>
+
+<script src="auth.js"></script>
+<script>
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const $ = id => document.getElementById(id);
+let INFO = null, LAST = null;
+
+const colorOf = code => (DBT.langs.find(l => l.code === code) || {}).color || '#8a8a8a';
+const abbrOf  = code => (INFO && INFO.languages.find(l => l.code === code) || {}).abbr || String(code).toUpperCase();
+const nameOf  = code => (INFO && INFO.languages.find(l => l.code === code) || {}).name || String(code).toUpperCase();
+
+async function loadInfo() {
+  try {
+    INFO = await (await fetch('/api/concordance/info')).json();
+  } catch (e) { $('cc-corpus').textContent = 'The corpus could not be loaded.'; return; }
+  $('cc-corpus').textContent = `${INFO.lines.toLocaleString()} sentences, ${INFO.words.toLocaleString()} words: ` +
+    INFO.sources.map(s => `${s.label} ${s.lines.toLocaleString()}`).join(' · ');
+  $('cc-lang').innerHTML = '<option value="">All languages</option>' +
+    INFO.languages.map(l => `<option value="${esc(l.code)}">${esc(l.name)} (${l.lines.toLocaleString()})</option>`).join('');
+  $('cc-sources').innerHTML = INFO.sources.length > 1 ? '<span>Sources:</span>' + INFO.sources.map(s =>
+    `<label><input type="checkbox" class="cc-src-box" value="${esc(s.id)}" checked> ${esc(s.label)}</label>`).join('') : '';
+  if (DBT.langs.length < 2) $('cc-lang').closest('label').style.display = 'none';
+}
+
+function params() {
+  const p = new URLSearchParams();
+  p.set('q', $('cc-q').value.trim());
+  p.set('scope', $('cc-scope').value); p.set('match', $('cc-match').value);
+  p.set('case', $('cc-case').checked ? '1' : '0'); p.set('diac', $('cc-diac').checked ? '1' : '0');
+  if ($('cc-lang').value) p.set('lang', $('cc-lang').value);
+  const boxes = [...document.querySelectorAll('.cc-src-box')];
+  const on = boxes.filter(b => b.checked).map(b => b.value);
+  if (boxes.length && on.length && on.length < boxes.length) p.set('source', on.join(','));
+  p.set('width', $('cc-width').value || '6');
+  return p;
+}
+function restore() {                                            // the address says what was searched
+  const p = new URLSearchParams(location.search);
+  if (p.has('q')) $('cc-q').value = p.get('q');
+  if (p.has('scope')) $('cc-scope').value = p.get('scope');
+  if (p.has('match')) $('cc-match').value = p.get('match');
+  if (p.has('case')) $('cc-case').checked = p.get('case') !== '0';
+  if (p.has('diac')) $('cc-diac').checked = p.get('diac') === '1';
+  if (p.has('lang')) $('cc-lang').value = p.get('lang');
+  if (p.has('width')) $('cc-width').value = p.get('width');
+  if (p.has('source')) { const on = new Set(p.get('source').split(',')); document.querySelectorAll('.cc-src-box').forEach(b => { b.checked = on.has(b.value); }); }
+  if (p.has('sort')) $('cc-sort').value = p.get('sort');
+  return p.has('q') && p.get('q').trim() !== '';
+}
+
+let runId = 0, runCtl = null;                  // only the latest search may update the page: an older answer can arrive last
+async function run() {
+  const my = ++runId;
+  if (runCtl) runCtl.abort();
+  runCtl = new AbortController();
+  const q = $('cc-q').value.trim();
+  if (!q) { $('cc-summary').textContent = ''; $('cc-results').innerHTML = ''; $('cc-tools').classList.remove('visible'); return; }
+  const p = params();
+  const shown = new URLSearchParams(p); shown.set('sort', $('cc-sort').value);
+  history.replaceState(null, '', location.pathname + '?' + shown.toString());
+  $('cc-summary').textContent = 'Searching…';
+  let res;
+  try {
+    const r = await fetch('/api/concordance?' + p.toString(), { signal: runCtl.signal });
+    res = await r.json();
+    if (my !== runId) return;
+    if (!r.ok) throw new Error(res.error || 'HTTP ' + r.status);
+  } catch (e) {
+    if (e.name === 'AbortError' || my !== runId) return;
+    $('cc-summary').innerHTML = `<span class="cc-error">${esc(e.message)}</span>`;
+    $('cc-results').innerHTML = ''; $('cc-tools').classList.remove('visible'); return;
+  }
+  LAST = res;
+  const langs = Object.entries(res.byLang).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${esc(abbrOf(c))} ${n}`).join(' · ');
+  $('cc-summary').innerHTML = res.total
+    ? `<b>${res.total.toLocaleString()}</b> hit${res.total === 1 ? '' : 's'} in ${res.sentences.toLocaleString()} sentence${res.sentences === 1 ? '' : 's'}` +
+      ` <span class="cc-count">${DBT.langs.length > 1 && langs ? '(' + langs + ')' : ''}${res.truncated ? ' · the first ' + res.shown.toLocaleString() + ' are shown' : ''}</span>`
+    : `No hit for <b>${esc(res.query)}</b>.`;
+  $('cc-tools').classList.toggle('visible', res.total > 0);
+  render();
+}
+
+const rev = s => s.split(/\s+/).filter(Boolean).reverse().join(' ');
+const SORTS = {
+  corpus: null,
+  left:  (a, b) => rev(a.h.left).localeCompare(rev(b.h.left), undefined, { sensitivity: 'base' }),
+  right: (a, b) => a.h.right.localeCompare(b.h.right, undefined, { sensitivity: 'base' }),
+  match: (a, b) => a.h.match.localeCompare(b.h.match, undefined, { sensitivity: 'base' }),
+  lang:  (a, b) => abbrOf(a.h.lang).localeCompare(abbrOf(b.h.lang)),
+};
+function render() {
+  if (!LAST) return;
+  const rows = LAST.hits.map((h, i) => ({ h, i }));
+  const cmp = SORTS[$('cc-sort').value];
+  if (cmp) rows.sort((a, b) => cmp(a, b) || a.i - b.i);
+  const scope = LAST.scope;
+  $('cc-results').innerHTML = rows.map(({ h }) => {
+    const tip = [h.gloss && 'gloss: ' + h.gloss, h.pos && 'part of speech: ' + h.pos, h.entry && 'dictionary: ' + h.entry].filter(Boolean).join(' · ');
+    const second = scope === 'forms'
+      ? (h.translation ? `‘${esc(h.translation)}’` : '')
+      : `<span class="cc-form">${esc(h.sentence)}</span>${h.translation && scope !== 'translation' ? '‘' + esc(h.translation) + '’' : ''}`;
+    const gloss = scope === 'forms' && h.gloss ? `<span class="cc-gloss">${esc(h.gloss)}</span>` : '';
+    return `<div class="cc-hit">
+      <span class="cc-lang" style="background:${colorOf(h.lang)};" title="${esc(nameOf(h.lang))}">${esc(abbrOf(h.lang))}</span>
+      <span class="cc-left${h.leftAdj ? ' adj-l' : ''}">${h.leftCut ? '… ' : ''}${esc(h.left)}</span>${h.leftAdj ? '' : ' '}<mark class="cc-match" title="${esc(tip)}">${esc(h.match)}</mark>${h.rightAdj ? '' : ' '}<span class="cc-right${h.rightAdj ? ' adj-r' : ''}">${esc(h.right)}${h.rightCut ? ' …' : ''}</span>
+      <span class="cc-src"><a href="${esc(h.link)}" title="Open this sentence in its text">${esc(h.label)}</a></span>
+      <div class="cc-transl">${second}${gloss}</div>
+    </div>`;
+  }).join('') || '';
+}
+
+function csv() {
+  if (!LAST || !LAST.hits.length) return;
+  const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const head = ['language', 'source', 'reference', 'left', 'match', 'right', 'sentence', 'translation', 'gloss', 'dictionary entry', 'part of speech', 'link'];
+  const lines = [head.map(cell).join(',')].concat(LAST.hits.map(h =>
+    [nameOf(h.lang), h.src, h.label, h.left, h.match, h.right, h.sentence, h.translation, h.gloss, h.entry, h.pos, new URL(h.link, location.href).href].map(cell).join(',')));
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'concordance-' + (LAST.query.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 30) || 'search') + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+$('cc-form').addEventListener('submit', e => { e.preventDefault(); run(); });
+$('cc-sort').addEventListener('change', () => { const u = new URL(location); u.searchParams.set('sort', $('cc-sort').value); history.replaceState(null, '', u); render(); });
+$('cc-csv').addEventListener('click', csv);
+['cc-scope', 'cc-match', 'cc-case', 'cc-diac', 'cc-lang', 'cc-width'].forEach(id => $(id).addEventListener('change', () => { if ($('cc-q').value.trim()) run(); }));
+document.addEventListener('change', e => { if (e.target.classList.contains('cc-src-box') && $('cc-q').value.trim()) run(); });
+
+bindLoginModal();
+checkAuth();
+loadInfo().then(() => { if (restore()) run(); });
+</script>
+</body>
+</html>
