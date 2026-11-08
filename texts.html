@@ -25,6 +25,7 @@
   transition: color 0.15s, border-color 0.15s;
   margin-bottom: -2px; white-space: nowrap;
 }
+.tab-link { text-decoration: none; display: flex; align-items: center; line-height: normal; }
 .tab-btn:hover { color: #c9a458; }
 .tab-btn.active { color: #f0dfc0; border-bottom-color: var(--gold); }
 
@@ -259,6 +260,7 @@
 <div class="texts-tabs">
   <button class="tab-btn active" data-tab="recordings">🎧 Texts from recordings</button>
   <button class="tab-btn" data-tab="fieldnotes">📋 Texts from fieldnotes</button>
+  <a class="tab-btn tab-link" href="concordance.html" title="Search the texts for a word, a morpheme or a phrase">🔍 Search the texts</a>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
@@ -348,7 +350,7 @@ async function loadTxIndex() {
 const LANG_CODES = DBT.langs.map(l => ({code: l.code, lang: l.name}));
 
 // ── Tabs ──────────────────────────────────────────────────────
-document.querySelectorAll('.tab-btn').forEach(btn => {
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
@@ -546,6 +548,9 @@ document.getElementById('upload-tx-submit').addEventListener('click', async () =
 });
 bindUploadModal('fn-edit-tab','upload-fn-modal','fn-file','upload-fn-msg',
   'upload-fn-cancel','upload-fn-submit','/api/upload/fieldnotes', true);
+
+// texts.html#fieldnotes opens the fieldnotes tab (the search page links to it)
+if (location.hash === '#fieldnotes') document.querySelector('.tab-btn[data-tab="fieldnotes"]').click();
 </script>
 </div>
 </body>
