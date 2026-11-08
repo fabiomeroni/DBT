@@ -18,6 +18,7 @@ import markdown as md_lib
 
 import security
 import references as refs_lib
+import concordance as conc
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -670,6 +671,165 @@ def build_entry_chip(entry_id):
             f'<span class="chip-gloss"> \u2018{gloss}\u2019</span>'
             f'</a>')
 
+
+# ══════════════════════════════════════════════════════════════
+#  CONCORDANCE  (search the texts for a string, with its context)
+#  concordance.py does the searching; here the corpus is turned into lines (one sentence in one language) and served.
+# ══════════════════════════════════════════════════════════════
+from urllib.parse import quote as _urlq
+
+_CORPUS = {'sig': None, 'lines': []}
+
+def _corpus_signature():
+    paths = [os.path.join(UPLOAD_FOLDER, 'fieldnotes.xml'), FIELDNOTES_FILE]
+    for folder in (TRANSCRIPTIONS_FOLDER, GLOSSES_FOLDER):
+        try:
+            paths += [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(('.xml', '.json'))]
+        except OSError:
+            pass
+    sig = []
+    for p in sorted(paths):
+        try:
+            st = os.stat(p)
+            sig.append((p, st.st_mtime_ns, st.st_size))
+        except OSError:
+            pass
+    return tuple(sig)
+
+def _tokens_of(forms, glosses):
+    return [{'form': f, 'gloss': (glosses[i] if i < len(glosses) else '') or ''} for i, f in enumerate(forms) if f]
+
+def _lines_fieldnotes():
+    xml, out = get_fieldnotes_xml(), []
+    if xml is None:
+        return out
+    for idx, tg in enumerate(xml.findall('.//tiGroup')):
+        title = (tg.findtext('ti') or '').strip()
+        stored_all = _load_stored_glosses(f'fieldnotes_{idx}')
+        for rfg in tg.findall('rfGroup'):
+            sid = (rfg.findtext('rf') or '').strip()
+            grp = rfg.find('bslGroup') if rfg.find('bslGroup') is not None else rfg.find('frGroup')
+            if grp is None or not sid:
+                continue
+            prompt = (grp.findtext('bsl') or grp.findtext('fr') or '').strip()
+            st = stored_all.get(sid) if isinstance(stored_all.get(sid), dict) else None
+            transl = st.get('translation') if st and st.get('translation') is not None else prompt
+            for code in LANG_CODES:
+                text = ' '.join(nd.text.strip() for nd in grp.findall(code) if nd.text and nd.text.strip())
+                if not text or text == '\u2014':
+                    continue
+                if st and isinstance(st.get('tokens'), dict) and st['tokens'].get(code):
+                    tokens = _tokens_of(st['tokens'][code], st.get('glosses', []))
+                else:
+                    tokens = [{'form': t, 'gloss': ''} for t in _tokenize_form(text)]
+                out.append({'src': 'fieldnotes', 'lang': code, 'sid': sid, 'label': f'{title} · {sid}', 'text': text, 'translation': transl, 'tokens': tokens,
+                            'link': f'transcription.html?fieldnotes=1&index={idx}&title={_urlq(title)}#{_urlq(sid)}'})
+    return out
+
+def _lines_papers():
+    out = []
+    for ex in _paper_examples():
+        sid = ex.get('id', '')
+        tokens, glosses, _n, transl = _paper_state(ex)
+        label = (ex.findtext('Label') or '').strip() or sid
+        for code in LANG_CODES:
+            tier = ex.find(f'Tier[@lang="{code}"]')
+            text = (tier.text or '').strip() if tier is not None else ''
+            if not text or text == '\u2014':
+                continue
+            out.append({'src': 'papers', 'lang': code, 'sid': sid, 'label': f'{PAPERS_TITLE} · {label}', 'text': text, 'translation': transl,
+                        'tokens': _tokens_of(tokens.get(code, []), glosses),
+                        'link': f'transcription.html?papers=1&index=0&title={_urlq(PAPERS_TITLE)}#{_urlq(sid)}'})
+    return out
+
+def _lines_recordings():
+    out = []
+    for fn in sorted(os.listdir(TRANSCRIPTIONS_FOLDER)):
+        path = os.path.join(TRANSCRIPTIONS_FOLDER, fn)
+        if not fn.endswith('.xml') or _is_examples_file(path):
+            continue
+        try:
+            data = _parse_tx(path)
+        except Exception:
+            continue
+        tx_lang = data['lang']
+        code = _TX_LANG_TO_CODE.get(tx_lang) or tx_lang             # a recording in a language outside the project keeps its own code
+        stored_all = _load_stored_glosses(fn)
+        for s in data['sentences']:
+            st = stored_all.get(s['id']) if isinstance(stored_all.get(s['id']), dict) else None
+            if st and st.get('tokens'):
+                tokens = _tokens_of(_stored_tokens(st, code), st.get('glosses', []))
+                transl = st.get('translation') if st.get('translation') is not None else s['transl']
+            else:
+                tokens = [{'form': w['form'], 'gloss': w.get('gloss', '')} for w in s.get('words', [])]
+                transl = s['transl']
+            out.append({'src': 'recording', 'lang': code, 'sid': s['id'], 'label': f"{data['title']} · {s['id']}", 'text': s['form'], 'translation': transl, 'tokens': tokens,
+                        'link': f"transcription.html?key={_urlq(fn)}&title={_urlq(data['title'])}&lang={_urlq(tx_lang)}#{_urlq(s['id'])}"})
+    return out
+
+def _corpus_lines():
+    """The corpus as lines. Built again only when a text, a gloss file or the questionnaire has changed."""
+    sig = _corpus_signature()
+    if _CORPUS['sig'] != sig:
+        _CORPUS['lines'] = [conc.prepare_line(l) for l in _lines_fieldnotes() + _lines_papers() + _lines_recordings()]
+        _CORPUS['sig'] = sig
+    return _CORPUS['lines']
+
+_SOURCE_LABELS = {'fieldnotes': 'Fieldnotes', 'papers': PAPERS_TITLE, 'recording': 'Recordings'}
+
+def _form_annotator():
+    """annotate(line, token) -> {entry, pos}: the dictionary entry whose form in that language is the word (when only one is)."""
+    d = get_dict_xml()
+    index = {}
+    if d is not None:
+        for el in d.findall('.//EntréeLexicale'):
+            pos = (el.findtext('ClasseGrammaticale') or '').strip()
+            for code, form in _entry_forms_clean(el).items():
+                index.setdefault((code, form), []).append((el.get('identifiant', ''), pos))
+    def annotate(line, token):
+        found = index.get((line.get('lang'), _clean_form(token.get('form', ''))), [])
+        return {'entry': found[0][0], 'pos': found[0][1]} if len(found) == 1 else {}
+    return annotate
+
+def _flag(name, default):
+    v = request.args.get(name)
+    return default if v is None else v not in ('0', 'false', '')
+
+@app.route('/api/concordance/info')
+def concordance_info():
+    """What can be searched: the languages and the sources of the corpus, with their sizes."""
+    lines = _corpus_lines()
+    by_lang, by_src, words = {}, {}, 0
+    for l in lines:
+        by_lang[l['lang']] = by_lang.get(l['lang'], 0) + 1
+        by_src[l['src']] = by_src.get(l['src'], 0) + 1
+        words += len(l['text'].split())
+    known = {l['code']: l for l in PROJECT['languages']}
+    order = [c for c in LANG_CODES if c in by_lang] + sorted(c for c in by_lang if c not in known)
+    return jsonify({'lines': len(lines), 'words': words,
+                    'languages': [{'code': c, 'name': known[c]['name'] if c in known else c.upper(), 'abbr': known[c]['abbr'] if c in known else c.upper(),
+                                   'lines': by_lang[c]} for c in order],
+                    'sources': [{'id': s, 'label': _SOURCE_LABELS[s], 'lines': by_src[s]} for s in ('fieldnotes', 'recording', 'papers') if s in by_src]})
+
+@app.route('/api/concordance')
+def concordance_search():
+    """Search the texts for a string: /api/concordance?q=…&scope=forms|glosses|translation&match=anywhere|word|morpheme
+    &case=1&diac=0&lang=code&source=fieldnotes,recording,papers&width=6&limit=1000"""
+    q = request.args.get('q', '')
+    try:
+        width, limit = int(request.args.get('width', 6)), int(request.args.get('limit', 1000))
+    except ValueError:
+        return jsonify({'error': 'width and limit must be numbers.'}), 400
+    sources = [s for s in request.args.get('source', '').split(',') if s]
+    if any(s not in _SOURCE_LABELS for s in sources):
+        return jsonify({'error': 'Unknown source.'}), 400
+    try:
+        res = conc.search(_corpus_lines(), q, scope=request.args.get('scope', 'forms'), match=request.args.get('match', 'anywhere'),
+                          ignore_case=_flag('case', True), ignore_diacritics=_flag('diac', False), lang=request.args.get('lang') or None,
+                          sources=sources or None, width=width, limit=limit, annotate=_form_annotator())
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(res)
 
 # ══════════════════════════════════════════════════════════════
 #  REFERENCES (the project's bibliography, APA 7)
