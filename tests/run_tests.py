@@ -18,7 +18,7 @@ and settings are never touched), then checks three things:
 Needs:  pip install -r tests/requirements-test.txt  &&  playwright install chromium
 Screenshots depend on the fonts of the machine, so a baseline belongs to the machine that recorded it.
 """
-import argparse, hashlib, html as html_lib, json, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+import argparse, hashlib, html as html_lib, json, urllib.parse, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 from pathlib import Path
 from lxml import etree
 
@@ -174,6 +174,7 @@ VISITOR_PAGES = [
     ("viewer-recording",  "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase"),
     ("references",        "references.html",                 ".ref-entry"),
     ("dictionary-senses", "dictionary.html?lang=Koro&mode=senses", ".sense-group"),
+    ("concordance",       "concordance.html?q=Q%C5%8Dn%CC%84&width=3", ".cc-hit"),
 ]
 AUTHOR_PAGES = [
     ("author-grammar",           "grammar.html",                    "#sections-container .grammar-section"),
@@ -284,6 +285,8 @@ PUBLIC_API = [
     ("colors-js", "colors.js"),
     ("project-js", "project.js"),
     ("dictionary-cited-examples", "api/dictionary/cited-examples"),
+    ("concordance-info", "api/concordance/info"),
+    ("concordance-qon", "api/concordance?q=Q%C5%8Dn%CC%84&width=3"),
     ("references", "api/references"),
     ("references-bibtex", "api/references/export/bibtex"),
     ("references-endnote", "api/references/export/endnote"),
@@ -488,9 +491,9 @@ def suite_functional(browser, site, args):
 
 
 # ───────────────────────── 4. generality suite: the code knows no language ─────────────────────────
-CODE_FILES = ["app.py", "security.py", "references.py", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
+CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
 PROJECT_WORDS = re.compile(r"\b(Nume|Dorig|Koro|Olrat|Lakon|Gaua|Vanuatu|Banks Islands|Meroni|Fran[cç]ois)\b")
-NOT_SERVED = ["app.py", "references.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
+NOT_SERVED = ["app.py", "references.py", "concordance.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
               "project/orthography.json", "project/dictionary.xml", "project/fieldnotes.xml", "project/grammar/s1.md",
               "project/texts/crdo-WWO_FARFADETS.xml", "uploads/dictionary_settings.json", "tests/run_tests.py", "grammar_content/s1.md",
               ".gitignore", "requirements.txt", "transcribed_narratives/crdo-WWO_FARFADETS.xml", "%2e%2e/app.py", "../app.py"]
@@ -504,7 +507,7 @@ def suite_generality(browser, site, args):
     anon = new_context(browser, site, author=False); api = anon.request
     bad = [p for p in NOT_SERVED if api.get(site.url + p).status != 404]
     check(S, "source code and data files are not served (app.py, XML, JSON, uploads, project, tests ...)", not bad, str(bad))
-    pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
+    pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html", "concordance.html"]
     assets = ["style.css", "auth.js", "images/gaua_map.png", "etymograph_icon.png"]
     check(S, "the site's pages and images are served", all(api.get(site.url + p).status == 200 for p in pages + assets))
     left = [p for p in pages if "{{project." in api.get(site.url + p).text()]
@@ -1164,7 +1167,7 @@ def suite_references(browser, args):
         au = new_context(browser, site, 1280, author=True); aa = au.request
 
         # ── the page, the navigation and what a visitor sees ──
-        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "transcription.html", "references.html"]
+        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "transcription.html", "references.html", "concordance.html"]
         missing = [p for p in pages if 'href="references.html"' not in va.get(site.url + p).text()]
         check(S, "every page has the References link in its top bar", not missing, str(missing))
         check(S, "no project marker is left unexpanded on the References page", "{{project." not in va.get(site.url + "references.html").text())
@@ -1983,12 +1986,215 @@ def suite_dictionary(browser, args):
     finally:
         site.stop()
 
+
+# ───────────────────────── 11. concordance suite: search the texts for a string, with its context ─────────────────────────
+import csv as _csv
+import io as _io
+import unicodedata as _ud
+
+def _plain_fold(s, ignore_diacritics=False):
+    s = _ud.normalize("NFC", s).lower()
+    return "".join(c for c in _ud.normalize("NFD", s) if _ud.category(c) != "Mn") if ignore_diacritics else s
+
+def _fieldnote_lines(site):
+    """The sentences of the questionnaire, read here without the server's code: [(language code, text)]."""
+    root = etree.parse(str(site.dir / "project" / "fieldnotes.xml")).getroot()
+    out = []
+    for rfg in root.iter("rfGroup"):
+        grp = rfg.find("bslGroup") if rfg.find("bslGroup") is not None else rfg.find("frGroup")
+        if grp is None: continue
+        for code in ALLC:
+            text = " ".join(n.text.strip() for n in grp.findall(code) if n.text and n.text.strip())
+            if text and text != "—": out.append((code, text))
+    return out
+
+def _fieldnote_prompts(site):
+    root = etree.parse(str(site.dir / "project" / "fieldnotes.xml")).getroot()
+    out = []
+    for rfg in root.iter("rfGroup"):
+        grp = rfg.find("bslGroup") if rfg.find("bslGroup") is not None else rfg.find("frGroup")
+        if grp is None: continue
+        n = len([c for c in ALLC if " ".join(x.text.strip() for x in grp.findall(c) if x.text and x.text.strip()) not in ("", "—")])
+        out.append(((grp.findtext("bsl") or grp.findtext("fr") or "").strip(), n))
+    return out
+
+_REC = ('<?xml version="1.0" encoding="utf-8"?>\n<TEXT xml:lang="%s" id="%s"><HEADER><TITLE xml:lang="en">%s</TITLE></HEADER>'
+        '<S id="S1"><FORM>%s</FORM><TRANSL xml:lang="en">%s</TRANSL></S></TEXT>')
+
+def suite_concordance(browser, args):
+    S = "concordance"
+    section("concordance: search the texts for a string, with its context")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_concordance.py")], capture_output=True, text=True, timeout=120)
+    last = [l for l in unit.stdout.strip().split("\n") if l][-1] if unit.stdout.strip() else unit.stderr[-200:]
+    check(S, "the concordance engine passes its own direct tests (Unicode, plain strings, words and morphemes, context, glosses)", unit.returncode == 0, last + ("" if unit.returncode == 0 else "\n" + unit.stdout[-500:]))
+    QON = "Qōn̄"
+    LANG_NAMES = [l["name"] for l in json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))["languages"]]
+
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        def get(path, **q):
+            r = va.get(site.url + path + ("?" + urllib.parse.urlencode(q) if q else "")); return r.status, r.json()
+        st, info = get("api/concordance/info")
+        check(S, "the corpus is described: its sentences, words, languages (in the project's order) and sources, which add up", st == 200 and info["lines"] == sum(l["lines"] for l in info["languages"]) == sum(s["lines"] for s in info["sources"]) and [l["code"] for l in info["languages"]][:5] == ALLC and {s["id"] for s in info["sources"]} == {"fieldnotes", "recording", "papers"}, str({k: v for k, v in info.items() if k != "languages"}))
+        lines = _fieldnote_lines(site)
+
+        # ── counts, checked against a plain reading of the XML ──
+        for label, q, extra, want in (
+            ("the string, ignoring case", QON, {}, sum(_plain_fold(t).count(_plain_fold(QON)) for _, t in lines)),
+            ("the string, respecting case", "Qōn̄", {"case": "0"}, sum(_ud.normalize("NFC", t).count(_ud.normalize("NFC", "Qōn̄")) for _, t in lines)),
+            ("without diacritics (qon finds Qōn̄ and qon)", "qon", {"diac": "1"}, sum(_plain_fold(t, True).count("qon") for _, t in lines)),
+            ("with diacritics respected (qon is another word)", "qon", {}, sum(_plain_fold(t).count("qon") for _, t in lines)),
+            ("a string with a dot, read as a dot", "e.", {}, sum(_plain_fold(t).count("e.") for _, t in lines)),
+            ("a bracket", "(", {}, sum(t.count("(") for _, t in lines))):
+            st, r = get("api/concordance", q=q, source="fieldnotes", width=3, **extra)
+            check(S, f"fieldnotes, {label}: the server counts the same occurrences as a plain reading of the XML ({want})", st == 200 and r["total"] == want, f"{r.get('total')} vs {want}")
+        st, r = get("api/concordance", q=QON, source="fieldnotes", width=3)
+        bl = {c: sum(_plain_fold(t).count(_plain_fold(QON)) for cc, t in lines if cc == c) for c in ALLC}
+        check(S, "…and the counts per language agree", {k: v for k, v in r["byLang"].items()} == {k: v for k, v in bl.items() if v}, str(r["byLang"]))
+        st, r = get("api/concordance", q="Gud aftenun", scope="translation", source="fieldnotes")
+        check(S, "the translations can be searched (each prompt counts once per language that has the sentence)", r["total"] == sum(n for p, n in _fieldnote_prompts(site) if _plain_fold(p).count("gud aftenun")) and r["total"] > 0, str(r["total"]))
+
+        # ── a hit ──
+        st, r = get("api/concordance", q=QON, source="fieldnotes", lang="drg", width=3)
+        h = r["hits"][0]
+        check(S, "a hit gives the context, the translation and where the sentence is: Dorig, “Qōn̄ va-wē.”", (h["left"], h["match"], h["right"], h["lang"], h["sid"], h["translation"]) == ("", "Qōn̄", "va-wē.", "drg", "d01.Road:02", "Gud aftenun."), str(h)[:200])
+        check(S, "…and a link to that sentence in its text, which the text viewer lands on", h["link"] == "transcription.html?fieldnotes=1&index=0&title=D01%20~%20Trigeta%20i%20mit%20long%20rot#d01.Road%3A02", h["link"])
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, h["link"], ".tx-phrase, .fn-sentence, [data-sid]", 1500)
+        check(S, "the viewer opens on the sentence named by the link", page.evaluate("!!document.getElementById(decodeURIComponent(location.hash.slice(1)))") or page.locator('[data-sid="d01.Road:02"]').count() > 0)
+        st, r = get("api/concordance", q="wē", source="fieldnotes", lang="drg", width=2)
+        h = [x for x in r["hits"] if x["sid"] == "d01.Road:02"][0]
+        check(S, "a match inside a word touches what is next to it (the wē of va-wē touches the va- and the full stop)", (h["left"], h["match"], h["right"], h["leftAdj"], h["rightAdj"]) == ("Qōn̄ va-", "wē", ".", True, True), str(h))
+        # ── words, morphemes ──
+        c = {m: get("api/concordance", q="wē", source="fieldnotes", match=m)[1]["total"] for m in ("anywhere", "morpheme", "word")}
+        check(S, "whole words are among whole morphemes, which are among all occurrences, and wē alone is rarer than wē in va-wē", c["word"] <= c["morpheme"] <= c["anywhere"] and c["word"] < c["morpheme"], str(c))
+
+        # ── filters, limits and refusals ──
+        st, all_ = get("api/concordance", q=QON)
+        st, drg = get("api/concordance", q=QON, lang="drg"); st, fnr = get("api/concordance", q=QON, source="fieldnotes,papers")
+        check(S, "a language filter and a source filter narrow the hits exactly", drg["total"] == all_["byLang"]["drg"] and fnr["total"] == all_["bySource"].get("fieldnotes", 0) + all_["bySource"].get("papers", 0), f"{drg['total']} {all_['byLang']} {fnr['total']}")
+        st, lim = get("api/concordance", q="a", limit=7)
+        check(S, "a limit shows the first hits and still counts them all", lim["shown"] == 7 and lim["truncated"] and lim["total"] > 7, str((lim["shown"], lim["total"])))
+        bad = {"no query": dict(q=" "), "a long query": dict(q="x" * 201), "a bad scope": dict(q="a", scope="nope"), "a bad match": dict(q="a", match="nope"), "a bad source": dict(q="a", source="nope"), "a bad width": dict(q="a", width="many")}
+        res = {k: get("api/concordance", **v)[0] for k, v in bad.items()}
+        check(S, "a query that cannot be answered is refused with a 400 and a reason", all(v == 400 for v in res.values()) and "characters" in get("api/concordance", q=" ")[1]["error"], str(res))
+        vis.close()
+
+        # ── the corpus is read again when a text changes ──
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        before = aa.get(site.url + "api/concordance?q=zzquuxzz").json()["total"]
+        tdir = site.dir / "project" / "texts"
+        (tdir / "zz_new.xml").write_text(_REC % ("wwo", "zz-new", "A new recording", "zzquuxzz mi tē zzquuxzz", "A unique word, twice."), encoding="utf-8")
+        (tdir / "zz_odd.xml").write_text(_REC % ("zzz", "zz-odd", "A recording in another language", "zzquuxzz in an unlisted language", "Elsewhere."), encoding="utf-8")
+        (tdir / "zz_evil.xml").write_text(_REC % ("wwo", "zz-evil", "Hostile", "&lt;img src=x onerror=alert(1)&gt; zzevilzz", "&lt;b&gt;bold&lt;/b&gt;"), encoding="utf-8")
+        r = aa.get(site.url + "api/concordance?q=zzquuxzz&width=2").json()
+        check(S, "a recording added while the server runs is found at once, in a language the project does not list too", before == 0 and r["total"] == 3 and r["bySource"] == {"recording": 3} and set(r["byLang"]) == {"drg", "zzz"}, str(r["byLang"]))
+        i2 = aa.get(site.url + "api/concordance/info").json()
+        check(S, "…and the languages of the corpus then include it, after the project's own", [l["code"] for l in i2["languages"]][-1] == "zzz" and i2["languages"][-1]["abbr"] == "ZZZ")
+        (tdir / "zz_new.xml").unlink(); (tdir / "zz_odd.xml").unlink()
+        check(S, "…and the hits go when the text goes", aa.get(site.url + "api/concordance?q=zzquuxzz").json()["total"] == 0)
+
+        # ── glosses and the dictionary ──
+        pg = au.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        pg.locator(".gloss-badge").first.click(); pg.wait_for_timeout(1500)
+        r = aa.get(site.url + "api/concordance?q=vregel&diac=1&source=papers&lang=drg").json()
+        h = r["hits"][0] if r["hits"] else {}
+        check(S, "a word of a glossed text carries its gloss, and the dictionary entry and part of speech it is", h.get("gloss") == "know" and h.get("entry") == "know" and h.get("pos") == "v.tr.", str(h)[:160])
+        r = aa.get(site.url + "api/concordance?q=NONDUM&scope=glosses&source=papers&lang=drg").json()
+        check(S, "the glosses can be searched, and the hit is a stretch of glosses", r["total"] >= 1 and all("NONDUM" in x["match"] for x in r["hits"]) and r["hits"][0]["sentence"] != "", str(r["hits"][:1])[:150])
+        au.close()
+
+        # ── in the browser ──
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "texts.html", ".tab-btn", 500)
+        check(S, "the Texts page has a third tab, Search the texts, next to the other two", page.locator(".texts-tabs .tab-link").inner_text().strip().endswith("Search the texts"))
+        page.locator(".texts-tabs .tab-link").click(); page.wait_for_selector("#cc-q", timeout=6000)
+        check(S, "…which opens the search page, with the cursor in the box and the other two tabs still there", page.evaluate("document.activeElement.id") == "cc-q" and page.locator(".texts-tabs a").count() == 3)
+        page.locator('.texts-tabs a[href="texts.html#fieldnotes"]').click(); page.wait_for_selector("#panel-fieldnotes.active", timeout=6000)
+        check(S, "the fieldnotes tab link opens that tab of the Texts page", page.locator("#panel-fieldnotes.active").count() == 1)
+        open_page(page, site, "concordance.html", "#cc-q", 800)
+        check(S, "the page describes the corpus and offers the languages and sources", "sentences" in page.inner_text("#cc-corpus") and page.locator("#cc-lang option").count() >= 6 and [x.split(" (")[0] for x in page.locator("#cc-lang option").all_inner_texts()[1:6]] == LANG_NAMES and page.locator(".cc-src-box").count() == 3)
+        page.fill("#cc-q", QON); page.press("#cc-q", "Enter"); page.wait_for_selector(".cc-hit")
+        want = sum(_plain_fold(t).count(_plain_fold(QON)) for _, t in lines)
+        first = page.locator(".cc-hit").first
+        check(S, "Enter searches: the hits are listed with their language, the match highlighted, the translation and the source", page.locator(".cc-hit").count() >= want and first.locator(".cc-match").inner_text() == QON and first.locator(".cc-lang").inner_text() == "DRG" and "Gud aftenun" in first.locator(".cc-transl").inner_text() and first.locator(".cc-src a").count() == 1)
+        check(S, "…with the number of hits, of sentences and per language", f"hits in" in page.inner_text("#cc-summary") and "Drg" in page.inner_text("#cc-summary"), page.inner_text("#cc-summary"))
+        check(S, "…and the address now says what was searched", "q=" in page.url and "scope=forms" in page.url)
+        n_all = page.locator(".cc-hit").count()
+        page.select_option("#cc-lang", "drg"); page.wait_for_timeout(700)
+        check(S, "choosing a language searches again, in that language only", page.locator(".cc-hit").count() < n_all and set(page.locator(".cc-lang").all_inner_texts()) == {"DRG"})
+        page.select_option("#cc-lang", ""); page.wait_for_timeout(500)
+        page.fill("#cc-q", "qon"); page.press("#cc-q", "Enter"); page.wait_for_timeout(700)
+        n_exact = page.locator(".cc-hit").count(); page.check("#cc-diac"); page.wait_for_timeout(800)
+        check(S, "ignoring diacritics finds more (qon finds Qōn̄)", page.locator(".cc-hit").count() > n_exact)
+        page.uncheck("#cc-diac"); page.fill("#cc-q", "wē"); page.select_option("#cc-match", "word"); page.wait_for_timeout(800); n_word = page.locator(".cc-hit").count()
+        page.select_option("#cc-match", "anywhere"); page.wait_for_timeout(800)
+        check(S, "the match option changes the hits (a whole word finds fewer)", 0 < n_word < page.locator(".cc-hit").count(), f"{n_word}")
+        page.select_option("#cc-sort", "left"); page.wait_for_timeout(300)
+        ordered = page.evaluate("""() => { const rev = s => s.replace('… ', '').split(/\\s+/).filter(Boolean).reverse().join(' ');
+          const a = [...document.querySelectorAll('.cc-left')].map(e => rev(e.textContent));
+          return a.length > 5 && a.some(x => x) && a.every((x, i) => i === 0 || a[i - 1].localeCompare(x, undefined, { sensitivity: 'base' }) <= 0); }""")
+        check(S, "sorting by the word before puts the hits in the order of what precedes the match, read backwards from it", ordered)
+        with page.expect_download() as dl:
+            page.click("#cc-csv")
+        rows = list(_csv.reader(_io.StringIO(Path(dl.value.path()).read_text(encoding="utf-8-sig"))))
+        check(S, "the hits can be downloaded as a CSV file: a header and one row per hit", rows[0][:6] == ["language", "source", "reference", "left", "match", "right"] and len(rows) - 1 == page.locator(".cc-hit").count() and all(len(r) == 12 for r in rows), f"{len(rows) - 1} rows")
+        page.select_option("#cc-scope", "translation"); page.fill("#cc-q", "Gud aftenun"); page.press("#cc-q", "Enter"); page.wait_for_timeout(800)
+        check(S, "searching the translations shows the matched translation, with the sentence below it", page.locator(".cc-match").first.inner_text().lower() == "gud aftenun" and page.locator(".cc-transl .cc-form").count() > 0)
+        page.select_option("#cc-scope", "forms")
+        page.fill("#cc-q", "x" * 250); page.press("#cc-q", "Enter"); page.wait_for_timeout(600)
+        check(S, "a query the server refuses shows its reason, not an empty page", "characters" in page.inner_text("#cc-summary") and page.locator(".cc-hit").count() == 0, page.inner_text("#cc-summary"))
+        page.fill("#cc-q", "zzzzzz"); page.press("#cc-q", "Enter"); page.wait_for_timeout(600)
+        check(S, "…and a search with no hit says so", "No hit" in page.inner_text("#cc-summary") and not page.locator("#cc-tools.visible").count())
+        open_page(page, site, "concordance.html?q=%s&scope=forms&match=anywhere&case=1&diac=0&lang=drg&width=2&sort=right" % urllib.parse.quote(QON), ".cc-hit", 1000)
+        check(S, "an address with a search in it runs the search and sets the controls (a link can be shared)", page.input_value("#cc-q") == QON and page.input_value("#cc-lang") == "drg" and page.input_value("#cc-width") == "2" and page.input_value("#cc-sort") == "right" and page.locator(".cc-hit").count() == drg["total"], str(page.locator(".cc-hit").count()))
+        page.locator(".cc-src a").first.click(); page.wait_for_url("**/transcription.html**", timeout=8000)
+        check(S, "a source link opens the text viewer on that sentence", "#d01.Road" in page.url or "#" in page.url)
+        check(S, "the search page raised no JavaScript or loading error", not [e for e in errs if "400" not in e], "; ".join(errs[:2]))
+        au.close()
+
+        # ── what the texts contain is never run ──
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        open_page(page, site, "concordance.html?q=zzevilzz", ".cc-hit", 1000)
+        check(S, "markup in a text is shown as text: no element is made, nothing runs", page.locator(".cc-hit img, .cc-hit b").count() == 0 and "<img" in page.locator(".cc-left").first.inner_text() and not [e for e in errs if "DIALOG" in e or "PAGEERROR" in e], str(errs[:2]))
+        c.close()
+        (tdir / "zz_evil.xml").unlink()
+
+        # ── narrow screens ──
+        for w in (600, 390, 320):
+            cc = new_context(browser, site, w); p = cc.new_page(); open_page(p, site, "concordance.html?q=%s" % urllib.parse.quote(QON), ".cc-hit", 800)
+            wide = p.evaluate("document.documentElement.scrollWidth")
+            first_h = p.locator(".cc-hit").first.bounding_box()
+            check(S, f"at {w}px the page does not scroll sideways, and a hit reads as one line of text with its source below", wide <= w and first_h["width"] <= w, f"page {wide}px, hit {first_h}")
+            cc.close()
+    finally:
+        site.stop()
+
+    # ── a project with one language ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "concordance.html", "#cc-q", 800)
+        page.fill("#cc-q", "a"); page.press("#cc-q", "Enter"); page.wait_for_selector(".cc-hit", timeout=6000)
+        check(S, "with one language there is no language choice and the summary has no breakdown, but the search works", not page.locator("#cc-lang").is_visible() and "(" not in page.inner_text("#cc-summary").split("sentence")[-1][:3] and page.locator(".cc-hit").count() > 0, page.inner_text("#cc-summary"))
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); c.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -2008,6 +2214,7 @@ def main():
             if args.only in (None, "migration"):  suite_migration(browser, args)
             if args.only in (None, "references"): suite_references(browser, args)
             if args.only in (None, "dictionary"): suite_dictionary(browser, args)
+            if args.only in (None, "concordance"): suite_concordance(browser, args)
             browser.close()
     finally:
         site.stop()
