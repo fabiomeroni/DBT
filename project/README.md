@@ -169,6 +169,18 @@ ambiguous, in a message that names the choices. Each reference also has a **key*
 author and year: it is the safe choice if a name is spelled in several ways. Changing a key on the page updates the citations
 in the grammar.
 
+**Importing a list.** The author can add many references at once with **⬆ Import** on the References page: choose one or more files in
+**BibTeX** (`.bib`), **EndNote** (`.enw`, the tagged format that EndNote and many other programs export, and the one this site writes)
+or **RIS** (`.ris`), or paste the references. The format is recognised from what is in the file. Nothing is added at once: a **preview**
+shows each reference in APA 7 with its status: *new*, *key changed* (the key in the file was already used by another reference, so a free
+one was given), *already there* (the same authors, year and title: it is not added again, so importing the same file twice is harmless)
+or *not read* (with the reason, for instance that it has no title). Then **Import** adds the new ones. LaTeX accents (`{\c c}`, `{\"o}`),
+protective braces and `@string` macros in BibTeX are resolved; a file saved in Windows-1252 is read correctly; a URL that does not
+start with http(s) is left out with a warning. A year letter (2026b) is not part of these formats: the page adds the letters itself.
+
+**One reference as a file.** Next to each reference everyone can download it alone as **BibTeX** or **EndNote** (`/api/references/<key>/export/bibtex`
+and `.../endnote`), to drop into their own reference manager. The whole list is still on the buttons at the top of the page.
+
 The top-bar label of the page is `nav.references` in `project.json` (default: References).
 
 ## Where the data is
