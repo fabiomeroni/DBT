@@ -175,6 +175,7 @@ VISITOR_PAGES = [
     ("references",        "references.html",                 ".ref-entry"),
     ("dictionary-senses", "dictionary.html?lang=Koro&mode=senses", ".sense-group"),
     ("concordance",       "concordance.html?q=Q%C5%8Dn%CC%84&width=3", ".cc-hit"),
+    ("concordance-ngrams", "concordance.html?view=ngrams&n=2&q=t%C4%93&source=fieldnotes", ".cc-ng:not(.head)"),
 ]
 AUTHOR_PAGES = [
     ("author-grammar",           "grammar.html",                    "#sections-container .grammar-section"),
@@ -286,6 +287,8 @@ PUBLIC_API = [
     ("dictionary-cited-examples", "api/dictionary/cited-examples"),
     ("concordance-info", "api/concordance/info"),
     ("concordance-qon", "api/concordance?q=Q%C5%8Dn%CC%84&width=3"),
+    ("ngrams-te", "api/ngrams?q=t%C4%93&n=2&limit=40"),
+    ("texts-stats", "api/texts/stats"),
     ("references", "api/references"),
     ("references-bibtex", "api/references/export/bibtex"),
     ("references-endnote", "api/references/export/endnote"),
@@ -506,7 +509,7 @@ def suite_functional(browser, site, args):
 
 
 # ───────────────────────── 4. generality suite: the code knows no language ─────────────────────────
-CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
+CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "ttr.js", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
 PROJECT_WORDS = re.compile(r"\b(Nume|Dorig|Koro|Olrat|Lakon|Gaua|Vanuatu|Banks Islands|Meroni|Fran[cç]ois)\b")
 NOT_SERVED = ["app.py", "references.py", "concordance.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
               "project/orthography.json", "project/dictionary.xml", "project/fieldnotes.xml", "project/grammar/s1.md",
@@ -523,7 +526,7 @@ def suite_generality(browser, site, args):
     bad = [p for p in NOT_SERVED if api.get(site.url + p).status != 404]
     check(S, "source code and data files are not served (app.py, XML, JSON, uploads, project, tests ...)", not bad, str(bad))
     pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html", "concordance.html"]
-    assets = ["style.css", "auth.js", "images/gaua_map.png", "etymograph_icon.png"]
+    assets = ["style.css", "auth.js", "ttr.js", "images/gaua_map.png", "etymograph_icon.png"]
     check(S, "the site's pages and images are served", all(api.get(site.url + p).status == 200 for p in pages + assets))
     left = [p for p in pages if "{{project." in api.get(site.url + p).text()]
     check(S, "no project marker is left unexpanded in any page", not left, str(left))
@@ -2204,12 +2207,223 @@ def suite_concordance(browser, args):
         site.stop()
 
 
+
+# ── n-grams and lexical statistics, checked against an independent reading of the XML ──
+_PUNCT = '.,;:!?…"“”«»()[]{}'
+
+def _words_plain(text):
+    """The words of a text, without the program's code: spaces, punctuation stripped at the edges, lower case, NFC."""
+    out = []
+    for w in _ud.normalize("NFC", text).split():
+        w = w.strip(_PUNCT)
+        if w and w != "—": out.append(w.lower())
+    return out
+
+def _plain_ngrams(lines, query, n):
+    q = _words_plain(query); k = len(q); count = {}
+    for _code, text in lines:
+        ws = _words_plain(text)
+        for i in range(len(ws) - n + 1):
+            win = ws[i:i + n]
+            if any(win[j:j + k] == q for j in range(n - k + 1)): count[tuple(win)] = count.get(tuple(win), 0) + 1
+    return count
+
+def _plain_stats(texts):
+    toks = [w for t in texts for w in _words_plain(t)]
+    return len(toks), len(set(toks))
+
+def _fieldnote_group_lines(site, idx):
+    root = etree.parse(str(site.dir / "project" / "fieldnotes.xml")).getroot()
+    out = []
+    for rfg in root.findall(".//tiGroup")[idx].findall("rfGroup"):
+        grp = rfg.find("bslGroup") if rfg.find("bslGroup") is not None else rfg.find("frGroup")
+        if grp is None: continue
+        for code in ALLC:
+            text = " ".join(n.text.strip() for n in grp.findall(code) if n.text and n.text.strip())
+            if text and text != "—": out.append((code, text))
+    return out
+
+def suite_ngrams_and_stats(browser, args):
+    S = "textstats"
+    section("textstats: n-grams of the word typed, and tokens, types, TTR and Root TTR of the texts")
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        def get(path, **q):
+            r = va.get(site.url + path + ("?" + urllib.parse.urlencode(q) if q else "")); return r.status, r.json()
+        lines = _fieldnote_lines(site)
+
+        # ── n-grams ──
+        for q, n in (("tē", 2), ("tē", 3), ("Qōn̄", 3), ("Qōn̄ va", 3), ("na", 4)):
+            st, r = get("api/ngrams", q=q, n=n, source="fieldnotes", limit=2000)
+            want = _plain_ngrams(lines, q, n)
+            got = {tuple(w.lower() for w in g["tokens"]): g["count"] for g in r["grams"]}
+            check(S, f"n-grams: the {n}-grams containing “{q}” and their counts are exactly those of a plain reading of the XML ({len(want)} different, {sum(want.values())} in all)",
+                  st == 200 and got == want and r["distinct"] == len(want) and r["occurrences"] == sum(want.values()), f"{r.get('distinct')} vs {len(want)}")
+        qq = _words_plain("tē")
+        st, r = get("api/ngrams", q="tē", n=3, source="fieldnotes")
+        check(S, "n-grams: the count of the word itself is its number of occurrences", r["queryCount"] == sum(ws.count("tē") for ws in (_words_plain(t) for _, t in lines)), str(r["queryCount"]))
+        grams = r["grams"]
+        check(S, "n-grams: most frequent first, then alphabetical; and each gram says where the word stands in it", [(-g["count"], g["text"].lower()) for g in grams] == sorted((-g["count"], g["text"].lower()) for g in grams) and all(g["tokens"][i].lower() == "tē" for g in grams for i in g["hl"][:1]), str(grams[:2]))
+        st, byl = get("api/ngrams", q="tē", n=3, source="fieldnotes", limit=2000)
+        top = byl["grams"][0]
+        check(S, "n-grams: the counts by language add up, and sentences are counted once", sum(top["byLang"].values()) == top["count"] and top["sentences"] <= top["count"], str(top["byLang"]))
+        for q, n, kw, why in (("tē", 2, {"lang": "lkn"}, "a language"), ("tē", 2, {"source": "papers"}, "a source"), ("tē", 2, {"min": "3"}, "a minimum frequency")):
+            st, r = get("api/ngrams", q=q, n=n, limit=2000, **kw)
+            check(S, f"n-grams: {why} narrows them", st == 200 and (all(set(g["byLang"]) == {"lkn"} for g in r["grams"]) if "lang" in kw else True) and (all(g["count"] >= 3 for g in r["grams"]) if "min" in kw else True) and (r["occurrences"] <= get("api/ngrams", q=q, n=n, limit=2000)[1]["occurrences"]))
+        st, r = get("api/ngrams", q="qon", n=2, source="fieldnotes", diac="1", limit=2000)
+        fold_ = lambda s: "".join(c for c in _ud.normalize("NFD", s) if _ud.category(c) != "Mn")
+        want = {}
+        for _c, t in lines:
+            ws = [fold_(w) for w in _words_plain(t)]
+            for i in range(len(ws) - 1):
+                if "qon" in ws[i:i + 2]: want[tuple(ws[i:i + 2])] = want.get(tuple(ws[i:i + 2]), 0) + 1
+        check(S, "n-grams: with diacritics ignored “qon” finds the grams of Qōn̄ (and counts them like a plain folded reading does)", {tuple(fold_(w.lower()) for w in g["tokens"]): g["count"] for g in r["grams"]} == want and r["occurrences"] > 0, f"{r['occurrences']} vs {sum(want.values())}")
+        refused = {"n too small": dict(q="tē", n=1), "n too large": dict(q="tē", n=9), "n not a number": dict(q="tē", n="x"), "no query": dict(q=" ", n=3), "a query longer than n": dict(q="a b c d", n=3), "a bad unit": dict(q="tē", n=3, unit="x"), "a bad source": dict(q="tē", n=3, source="x")}
+        res = {k: get("api/ngrams", **v)[0] for k, v in refused.items()}
+        check(S, "n-grams: what cannot be answered is refused with a 400", all(v == 400 for v in res.values()), str(res))
+        # the n-gram and the lines agree: a whole-words-in-sequence search finds as many occurrences as the n-gram has
+        st, r = get("api/ngrams", q="tē", n=3, source="fieldnotes", limit=2000)
+        picks = [g for g in r["grams"] if len(set(g["tokens"])) == len(g["tokens"])][:6]
+        ok = all(get("api/concordance", q=g["text"], match="phrase", source="fieldnotes")[1]["total"] == g["count"] for g in picks)
+        check(S, "n-grams and the concordance agree: the “lines →” of an n-gram (whole words in sequence) has exactly as many hits as its count", ok and len(picks) >= 3, str([(g["text"], g["count"]) for g in picks[:3]]))
+        # glosses and morphemes
+        au = new_context(browser, site, 1280, author=True); aa = au.request; pg = au.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        pg.locator(".gloss-badge").first.click(); pg.wait_for_timeout(1500)
+        st, r = get("api/ngrams", q="3PL", n=2, scope="glosses", source="papers")
+        check(S, "n-grams of glosses: the glosses next to a gloss, in the order of the words", st == 200 and r["distinct"] >= 1 and all("3PL" in g["tokens"] for g in r["grams"]), str(r["grams"][:2])[:160])
+        st, r = get("api/ngrams", q="va", n=2, unit="morpheme", source="fieldnotes", limit=2000)
+        check(S, "n-grams of morphemes: va finds the token va-, and a gram is written as the word it is part of (va-wē)", st == 200 and any(g["text"] == "va-wē" for g in r["grams"]) and any(g["text"].endswith("va-") for g in r["grams"]), str([g["text"] for g in r["grams"][:4]]))
+        au.close()
+
+        # ── tokens, types, TTR and Root TTR ──
+        st, s = get("api/texts/stats")
+        fn = s["collections"]["fieldnotes"]
+        want_all = _plain_stats([t for _, t in lines])
+        check(S, "statistics: the fieldnotes as a whole have the tokens and types of a plain reading of the XML", (fn["all"]["tokens"], fn["all"]["types"]) == want_all, f"{fn['all']} vs {want_all}")
+        bad = []
+        for code in ALLC:
+            tk, ty = _plain_stats([t for c, t in lines if c == code]); m = fn["byLang"][code]
+            if (m["tokens"], m["types"]) != (tk, ty) or abs(m["ttr"] - ty / tk) > 6e-5 or abs(m["rttr"] - ty / tk ** 0.5) > 6e-4: bad.append(f"{code}: {m} vs {(tk, ty)}")
+        check(S, "statistics: and so does each language of the fieldnotes, with TTR = types / tokens and Root TTR = types / √tokens", not bad, "; ".join(bad[:2]))
+        g0 = s["texts"]["fieldnotes:0"]; tk, ty = _plain_stats([t for _, t in _fieldnote_group_lines(site, 0)])
+        check(S, "statistics: a fieldnotes text (D01) counts its own sentences, all languages together and by language", (g0["all"]["tokens"], g0["all"]["types"]) == (tk, ty) and set(g0["byLang"]) == set(ALLC) and sum(m["tokens"] for m in g0["byLang"].values()) == tk, str(g0["all"]))
+        root = etree.parse(str(site.dir / "project" / "texts" / "crdo-WWO_FARFADETS.xml")).getroot()
+        forms = [(s_.findtext("FORM") or "") for s_ in root.iter("S")]
+        rec = s["texts"]["recording:crdo-WWO_FARFADETS.xml"]
+        tk, ty = _plain_stats(forms)
+        check(S, "statistics: a recording is counted from its sentences, in its one language", (rec["all"]["tokens"], rec["all"]["types"]) == (tk, ty) and list(rec["byLang"]) == ["drg"] and rec["title"], f"{rec['all']} vs {(tk, ty)}")
+        pp = etree.parse(str(site.dir / "project" / "texts" / "Examples_from_papers.xml")).getroot()
+        ptexts = [(t.text or "").strip() for t in pp.iter("Tier") if (t.get("lang") in ALLC and (t.text or "").strip() not in ("", "—"))]
+        pt, pty = _plain_stats(ptexts)
+        check(S, "statistics: the published examples are a text of their own", (s["texts"]["papers:0"]["all"]["tokens"], s["texts"]["papers:0"]["all"]["types"]) == (pt, pty), f"{s['texts']['papers:0']['all']} vs {(pt, pty)}")
+        check(S, "statistics: each collection is its own: it is exactly the sum of its texts (the recordings do not include the fieldnotes, nor the other way round)",
+          all(sum(x["all"]["tokens"] for x in s["texts"].values() if x["src"] == src) == s["collections"][src]["all"]["tokens"] > 0 for src in ("fieldnotes", "recording", "papers")) and s["collections"]["papers"]["all"]["tokens"] == pt)
+        m = get("api/texts/stats", unit="morpheme")[1]["collections"]["fieldnotes"]["all"]
+        check(S, "statistics: counted by morpheme there are more tokens than by word, and a bad unit is refused", m["tokens"] > fn["all"]["tokens"] and get("api/texts/stats", unit="x")[0] == 400, str(m))
+        cache_before = fn["all"]["tokens"]; tdir = site.dir / "project" / "texts"
+        (tdir / "zz_stats.xml").write_text(_REC % ("wwo", "zz-st", "Stats test", "zzqa zzqb zzqa zzqc", "x."), encoding="utf-8")
+        r2 = get("api/texts/stats")[1]
+        check(S, "statistics: a recording added while the server runs is counted at once (4 tokens, 3 types), and is a text of its own", r2["collections"]["recording"]["all"]["tokens"] == s["collections"]["recording"]["all"]["tokens"] + 4 and r2["texts"]["recording:zz_stats.xml"]["all"] == {"tokens": 4, "types": 3, "ttr": 0.75, "rttr": 1.5} and r2["collections"]["fieldnotes"]["all"]["tokens"] == cache_before)
+        (tdir / "zz_stats.xml").unlink()
+        vis.close()
+
+        # ── on the Texts page: the whole, by language, and each text ──
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        def get(path, **q):
+            r_ = c.request.get(site.url + path + ("?" + urllib.parse.urlencode(q) if q else "")); return r_.status, r_.json()
+        fmt = lambda m: [f"{m['tokens']:,}", f"{m['types']:,}", f"{m['ttr']:.3f}", f"{m['rttr']:.2f}"]
+        rowvals = lambda row: [x.strip() for x in row.locator("td").all_inner_texts()]
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1200)
+        box = page.locator("#ttr-recordings"); bb = box.bounding_box(); pw = page.evaluate("document.documentElement.clientWidth")
+        check(S, "Texts, recordings: the box is in the upper right corner, with tokens, types, TTR and Root TTR of all the recordings", bb["x"] + bb["width"] > pw * 0.7 and bb["y"] < 240 and rowvals(box.locator("tr.ttr-all")) == fmt(s["collections"]["recording"]["all"]), f"{bb} {rowvals(box.locator('tr.ttr-all'))}")
+        check(S, "…and each language of the recordings has its row", {r.get_attribute("data-lang") for r in box.locator("tr.ttr-lang").all()} == set(s["collections"]["recording"]["byLang"]) or box.locator("tr.ttr-lang").count() == 0 and len(s["collections"]["recording"]["byLang"]) == 1)
+        card = page.locator(".text-card", has_text="Farfadets").first
+        check(S, "…each recording has its measures in the corner of its card (TTR, Root TTR, tokens and types)", card.locator(".ttr-mini").inner_text().replace("\n", " | ") == f"TTR {rec['all']['ttr']:.3f} · Root TTR {rec['all']['rttr']:.2f} | {rec['all']['tokens']:,} tokens · {rec['all']['types']:,} types", card.locator(".ttr-mini").inner_text())
+        page.click('.tab-btn[data-tab="fieldnotes"]'); page.wait_for_selector("#fn-grid .text-card", timeout=8000); page.wait_for_timeout(300)
+        box = page.locator("#ttr-fieldnotes")
+        langrows = {r.get_attribute("data-lang"): rowvals(r) for r in box.locator("tr.ttr-lang").all()}
+        check(S, "Texts, fieldnotes: the box has the whole, then one row per language, each with its own tokens, types, TTR and Root TTR", rowvals(box.locator("tr.ttr-all")) == fmt(fn["all"]) and langrows == {c_: fmt(fn["byLang"][c_]) for c_ in ALLC}, str(langrows)[:200])
+        check(S, "…in the project's order of languages", [r.get_attribute("data-lang") for r in box.locator("tr.ttr-lang").all()] == ALLC)
+        d01 = page.locator("#fn-grid .text-card", has_text="D01").first
+        check(S, "…and a fieldnotes card has its text's measures, with the languages in its tooltip", d01.locator(".ttr-mini").inner_text().split("\n")[1] == f"{g0['all']['tokens']:,} tokens · {g0['all']['types']:,} types" and "Dorig: " in (d01.locator(".ttr-mini").get_attribute("title") or ""))
+        pcard = page.locator("#fn-grid .text-card", has_text="Examples from papers").first
+        check(S, "…and the published examples have theirs", pcard.locator(".ttr-mini").count() == 1 and f"{pt:,} tokens" in pcard.locator(".ttr-mini").inner_text())
+        check(S, "the Texts page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+
+        # ── in the text viewer: upper right of the title ──
+        open_page(page, site, "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", "#tx-ttr table", 1500)
+        vb = page.locator("#tx-ttr").bounding_box(); tb = page.locator(".tx-title").bounding_box()
+        check(S, "Viewer, a recording: the measures of that text are in the upper right, beside the title, with its tokens and types", vb["x"] > tb["x"] + 300 and vb["y"] < tb["y"] + 120 and rowvals(page.locator("#tx-ttr tr.ttr-all")) == fmt(rec["all"]) and page.locator("#tx-ttr tr.ttr-lang").count() == 0, f"{vb} {rowvals(page.locator('#tx-ttr tr.ttr-all'))}")
+        open_page(page, site, "transcription.html?fieldnotes=1&index=0&title=D01", "#tx-ttr table", 1500)
+        lr = {r.get_attribute("data-lang"): rowvals(r) for r in page.locator("#tx-ttr tr.ttr-lang").all()}
+        check(S, "Viewer, a fieldnotes text: the whole and a row for each language", rowvals(page.locator("#tx-ttr tr.ttr-all")) == fmt(g0["all"]) and lr == {c_: fmt(g0["byLang"][c_]) for c_ in ALLC}, str(lr)[:160])
+        open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", "#tx-ttr table", 1500)
+        check(S, "Viewer, the published examples: the same", rowvals(page.locator("#tx-ttr tr.ttr-all")) == fmt(s["texts"]["papers:0"]["all"]))
+        check(S, "the viewer raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        for w in (600, 390, 320):
+            cc = new_context(browser, site, w); p = cc.new_page(); wide = []
+            for url, sel in (("texts.html", ".text-card"), ("transcription.html?fieldnotes=1&index=0&title=D01", "#tx-ttr table")):
+                open_page(p, site, url, sel, 900)
+                if p.evaluate("document.documentElement.scrollWidth") > w: wide.append(url)
+            cc.close()
+            check(S, f"at {w}px the Texts page and the viewer, with their tables, do not scroll sideways", not wide, str(wide))
+
+        # ── the n-gram view of the concordance page ──
+        open_page(page, site, "concordance.html?q=%s&view=ngrams&n=2&source=fieldnotes" % urllib.parse.quote("tē"), ".cc-ng:not(.head)", 1200)
+        st, api2 = get("api/ngrams", q="tē", n=2, source="fieldnotes")
+        rows = page.locator(".cc-ng:not(.head)")
+        check(S, "N-grams page: the table lists the n-grams of the API, with counts, sentences and the word highlighted", rows.count() == api2["shown"] and rows.first.locator(".n-gram").inner_text().lower() == api2["grams"][0]["text"].lower() and rows.first.locator(".n-count").inner_text() == str(api2["grams"][0]["count"]) and rows.first.locator(".cc-match").count() >= 1, rows.first.inner_text().replace("\n", " | "))
+        check(S, "…the summary says how many different n-grams, how many occurrences and how often the word itself occurs", f"{api2['distinct']:,}" in page.inner_text("#cc-summary") and f"{api2['queryCount']:,}" in page.inner_text("#cc-summary"), page.inner_text("#cc-summary"))
+        page.select_option("#cc-n", "3"); page.wait_for_timeout(900); a3 = get("api/ngrams", q="tē", n=3, source="fieldnotes")[1]
+        check(S, "…choosing another n searches again, and the address keeps it", f"{a3['distinct']:,}" in page.inner_text("#cc-summary") and "n=3" in page.url and "view=ngrams" in page.url)
+        page.fill("#cc-min", "2"); page.press("#cc-min", "Enter"); page.wait_for_timeout(900)
+        a3m = get("api/ngrams", q="tē", n=3, source="fieldnotes", min=2)[1]
+        check(S, "…and so does a minimum frequency", page.locator(".cc-ng:not(.head)").count() == a3m["shown"] and all(int(x) >= 2 for x in page.locator(".cc-ng:not(.head) .n-count").all_inner_texts()))
+        page.select_option("#cc-ngsort", "text"); texts_ = [x.lower() for x in page.locator(".cc-ng:not(.head) .n-gram").all_inner_texts()]
+        check(S, "…sorting alphabetically reorders them", texts_ == sorted(texts_, key=lambda s_: s_) or len(texts_) > 1 and texts_ != [g["text"].lower() for g in a3m["grams"]])
+        first = page.locator(".cc-ng:not(.head)").first; gtext = first.locator(".n-gram").inner_text(); gcount = int(first.locator(".n-count").inner_text())
+        with page.expect_download() as dl:
+            page.click("#cc-csv")
+        crows = list(_csv.reader(_io.StringIO(Path(dl.value.path()).read_text(encoding="utf-8-sig"))))
+        check(S, "…and they can be downloaded as CSV: the n-gram, its count, its sentences and languages", crows[0][:3] == ["3-gram", "count", "sentences"] and len(crows) - 1 == page.locator(".cc-ng:not(.head)").count() and all(len(r) == 7 for r in crows), str(crows[:2]))
+        page.select_option("#cc-ngsort", "count"); first = page.locator(".cc-ng:not(.head)").first; gtext = first.locator(".n-gram").inner_text(); gcount = int(first.locator(".n-count").inner_text())
+        first.locator("a", has_text="lines").click(); page.wait_for_selector(".cc-hit", timeout=8000)
+        check(S, "“lines →” opens that n-gram in the concordance, with as many hits as its count", page.evaluate("VIEW") == "kwic" and page.locator(".cc-hit").count() == gcount and page.input_value("#cc-q").lower() == gtext.lower() and page.input_value("#cc-match") == "phrase", f"{page.locator('.cc-hit').count()} vs {gcount}")
+        page.click('.cc-view[data-view="ngrams"]'); page.wait_for_selector(".cc-ng:not(.head)", timeout=8000)
+        check(S, "the view switch goes back to the n-grams of the same query", "view=ngrams" in page.url and page.locator(".cc-ng:not(.head)").count() > 0)
+        page.select_option("#cc-scope", "glosses")
+        check(S, "the unit (words / morphemes) applies to the words of the texts only: it is off for glosses", page.locator("#cc-unit").is_disabled())
+        page.select_option("#cc-scope", "forms"); page.fill("#cc-q", "a b c d e f g"); page.select_option("#cc-n", "2"); page.press("#cc-q", "Enter"); page.wait_for_timeout(700)
+        check(S, "a query longer than n shows its reason", "n must be at least" in page.inner_text("#cc-summary"), page.inner_text("#cc-summary"))
+        check(S, "the page raised no JavaScript or loading error", not [e for e in errs if "400" not in e], "; ".join(errs[:2]))
+        c.close()
+    finally:
+        site.stop()
+
+    # ── one language: a single row, and no language breakdown ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1200)
+        check(S, "with one language the Texts page shows one row of measures, for the whole", page.locator("#ttr-recordings tr").count() == 2 and page.locator("#ttr-recordings tr.ttr-lang").count() == 0 and page.locator("#ttr-recordings .ttr-all td").first.inner_text().strip() != "", page.locator("#ttr-recordings").inner_text()[:80])
+        open_page(page, site, "concordance.html?view=ngrams&n=2&q=a", ".cc-ng:not(.head), #cc-summary", 1000); page.wait_for_timeout(500)
+        check(S, "…and the n-grams have no languages column", page.locator(".cc-ng.head span").nth(3).inner_text().strip() == "")
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); c.close()
+    finally:
+        site.stop()
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -2230,6 +2444,7 @@ def main():
             if args.only in (None, "references"): suite_references(browser, args)
             if args.only in (None, "dictionary"): suite_dictionary(browser, args)
             if args.only in (None, "concordance"): suite_concordance(browser, args)
+            if args.only in (None, "textstats"): suite_ngrams_and_stats(browser, args)
             browser.close()
     finally:
         site.stop()
