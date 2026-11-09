@@ -486,8 +486,10 @@ def suite_functional(browser, site, args):
     check(S, "papers: confirming the example attaches it to the eight dictionary entries",
           all(k in ex for k in ("3pl", "nondum1", "know", "properly", "nondum2", "art", "speech", "poss")), str(sorted(ex)))
     page.goto(site.url + "dictionary.html?lang=Koro", wait_until="domcontentloaded"); page.wait_for_timeout(2000)
-    lab = page.locator('[id="know"] .example-label').all_inner_texts()
-    check(S, "dictionary: the example is labelled with the text it comes from", any("PAPER" in l.upper() for l in lab), str(lab))
+    lab = page.locator('[id="know"] .example-source').all_inner_texts()
+    check(S, "dictionary: an example begins with the source it comes from, without brackets and without a label such as “Example · paper”",
+          any("Examples from papers" in l and "negation_example_01" in l for l in lab) and not any("[" in l or "]" in l or l.upper().startswith("EXAMPLE ·") for l in lab)
+          and page.locator('[id="know"] .example-label, [id="know"] .ex-ref').count() == 0, str(lab))
 
     section("functional: the grammar and the export")
     src = ("## Test\n\n{{cite: fieldnotes#0#d01.Road:09}}\n\n{{cite: papers#negation_example_01}}\n\n"
@@ -1493,6 +1495,15 @@ def _dict_examples(d):
         '<Sens identifiant="qonⓢ1" langues="drg kro lkn"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">afternoon</Glose><gloss>afternoon</gloss><Exemples>{{cite: fieldnotes#0#d01.Road:02}}</Exemples></Sens>'
         '<Sens identifiant="qonⓢ2" langues="num drg lkn"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">night</Glose><gloss>night</gloss></Sens>'
         '<Sens identifiant="qonⓢ3" langues="num"><NuméroDeSens>3</NuméroDeSens><Glose langue="eng">day</Glose><gloss>day</gloss></Sens></EntréeLexicale>'))
+    for xml in (
+        '<EntréeLexicale identifiant="spk"><Lemme><ReprésentationDeForme langue="num">spknum</ReprésentationDeForme><ReprésentationDeForme langue="drg">spkdrg</ReprésentationDeForme>'
+        '<ReprésentationDeForme langue="kro">spkkro</ReprésentationDeForme><ReprésentationDeForme langue="olr">spkolr</ReprésentationDeForme><ReprésentationDeForme langue="lkn">spklkn</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale><Étymologie><Étymon langues="drg lkn"><Langue>POc</Langue><Forme>*spk</Forme><Glose langue="eng">voice</Glose></Étymon></Étymologie>'
+        '<Sens identifiant="spkⓢ1" langues="num drg olr lkn"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">speech</Glose><gloss>speech</gloss></Sens>'
+        '<Sens identifiant="spkⓢ2" langues="drg kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">noise</Glose><gloss>noise</gloss></Sens></EntréeLexicale>',
+        '<EntréeLexicale identifiant="nos"><Lemme><ReprésentationDeForme langue="drg">nosdrg</ReprésentationDeForme><ReprésentationDeForme langue="num">nosnum</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale><Sens identifiant="nosⓢ1" langues="num"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">only for Nume</Glose></Sens></EntréeLexicale>'):
+        root.find(".//Dictionnaire").append(etree.fromstring(xml))
     kn = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "know"][0]
     kn.append(etree.fromstring('<Sens identifiant="knowⓢ2"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">recognise</Glose><gloss>recognise</gloss></Sens>'))
     tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
@@ -1900,6 +1911,32 @@ def suite_dictionary(browser, args):
         check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
         vis.close()
 
+        # ── the forms that are not cognates are told under the sense they are parallels for ──
+        ab = {l["code"]: l["abbr"] for l in proj["languages"]}
+        au2 = new_context(browser, site, 1280, author=True); pa = au2.new_page(); errs2 = []; watch(pa, errs2)
+        HID = """(id) => { const e = document.getElementById(id); if (!e) return null;
+          const norm = x => x.innerText.replace(/\\s+/g, ' ').trim();
+          return { perSense: [...e.querySelectorAll('.sense')].map(s => [(s.querySelector('.sense-gloss') || {innerText: ''}).innerText.trim(), [...s.querySelectorAll('.entry-hidden-forms')].map(norm)]),
+                   all: [...e.querySelectorAll('.entry-hidden-forms')].filter(x => getComputedStyle(x).display !== 'none').map(norm),
+                   entryLevel: [...e.children].filter(c => c.classList.contains('entry-hidden-forms') && c.innerText.includes('Not cognates')).length }; }"""
+        open_page(pa, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        h = pa.evaluate(HID, "spk")
+        tail = " ✎ set cognates"
+        check(S, "the author sees, under each sense, the forms of the languages that sense applies to and that are not cognates (speech: Nume and Olrat; noise: Koro), and none on the entry as a whole",
+              h["perSense"] == [["speech", [f"Not cognates, so not shown here: {ab['num']} spknum · {ab['olr']} spkolr{tail}"]], ["noise", [f"Not cognates, so not shown here: {ab['kro']} spkkro{tail}"]]] and h["entryLevel"] == 0, str(h))
+        open_page(pa, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
+        items = {g.locator(".sg-label").inner_text().strip(): g.locator(".entry-hidden-forms").all_inner_texts() for g in pa.locator(".sense-group").all() if g.locator(".sg-item[data-entry='spk']").count()}
+        check(S, "the list of senses says the same under each sense", [x.replace("\n", " ").strip() for x in items.get("speech", [])] == [f"Not cognates, so not shown here: {ab['num']} spknum · {ab['olr']} spkolr{tail}"] and [x.replace("\n", " ").strip() for x in items.get("noise", [])] == [f"Not cognates, so not shown here: {ab['kro']} spkkro{tail}"], str(items))
+        open_page(pa, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        h = pa.evaluate(HID, "nos")
+        check(S, "an entry with no sense for the language says so, and then lists the forms of the other languages that are not shown", bool(h["all"]) and h["all"][0].startswith(f"Not cognates, so not shown here: {ab['num']} nosnum") and pa.locator("#nos .no-sense").count() == 1, str(h))
+        pa.locator("#spk .hf-set").first.click(); pa.wait_for_selector("#entry-modal.visible")
+        check(S, "“set cognates” opens the entry in the author's window", pa.locator("#em-title").inner_text() == "Edit entry")
+        au2.close()
+        vis2 = new_context(browser, site, 1280); pv = vis2.new_page(); open_page(pv, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        check(S, "a visitor sees none of these lines", pv.evaluate(HID, "spk")["all"] == [])
+        vis2.close()
+
         au = new_context(browser, site, 1280, author=True); aa = au.request; page = au.new_page(); errs = []; watch(page, errs)
         def send(method, path, body): r = getattr(aa, method)(site.url + path, headers=_H, data=json.dumps(body)); return r.status, (r.json() if r.headers.get("content-type", "").startswith("application/json") else {})
         base = dict(forms={"drg": "xxdrg", "kro": "xxkro"}, pos="n.", domain="")
@@ -1917,6 +1954,16 @@ def suite_dictionary(browser, args):
         send("put", f"api/dictionary/entry/{eid}", dict(payload, senses=[dict(payload["senses"][0], examples=""), payload["senses"][1]]))
         check(S, "an empty list removes the examples of the sense", _entry_xml(site, eid).find("Sens/Exemples") is None)
         send("delete", f"api/dictionary/entry/{eid}", {})
+
+        # an example begins with its source
+        st, j = send("post", "api/dictionary/entry", dict(forms={"drg": "exsrc", "kro": "exsrc2"}, pos="n.", domain="", senses=[{"ref": None, "definition": "src", "shortGloss": "src", "examples": "{{cite: fieldnotes#0#d01.Road:02}}\n{{cite: papers#negation_example_01}}\n{{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}"}]))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        srcs = page.locator(f"#{j['id']} .example-source").all_inner_texts(); hrefs = page.locator(f"#{j['id']} .example-source a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
+        check(S, "an example begins with its source, as the sentence is cited: Fieldnotes · title · sentence, and for the published examples and for a recording their title · sentence",
+              srcs[0] == "Fieldnotes · D01 ~ Trigeta i mit long rot · d01.Road:02" and srcs[1] == "Examples from papers · negation_example_01" and srcs[2].endswith(" · en_fr_Drg_Farfadets_02") and len(srcs[2]) > len(" · en_fr_Drg_Farfadets_02"), str(srcs))
+        check(S, "…with no brackets, no label such as “Example · fieldnotes”, and no second line of source below the example", not any("[" in s_ or "]" in s_ or s_.upper().startswith("EXAMPLE ·") for s_ in srcs) and page.locator(f"#{j['id']} .example-label, #{j['id']} .ex-ref").count() == 0)
+        check(S, "…and the source is the link to the sentence in its text", hrefs[0] == "transcription.html?fieldnotes=1&index=0&title=D01%20~%20Trigeta%20i%20mit%20long%20rot#d01.Road%3A02" and hrefs[1].startswith("transcription.html?papers=1&index=0") and hrefs[2].startswith("transcription.html?key=crdo-WWO_FARFADETS.xml"), str(hrefs))
+        send("delete", f"api/dictionary/entry/{j['id']}", {})
 
         # which attested examples a sense shows when none was chosen
         open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
