@@ -1505,6 +1505,9 @@ def _existing_dict_forms():
 
 @app.route('/api/dictionary/proposed')
 def get_proposed_entries():
+    """The words that confirmed texts propose to the dictionary: for the author only (a visitor sees the dictionary, not its worklist)."""
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
     return jsonify(_load_proposed_entries())
 
 @app.route('/api/dictionary/proposed', methods=['POST'])
