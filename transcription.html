@@ -59,6 +59,9 @@
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--gold);
 }
+.tx-head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem 1.4rem; flex-wrap: wrap; }
+.tx-head-main { flex: 1 1 18rem; min-width: 0; }
+.tx-head-row .ttr-box { flex: 0 1 auto; }
 .tx-back {
   font-family: 'Crimson Pro', serif; font-size: 0.85rem;
   color: var(--gold); text-decoration: none;
@@ -441,6 +444,7 @@
 </div>
 
 <script src="auth.js"></script>
+<script src="ttr.js"></script>
 <script>
 'use strict';
 
@@ -1656,12 +1660,17 @@ function render(data) {
   const nSentences = sentences.length;
   main.innerHTML = `
     <div class="tx-header">
-      <a class="tx-back" href="texts.html">← Back to Texts</a>
-      <div class="tx-title" style="color:${langColor};">${data.title || textTitle}</div>
-      <div class="tx-meta">
-        <span style="color:${langColor};">${textLang}</span>
-        <span>${isPapers ? 'Published examples' : _recordedBy()}</span>
-        <span>${nSentences} phrase${nSentences !== 1 ? 's' : ''}</span>
+      <div class="tx-head-row">
+        <div class="tx-head-main">
+          <a class="tx-back" href="texts.html">← Back to Texts</a>
+          <div class="tx-title" style="color:${langColor};">${data.title || textTitle}</div>
+          <div class="tx-meta">
+            <span style="color:${langColor};">${textLang}</span>
+            <span>${isPapers ? 'Published examples' : _recordedBy()}</span>
+            <span>${nSentences} phrase${nSentences !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <div class="ttr-box" id="tx-ttr"></div>
       </div>
     </div>
     <div class="gloss-legend${isLoggedIn ? ' visible' : ''}" id="gloss-legend">
@@ -1670,6 +1679,10 @@ function render(data) {
       Changes are saved automatically.
     </div>
     <div id="phrases-container"></div>`;
+
+  // tokens, types, TTR and Root TTR of this text (by language when it has several)
+  const lexKey = isPapers ? `papers:${fnIndex}` : isFieldnotes ? `fieldnotes:${fnIndex}` : `recording:${textKey}`;
+  TTR.load().then(lex => { const el = document.getElementById('tx-ttr'); if (el) el.innerHTML = TTR.boxHTML((lex.texts || {})[lexKey], 'All languages'); });
 
   const container = document.getElementById('phrases-container');
 
