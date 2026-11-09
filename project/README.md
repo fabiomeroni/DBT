@@ -112,6 +112,8 @@ chosen: only the entries that have a form in that language are listed, with that
   `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
   shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
   language. The LaTeX export lists the same forms. To make a word's chip show its cognates, set its cognates in the dictionary.
+- **An example** begins with its source, as the sentence is cited (for example *Fieldnotes · D01 ~ Trigeta i mit long rot · d01.Road:02*),
+  which is also the link to the sentence in its text.
 - **Proposed entries** (words that confirmed texts suggest adding to the dictionary) are the author's worklist: they are shown, and
   served by the API, to the logged-in author only.
 - **Two ways to list.** The *List* switch in the sidebar shows the dictionary as **Entries** (each headword with its etymology,
@@ -120,8 +122,9 @@ chosen: only the entries that have a form in that language are listed, with that
 - **In the editor** (author mode) the window opens on the headword: its form and IPA, then **Cognates**: tick a language and write
   its form; then the senses (each with a tick per language) and, optionally, the proto-form. Forms that are not cognates are not
   asked for: a form already stored in the entry stays in the data, is listed in a note, and shows under its own language (the
-  author sees a line "Not cognates, so not shown here" on the entry, with a link to set the cognates). For a project with one
-  language there is nothing to tick.
+  author sees a line "Not cognates, so not shown here" **under each sense**, with a link to set the cognates: it lists the forms
+  of the languages *that sense applies to*, since the words that merely mean the same belong to a sense, not to the entry as a whole).
+  For a project with one language there is nothing to tick.
 
 ## Searching the texts (the concordance)
 
