@@ -138,6 +138,19 @@ from papers, in every language, also those the project does not list) for a stri
 - For a word that is glossed, the hit also gives its gloss and, when its form is in the dictionary, the entry and the part of speech.
   The server keeps the corpus as a list of sentences whose words carry such annotations (`concordance.py`): a search on the part of
   speech or on a gloss is the next step, and a tagger or NLTK / spaCy can feed the same list.
+- **N-grams.** The *N-grams* tab of the same page lists the runs of 2 to 6 tokens (inside one sentence) that **contain the word, or the
+  words, typed**, most frequent first, with their count, the number of sentences and the count by language; the word is highlighted in each,
+  and *lines →* opens every occurrence of that n-gram in the concordance (as whole words in sequence, so the counts agree). Tokens are
+  words (case and the punctuation at their edges ignored; `va-wē` is one word) or morphemes (the aligned tokens, `va-` `wē`); the n-grams can
+  be of the words, of the glosses or of the translations, restricted to a language or to some sources, with a minimum frequency, and
+  downloaded as CSV.
+- **Lexical diversity.** Each text has, in the upper right corner of its card and of its page, its **tokens**, **types**, **type-token ratio**
+  (TTR = types / tokens) and **Root TTR** (Guiraud's index = types / √tokens, which depends less on the length of the text). The Texts
+  page gives them for the fieldnotes as a whole and for the recordings as a whole in the corner of each tab; **for the fieldnotes and for a
+  fieldnotes text there is a row per language** (the questionnaire is in several languages), and the recordings are also given by language.
+  The published examples are a text of their own. A token is a word as above, and types are counted ignoring case; both are computed from the
+  texts as they are (`/api/texts/stats`, also by morpheme with `?unit=morpheme`). Compare Root TTR rather than TTR between texts of
+  different lengths.
 - The corpus is read again whenever a text, a gloss file or the questionnaire changes: nothing to rebuild.
 
 ## `references.json` (the bibliography)
