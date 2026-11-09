@@ -112,6 +112,8 @@ chosen: only the entries that have a form in that language are listed, with that
   `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
   shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
   language. The LaTeX export lists the same forms. To make a word's chip show its cognates, set its cognates in the dictionary.
+- **Proposed entries** (words that confirmed texts suggest adding to the dictionary) are the author's worklist: they are shown, and
+  served by the API, to the logged-in author only.
 - **Two ways to list.** The *List* switch in the sidebar shows the dictionary as **Entries** (each headword with its etymology,
   cognates and senses) or as **Senses** (each meaning, with the headwords of the language that have it, each showing what the entry says about that sense: IPA, part of speech, domain, definition, etymology and cognates, notes and the attested examples). The choice is kept in
   the address (`?mode=senses`) and remembered in the browser.
