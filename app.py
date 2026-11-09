@@ -678,7 +678,7 @@ def build_entry_chip(entry_id):
 # ══════════════════════════════════════════════════════════════
 from urllib.parse import quote as _urlq
 
-_CORPUS = {'sig': None, 'lines': []}
+_CORPUS = {'sig': None, 'lines': [], 'stats': {}}
 
 def _corpus_signature():
     paths = [os.path.join(UPLOAD_FOLDER, 'fieldnotes.xml'), FIELDNOTES_FILE]
@@ -723,6 +723,7 @@ def _lines_fieldnotes():
                 else:
                     tokens = [{'form': t, 'gloss': ''} for t in _tokenize_form(text)]
                 out.append({'src': 'fieldnotes', 'lang': code, 'sid': sid, 'label': f'{title} · {sid}', 'text': text, 'translation': transl, 'tokens': tokens,
+                            'tkey': f'fieldnotes:{idx}', 'ttitle': title,
                             'link': f'transcription.html?fieldnotes=1&index={idx}&title={_urlq(title)}#{_urlq(sid)}'})
     return out
 
@@ -737,7 +738,7 @@ def _lines_papers():
             text = (tier.text or '').strip() if tier is not None else ''
             if not text or text == '\u2014':
                 continue
-            out.append({'src': 'papers', 'lang': code, 'sid': sid, 'label': f'{PAPERS_TITLE} · {label}', 'text': text, 'translation': transl,
+            out.append({'src': 'papers', 'lang': code, 'sid': sid, 'label': f'{PAPERS_TITLE} · {label}', 'text': text, 'translation': transl, 'tkey': 'papers:0', 'ttitle': PAPERS_TITLE,
                         'tokens': _tokens_of(tokens.get(code, []), glosses),
                         'link': f'transcription.html?papers=1&index=0&title={_urlq(PAPERS_TITLE)}#{_urlq(sid)}'})
     return out
@@ -764,6 +765,7 @@ def _lines_recordings():
                 tokens = [{'form': w['form'], 'gloss': w.get('gloss', '')} for w in s.get('words', [])]
                 transl = s['transl']
             out.append({'src': 'recording', 'lang': code, 'sid': s['id'], 'label': f"{data['title']} · {s['id']}", 'text': s['form'], 'translation': transl, 'tokens': tokens,
+                        'tkey': f'recording:{fn}', 'ttitle': data['title'],
                         'link': f"transcription.html?key={_urlq(fn)}&title={_urlq(data['title'])}&lang={_urlq(tx_lang)}#{_urlq(s['id'])}"})
     return out
 
@@ -773,6 +775,7 @@ def _corpus_lines():
     if _CORPUS['sig'] != sig:
         _CORPUS['lines'] = [conc.prepare_line(l) for l in _lines_fieldnotes() + _lines_papers() + _lines_recordings()]
         _CORPUS['sig'] = sig
+        _CORPUS['stats'] = {}
     return _CORPUS['lines']
 
 _SOURCE_LABELS = {'fieldnotes': 'Fieldnotes', 'papers': PAPERS_TITLE, 'recording': 'Recordings'}
@@ -810,6 +813,36 @@ def concordance_info():
                     'languages': [{'code': c, 'name': known[c]['name'] if c in known else c.upper(), 'abbr': known[c]['abbr'] if c in known else c.upper(),
                                    'lines': by_lang[c]} for c in order],
                     'sources': [{'id': s, 'label': _SOURCE_LABELS[s], 'lines': by_src[s]} for s in ('fieldnotes', 'recording', 'papers') if s in by_src]})
+
+@app.route('/api/ngrams')
+def concordance_ngrams():
+    """The n-grams that contain the query: /api/ngrams?q=…&n=3&unit=word|morpheme&scope=forms|glosses|translation&case=1&diac=0
+    &lang=code&source=…&min=1&limit=200"""
+    try:
+        n, mn, limit = int(request.args.get('n', 3)), int(request.args.get('min', 1)), int(request.args.get('limit', 200))
+    except ValueError:
+        return jsonify({'error': 'n, min and limit must be numbers.'}), 400
+    sources = [s for s in request.args.get('source', '').split(',') if s]
+    if any(s not in _SOURCE_LABELS for s in sources):
+        return jsonify({'error': 'Unknown source.'}), 400
+    try:
+        res = conc.ngrams(_corpus_lines(), request.args.get('q', ''), n=n, scope=request.args.get('scope', 'forms'), unit=request.args.get('unit', 'word'),
+                          ignore_case=_flag('case', True), ignore_diacritics=_flag('diac', False), lang=request.args.get('lang') or None,
+                          sources=sources or None, min_count=mn, limit=limit)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(res)
+
+@app.route('/api/texts/stats')
+def texts_stats():
+    """Tokens, types, TTR and Root TTR of each text, of each collection (fieldnotes, recordings, papers) and by language."""
+    unit = request.args.get('unit', 'word')
+    lines = _corpus_lines()
+    if unit not in conc.UNITS:
+        return jsonify({'error': 'Unknown unit.'}), 400
+    if unit not in _CORPUS['stats']:
+        _CORPUS['stats'][unit] = conc.corpus_stats(lines, unit=unit)
+    return jsonify(_CORPUS['stats'][unit])
 
 @app.route('/api/concordance')
 def concordance_search():
