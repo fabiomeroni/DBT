@@ -667,7 +667,7 @@ function etymHTML(et) {
   const tl = safeUrl(et.tlopo), eg = safeUrl(et.etymograph);
   return `<span class="etym-badge">
     ${tl ? `<a class="etym-tag" href="${escHTML(tl)}" target="_blank" rel="noopener" title="${lang} etymology — TLOPO">${tag}</a>` : `<span class="etym-tag">${tag}</span>`}
-    ${eg ? `<a class="etymograph-link" href="${escHTML(eg)}" target="_blank" rel="noopener" title="View in Etymograph"><img src="etymograph_icon.png" alt="Etymograph"></a>` : ''}
+    ${eg ? `<a class="etymograph-link" href="${escHTML(eg)}" target="_blank" rel="noopener" title="View in Etymograph"><img src="evosem_logo.png" alt="Etymograph"></a>` : ''}
   </span>`;
 }
 
