@@ -15,6 +15,7 @@ settings on the server are never touched.
 | `setup` | the first run of a new project: the setup page, the refusals (wrong code, weak password, bad language codes), and both ways of creating a project (your own languages, the starter example), including the restart and a first login | scripted, on copies of the site with no project |
 | `concordance` | searching the texts: counts checked against a plain reading of the XML, Unicode (combining marks), words and morphemes, filters, a corpus that changes, glosses and dictionary entries, the page in a browser, CSV, hostile text, narrow screens, one language | scripted, with `tests/test_concordance.py` (direct tests of `concordance.py`) |
 | `textstats` | n-grams of the word typed and tokens, types, TTR and Root TTR of every text, collection and language: all counted again independently from the XML, then the Texts page, the viewers and the n-gram view in a browser, phones, one language | scripted |
+| `refimport` | importing BibTeX, EndNote and RIS lists (preview, duplicates, renamed keys, Windows-1252, hostile text, size limit, the site's own export read back) and each reference as a file, for visitors and the author, on phones | scripted, with `tests/test_references.py` (the parsers, direct) |
 | `dictionary` | entries listed per headword language, the etymology of a form with its cognates and no other forms, senses per language, the Entries / Senses list, the grammar's chips (cognates for lexical material, all forms for grammatical material), the examples chosen for each sense with {{cite: …}} (display, search, author's window around the headword and its cognates, API rules, a one-language project, hostile input) | scripted, on a dictionary with languages ticked |
 | `references` | the bibliography: APA 7 formatting through the server (templates of the UTS APA guide), who may edit, keys and year letters, `{{source: …}}` in the grammar and in the LaTeX export, BibTeX (read by a real parser) and EndNote, hostile input, the author's form in a browser, narrow screens, a project with no references | scripted, with `tests/test_references.py` (direct tests of `references.py`) |
 | `migration` | that an installation whose data sits in the old places (live edits included) is moved into `project/` safely: backup first, the live version wins, every file checked, the old places removed only afterwards, done once, and a move that cannot finish deletes nothing | scripted, on copies of the site shaped like a live installation |
@@ -26,7 +27,7 @@ settings on the server are never touched.
     playwright install chromium
 
     python tests/run_tests.py                       # everything
-    python tests/run_tests.py --only functional     # one suite: visual | api | functional | generality | security | setup | migration | references | dictionary | concordance | textstats
+    python tests/run_tests.py --only functional     # one suite: visual | api | functional | generality | security | setup | migration | references | dictionary | concordance | textstats | refimport
     python tests/run_tests.py --update-baseline     # record the current behaviour as the new baseline
     python tests/run_tests.py --record-missing      # record only the baselines that do not exist yet (never overwrites)
 
