@@ -1317,7 +1317,10 @@ function bindBadgeClicks() {
 // ── Proposed dictionary entries ──────────────────────────────
 let proposedEntries = {}; // colKey → {gloss, forms, examples}
 
+// The proposals are the author's worklist: only a logged-in author asks for them, and the server gives them to nobody else
 async function loadProposedEntries() {
+  proposedEntries = {};
+  if (!isLoggedIn) return;
   try {
     const r = await fetch('/api/dictionary/proposed');
     if (r.ok) proposedEntries = await r.json();
@@ -1328,8 +1331,8 @@ function renderProposedEntries() {
   const section = document.getElementById('proposed-section');
   const container = document.getElementById('proposed-entries');
   if (!section || !container) return;
-  const entries = Object.entries(proposedEntries);
-  if (!entries.length) { section.style.display = 'none'; return; }
+  const entries = isLoggedIn ? Object.entries(proposedEntries) : [];
+  if (!entries.length) { section.style.display = 'none'; container.innerHTML = ''; return; }
   section.style.display = '';
   const LANG_FROM_CODE = DBT.nameByCode;
   container.innerHTML = entries.map(([key, e]) => {
@@ -2266,7 +2269,7 @@ init();
   </div>
 </div>
 <script>
-function onAuthChange(loggedIn) {
+async function onAuthChange(loggedIn) {
   document.querySelectorAll('.entry-actions, .entry-hidden-forms').forEach(el =>
     el.classList.toggle('visible', loggedIn));
   // the IPA badges differ for the author (✓ on confirmed forms, clickable ones): redraw them in place
@@ -2274,7 +2277,10 @@ function onAuthChange(loggedIn) {
     const entry = DICT_MAP[el.id || el.dataset.entry], w = el.querySelector('.ipa-wrap');
     if (entry && w) w.outerHTML = ipaHTML(entry);
   });
-  if (typeof renderProposedEntries === 'function') renderProposedEntries();
+  if (typeof loadProposedEntries === 'function') {            // the proposals come with the login and go with the logout
+    await loadProposedEntries();
+    renderProposedEntries();
+  }
 }
 
 // Scripts at bottom of body — DOM already ready, no DOMContentLoaded needed
