@@ -272,7 +272,6 @@ PUBLIC_API = [
     ("dictionary-xml", "api/dictionary/xml"),
     ("dictionary-entries", "api/dictionary/entries"),
     ("dictionary-examples-initial", "api/dictionary/examples"),
-    ("dictionary-proposed-initial", "api/dictionary/proposed"),
     ("transcriptions-list", "api/transcriptions/list"),
     ("transcription-farfadets", "api/transcription/crdo-WWO_FARFADETS.xml"),
     ("fieldnotes-groups", "api/fieldnotes/groups"),
@@ -293,6 +292,7 @@ PUBLIC_API = [
 ]
 AUTHOR_API = [
     ("dictionary-settings", "api/dictionary/settings"),
+    ("dictionary-proposed-initial", "api/dictionary/proposed"),
     ("dictionary-orthography-preview", "api/dictionary/orthography"),
     ("latex-export", "api/grammar/export/latex"),
 ]
@@ -455,6 +455,21 @@ def suite_functional(browser, site, args):
     page.goto(site.url + "dictionary.html?lang=Dorig", wait_until="domcontentloaded"); page.wait_for_timeout(2000)
     ghost = page.locator(".entry.proposed", has_text="testgloss")
     check(S, "dictionary: the proposed entry is shown", ghost.count() >= 1)
+
+    # the proposals are the author's worklist: a visitor neither sees them nor can fetch them
+    vctx = new_context(browser, site, 1280); vpage = vctx.new_page(); verrs = []; watch(vpage, verrs); asked = []
+    vpage.on("request", lambda r: asked.append(r.url))
+    open_page(vpage, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1500); vpage.wait_for_timeout(600)
+    check(S, "dictionary: a visitor does not see the proposed entries (while the author has some waiting), and the page does not even ask for them",
+          vpage.locator(".entry.proposed").count() == 0 and not vpage.locator("#proposed-section").is_visible() and "Proposed entries" not in vpage.locator("#dict-content").inner_text()
+          and not [u for u in asked if "/api/dictionary/proposed" in u] and not verrs, f"{verrs[:2]} {[u for u in asked if 'proposed' in u]}")
+    check(S, "dictionary: the API refuses the proposals to a visitor (401), and gives them to the author", vctx.request.get(site.url + "api/dictionary/proposed").status == 401 and api.get(site.url + "api/dictionary/proposed").status == 200)
+    check(S, "dictionary: the proposals do not appear in what a visitor can read of the page's data either", "testgloss" not in vctx.request.get(site.url + "dictionary.html").text() and "testgloss" not in vctx.request.get(site.url + "api/dictionary/xml").text())
+    vpage.click(".login-btn"); vpage.fill("#login-pw", PASSWORD); vpage.click("#login-submit"); vpage.wait_for_selector(".entry.proposed", timeout=8000)
+    check(S, "dictionary: logging in shows the proposed entries at once, without a reload", vpage.locator(".entry.proposed", has_text="testgloss").count() >= 1 and vpage.locator("#proposed-section").is_visible())
+    vpage.click(".logout-btn"); vpage.wait_for_function("document.querySelectorAll('.entry.proposed').length === 0", timeout=8000)
+    check(S, "dictionary: logging out takes them away again, and nothing of them is left in the page", not vpage.locator("#proposed-section").is_visible() and vpage.locator("#proposed-entries").inner_html() == "" and vpage.locator(".proposed-badge, .proposed-actions, .proposed-example, [data-col-key]").count() == 0)
+    vctx.close()
     ghost.first.locator("text=Add to dictionary").click(); page.wait_for_timeout(2200)
     from lxml import etree
     added = [e for e in etree.parse(str(site.file("project/dictionary.xml"))).getroot().findall(".//EntréeLexicale") if e.get("identifiant", "").startswith("proposed_")]
