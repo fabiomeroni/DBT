@@ -52,10 +52,29 @@
 .cc-transl { grid-column: 2 / -1; font-family: 'Crimson Pro', serif; font-size: 0.92rem; color: var(--ink-light); font-style: italic; padding: 0 0 0.25rem; overflow-wrap: anywhere; }
 .cc-transl .cc-form { font-style: normal; color: #4a3520; font-family: 'EB Garamond', serif; margin-right: 0.5rem; }
 .cc-transl .cc-gloss { font-style: normal; font-family: 'Source Code Pro', monospace; font-size: 0.74rem; background: #efe6d3; border-radius: 2px; padding: 0 0.3rem; margin-left: 0.5rem; }
+.cc-views { display: flex; gap: 0; margin: 1rem 0 0; border-bottom: 2px solid var(--border-lt); }
+.cc-view { font-family: 'Crimson Pro', serif; font-size: 1rem; font-weight: 600; background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px;
+  padding: 0.4rem 1.1rem; color: var(--ink-light); cursor: pointer; }
+.cc-view:hover { color: var(--gold); }
+.cc-view.active { color: var(--ink); border-bottom-color: var(--gold); }
+body[data-view="kwic"] .cc-ng-only, body[data-view="ngrams"] .cc-kwic-only { display: none !important; }
+.cc-ng { display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem 5rem minmax(0, 14rem) 9rem; column-gap: 0.8rem; align-items: baseline; padding: 0.35rem 0.3rem;
+  border-top: 1px solid var(--border-lt); font-family: 'EB Garamond', serif; font-size: 1.14rem; line-height: 1.45; }
+.cc-ng.head { font-family: 'Crimson Pro', serif; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-light); border-top: none; padding-bottom: 0.15rem; }
+.cc-ng:not(.head):hover { background: #fbf6ea; }
+.cc-ng .n-gram { overflow-wrap: anywhere; }
+.cc-ng .n-count, .cc-ng .n-sent { text-align: right; font-variant-numeric: tabular-nums; font-family: 'Crimson Pro', serif; font-size: 1rem; }
+.cc-ng .n-count { font-weight: 700; color: var(--ink); background: linear-gradient(90deg, transparent calc(100% - var(--w, 0%)), #f1e3bd var(--w, 0%)) no-repeat; padding-right: 0.15rem; }
+.cc-ng .n-lang { font-family: 'Crimson Pro', serif; font-size: 0.82rem; color: var(--ink-light); }
+.cc-ng .n-act { text-align: right; font-family: 'Crimson Pro', serif; font-size: 0.82rem; white-space: nowrap; }
+.cc-ng .n-act a { color: var(--gold); text-decoration: none; border-bottom: 1px dotted var(--gold); margin-left: 0.5rem; }
 .cc-empty { color: var(--ink-light); font-style: italic; padding: 1rem 0; }
 
 @media (max-width: 900px) { .cc-main { padding: 1.2rem 1.2rem 4rem; } .texts-tabs { padding: 0 0.6rem; } .tab-btn { padding: 0.75rem 1rem 0.6rem; font-size: 0.92rem; } }
 @media (max-width: 720px) {
+  .cc-ng { grid-template-columns: minmax(0, 1fr) 3.4rem 3rem; }
+  .cc-ng .n-lang, .cc-ng .n-act { grid-column: 1 / -1; text-align: left; }
+  .cc-ng.head .n-lang, .cc-ng.head .n-act { display: none; }
   .cc-hit { display: block; padding: 0.5rem 0.2rem; }
   .cc-lang { display: inline-block; margin-right: 0.4rem; vertical-align: baseline; }
   .cc-left, .cc-right { display: inline; text-align: left; }
@@ -113,27 +132,35 @@
     <div class="cc-opts">
       <label>Search in
         <select id="cc-scope">
-          <option value="forms">the words of the texts</option>
-          <option value="glosses">the glosses</option>
-          <option value="translation">the translations</option>
+          <option value="forms">words of the texts</option>
+          <option value="glosses">glosses</option>
+          <option value="translation">translations</option>
         </select></label>
-      <label>Match
+      <label class="cc-kwic-only">Match
         <select id="cc-match">
           <option value="anywhere">anywhere in the text</option>
           <option value="word">a whole word</option>
           <option value="morpheme">a whole morpheme</option>
+          <option value="phrase">whole words in sequence</option>
         </select></label>
       <label><input type="checkbox" id="cc-case" checked> ignore case</label>
       <label><input type="checkbox" id="cc-diac"> ignore diacritics</label>
       <label>Language <select id="cc-lang"><option value="">All languages</option></select></label>
-      <label>Context <input type="number" id="cc-width" min="1" max="25" value="6"> words</label>
+      <label class="cc-kwic-only">Context <input type="number" id="cc-width" min="1" max="25" value="6"> words</label>
+      <label class="cc-ng-only">N-grams of <select id="cc-n"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select> tokens</label>
+      <label class="cc-ng-only">Tokens are <select id="cc-unit"><option value="word">words</option><option value="morpheme">morphemes</option></select></label>
+      <label class="cc-ng-only">Minimum frequency <input type="number" id="cc-min" min="1" max="1000" value="1"></label>
     </div>
     <div class="cc-sources" id="cc-sources"></div>
   </form>
 
+  <div class="cc-views" role="tablist" aria-label="What to show">
+    <button type="button" class="cc-view active" data-view="kwic" role="tab" title="Every occurrence of the string, in its context">Concordance</button>
+    <button type="button" class="cc-view" data-view="ngrams" role="tab" title="The runs of words that contain the string, with their frequency">N-grams</button>
+  </div>
   <div class="cc-summary" id="cc-summary" aria-live="polite"></div>
   <div class="cc-tools" id="cc-tools">
-    <label>Sort by
+    <label class="cc-kwic-only">Sort by
       <select id="cc-sort">
         <option value="corpus">texts order</option>
         <option value="left">left context (before)</option>
@@ -141,7 +168,13 @@
         <option value="match">matches</option>
         <option value="lang">language</option>
       </select></label>
-    <button type="button" class="cc-btn" id="cc-csv" title="Download the hits as a spreadsheet file (CSV)">⬇ CSV</button>
+    <label class="cc-ng-only">Sort by
+      <select id="cc-ngsort">
+        <option value="count">frequency</option>
+        <option value="text">alphabetical order</option>
+        <option value="sentences">number of sentences</option>
+      </select></label>
+    <button type="button" class="cc-btn" id="cc-csv" title="Download what is shown as a spreadsheet file (CSV)">⬇ CSV</button>
   </div>
   <div id="cc-results"></div>
 </main>
@@ -150,7 +183,7 @@
 <script>
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const $ = id => document.getElementById(id);
-let INFO = null, LAST = null;
+let INFO = null, LAST = null, VIEW = 'kwic';
 
 const colorOf = code => (DBT.langs.find(l => l.code === code) || {}).color || '#8a8a8a';
 const abbrOf  = code => (INFO && INFO.languages.find(l => l.code === code) || {}).abbr || String(code).toUpperCase();
@@ -169,29 +202,46 @@ async function loadInfo() {
   if (DBT.langs.length < 2) $('cc-lang').closest('label').style.display = 'none';
 }
 
-function params() {
+// What is searched, as the parameters of the server; `all` adds what only the other view uses (for the address).
+function common() {
   const p = new URLSearchParams();
   p.set('q', $('cc-q').value.trim());
-  p.set('scope', $('cc-scope').value); p.set('match', $('cc-match').value);
+  p.set('scope', $('cc-scope').value);
   p.set('case', $('cc-case').checked ? '1' : '0'); p.set('diac', $('cc-diac').checked ? '1' : '0');
   if ($('cc-lang').value) p.set('lang', $('cc-lang').value);
   const boxes = [...document.querySelectorAll('.cc-src-box')];
   const on = boxes.filter(b => b.checked).map(b => b.value);
   if (boxes.length && on.length && on.length < boxes.length) p.set('source', on.join(','));
-  p.set('width', $('cc-width').value || '6');
   return p;
+}
+function params(view = VIEW) {
+  const p = common();
+  if (view === 'ngrams') { p.set('n', $('cc-n').value); p.set('min', $('cc-min').value || '1'); if ($('cc-scope').value === 'forms') p.set('unit', $('cc-unit').value); }
+  else { p.set('match', $('cc-match').value); p.set('width', $('cc-width').value || '6'); }
+  return p;
+}
+function addressState() {
+  const p = params('kwic');
+  p.set('view', VIEW); p.set('n', $('cc-n').value); p.set('unit', $('cc-unit').value); p.set('min', $('cc-min').value || '1');
+  p.set('sort', $('cc-sort').value); p.set('ngsort', $('cc-ngsort').value);
+  return p;
+}
+function setView(v) {
+  VIEW = v === 'ngrams' ? 'ngrams' : 'kwic';
+  document.body.dataset.view = VIEW;
+  document.querySelectorAll('.cc-view').forEach(b => b.classList.toggle('active', b.dataset.view === VIEW));
+  $('cc-unit').disabled = $('cc-scope').value !== 'forms';
 }
 function restore() {                                            // the address says what was searched
   const p = new URLSearchParams(location.search);
+  const set = (id, key) => { if (p.has(key)) $(id).value = p.get(key); };
   if (p.has('q')) $('cc-q').value = p.get('q');
-  if (p.has('scope')) $('cc-scope').value = p.get('scope');
-  if (p.has('match')) $('cc-match').value = p.get('match');
+  set('cc-scope', 'scope'); set('cc-match', 'match'); set('cc-lang', 'lang'); set('cc-width', 'width');
+  set('cc-n', 'n'); set('cc-unit', 'unit'); set('cc-min', 'min'); set('cc-sort', 'sort'); set('cc-ngsort', 'ngsort');
   if (p.has('case')) $('cc-case').checked = p.get('case') !== '0';
   if (p.has('diac')) $('cc-diac').checked = p.get('diac') === '1';
-  if (p.has('lang')) $('cc-lang').value = p.get('lang');
-  if (p.has('width')) $('cc-width').value = p.get('width');
   if (p.has('source')) { const on = new Set(p.get('source').split(',')); document.querySelectorAll('.cc-src-box').forEach(b => { b.checked = on.has(b.value); }); }
-  if (p.has('sort')) $('cc-sort').value = p.get('sort');
+  setView(p.get('view') || 'kwic');
   return p.has('q') && p.get('q').trim() !== '';
 }
 
@@ -202,29 +252,38 @@ async function run() {
   runCtl = new AbortController();
   const q = $('cc-q').value.trim();
   if (!q) { $('cc-summary').textContent = ''; $('cc-results').innerHTML = ''; $('cc-tools').classList.remove('visible'); return; }
-  const p = params();
-  const shown = new URLSearchParams(p); shown.set('sort', $('cc-sort').value);
-  history.replaceState(null, '', location.pathname + '?' + shown.toString());
+  history.replaceState(null, '', location.pathname + '?' + addressState().toString());
   $('cc-summary').textContent = 'Searching…';
+  const view = VIEW;
   let res;
   try {
-    const r = await fetch('/api/concordance?' + p.toString(), { signal: runCtl.signal });
+    const r = await fetch((view === 'ngrams' ? '/api/ngrams?' : '/api/concordance?') + params(view).toString(), { signal: runCtl.signal });
     res = await r.json();
     if (my !== runId) return;
     if (!r.ok) throw new Error(res.error || 'HTTP ' + r.status);
   } catch (e) {
     if (e.name === 'AbortError' || my !== runId) return;
     $('cc-summary').innerHTML = `<span class="cc-error">${esc(e.message)}</span>`;
-    $('cc-results').innerHTML = ''; $('cc-tools').classList.remove('visible'); return;
+    $('cc-results').innerHTML = ''; $('cc-tools').classList.remove('visible'); LAST = null; return;
   }
-  LAST = res;
+  res.view = view; LAST = res;
+  if (view === 'ngrams') summaryNgrams(res); else summaryKwic(res);
+  $('cc-tools').classList.toggle('visible', (view === 'ngrams' ? res.distinct : res.total) > 0);
+  render();
+}
+
+function summaryKwic(res) {
   const langs = Object.entries(res.byLang).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${esc(abbrOf(c))} ${n}`).join(' · ');
   $('cc-summary').innerHTML = res.total
     ? `<b>${res.total.toLocaleString()}</b> hit${res.total === 1 ? '' : 's'} in ${res.sentences.toLocaleString()} sentence${res.sentences === 1 ? '' : 's'}` +
       ` <span class="cc-count">${DBT.langs.length > 1 && langs ? '(' + langs + ')' : ''}${res.truncated ? ' · the first ' + res.shown.toLocaleString() + ' are shown' : ''}</span>`
     : `No hit for <b>${esc(res.query)}</b>.`;
-  $('cc-tools').classList.toggle('visible', res.total > 0);
-  render();
+}
+function summaryNgrams(res) {
+  $('cc-summary').innerHTML = res.distinct
+    ? `<b>${res.distinct.toLocaleString()}</b> different ${res.n}-gram${res.distinct === 1 ? '' : 's'} contain <b>${esc(res.query)}</b>, ${res.occurrences.toLocaleString()} occurrences in all` +
+      ` <span class="cc-count">(${esc(res.query)} itself occurs ${res.queryCount.toLocaleString()} time${res.queryCount === 1 ? '' : 's'}${res.truncated ? '; the first ' + res.shown.toLocaleString() + ' are shown' : ''})</span>`
+    : `No ${res.n}-gram contains <b>${esc(res.query)}</b>` + (res.queryCount ? ` (it occurs ${res.queryCount.toLocaleString()} time${res.queryCount === 1 ? '' : 's'}, but not within ${res.n} words of a sentence).` : '.');
 }
 
 const rev = s => s.split(/\s+/).filter(Boolean).reverse().join(' ');
@@ -237,6 +296,7 @@ const SORTS = {
 };
 function render() {
   if (!LAST) return;
+  if (LAST.view === 'ngrams') return renderNgrams();
   const rows = LAST.hits.map((h, i) => ({ h, i }));
   const cmp = SORTS[$('cc-sort').value];
   if (cmp) rows.sort((a, b) => cmp(a, b) || a.i - b.i);
@@ -256,26 +316,70 @@ function render() {
   }).join('') || '';
 }
 
+// The n-grams: the runs of tokens that contain the query, most frequent first
+function gramLink(g, res) {                      // the lines of an n-gram, in the concordance, with the same options
+  const p = new URLSearchParams(location.search);
+  const q = new URLSearchParams();
+  q.set('q', g.text); q.set('scope', res.scope);
+  q.set('match', res.unit === 'morpheme' && res.scope === 'forms' ? 'anywhere' : 'phrase');
+  ['case', 'diac', 'lang', 'source'].forEach(k => { if (p.has(k)) q.set(k, p.get(k)); });
+  return 'concordance.html?' + q.toString();
+}
+function renderNgrams() {
+  const res = LAST, key = $('cc-ngsort').value;
+  const grams = res.grams.slice();
+  if (key === 'text') grams.sort((a, b) => a.text.localeCompare(b.text, undefined, { sensitivity: 'base' }));
+  else if (key === 'sentences') grams.sort((a, b) => b.sentences - a.sentences || b.count - a.count);
+  const top = Math.max(1, ...grams.map(g => g.count)), several = DBT.langs.length > 1;
+  const head = `<div class="cc-ng head"><span>${res.n}-gram</span><span style="text-align:right;">Count</span><span style="text-align:right;">Sentences</span><span>${several ? 'Languages' : ''}</span><span></span></div>`;
+  $('cc-results').innerHTML = head + grams.map(g => {
+    const hl = new Set(g.hl);
+    const text = g.tokens.map((t, i) => hl.has(i) ? `<mark class="cc-match">${esc(t)}</mark>` : esc(t)).join(' ');
+    const langs = several ? Object.entries(g.byLang).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${esc(abbrOf(c))} ${n}`).join(' · ') : '';
+    return `<div class="cc-ng">
+      <span class="n-gram">${text}</span>
+      <span class="n-count" style="--w:${Math.round(100 * g.count / top)}%;">${g.count.toLocaleString()}</span>
+      <span class="n-sent">${g.sentences.toLocaleString()}</span>
+      <span class="n-lang">${langs}</span>
+      <span class="n-act"><a href="${esc(g.example.link)}" title="${esc(g.example.sentence)} — ${esc(g.example.label)}">example</a><a href="${esc(gramLink(g, res))}" title="Every occurrence of this ${res.n}-gram, in context">lines →</a></span>
+    </div>`;
+  }).join('');
+}
+
 function csv() {
-  if (!LAST || !LAST.hits.length) return;
+  if (!LAST) return;
   const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const head = ['language', 'source', 'reference', 'left', 'match', 'right', 'sentence', 'translation', 'gloss', 'dictionary entry', 'part of speech', 'link'];
-  const lines = [head.map(cell).join(',')].concat(LAST.hits.map(h =>
-    [nameOf(h.lang), h.src, h.label, h.left, h.match, h.right, h.sentence, h.translation, h.gloss, h.entry, h.pos, new URL(h.link, location.href).href].map(cell).join(',')));
+  let head, rows;
+  if (LAST.view === 'ngrams') {
+    if (!LAST.grams.length) return;
+    head = [LAST.n + '-gram', 'count', 'sentences', 'languages', 'example', 'example sentence', 'link'];
+    rows = LAST.grams.map(g => [g.text, g.count, g.sentences, Object.entries(g.byLang).map(([c, n]) => nameOf(c) + ': ' + n).join('; '), g.example.label, g.example.sentence, new URL(g.example.link, location.href).href]);
+  } else {
+    if (!LAST.hits.length) return;
+    head = ['language', 'source', 'reference', 'left', 'match', 'right', 'sentence', 'translation', 'gloss', 'dictionary entry', 'part of speech', 'link'];
+    rows = LAST.hits.map(h => [nameOf(h.lang), h.src, h.label, h.left, h.match, h.right, h.sentence, h.translation, h.gloss, h.entry, h.pos, new URL(h.link, location.href).href]);
+  }
+  const lines = [head.map(cell).join(',')].concat(rows.map(r => r.map(cell).join(',')));
   const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'concordance-' + (LAST.query.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 30) || 'search') + '.csv';
+  a.href = URL.createObjectURL(blob);
+  a.download = (LAST.view === 'ngrams' ? 'ngrams-' : 'concordance-') + (LAST.query.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 30) || 'search') + '.csv';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 $('cc-form').addEventListener('submit', e => { e.preventDefault(); run(); });
-$('cc-sort').addEventListener('change', () => { const u = new URL(location); u.searchParams.set('sort', $('cc-sort').value); history.replaceState(null, '', u); render(); });
+document.querySelectorAll('.cc-view').forEach(b => b.addEventListener('click', () => { setView(b.dataset.view); run(); }));
+['cc-sort', 'cc-ngsort'].forEach(id => $(id).addEventListener('change', () => { history.replaceState(null, '', location.pathname + '?' + addressState().toString()); render(); }));
 $('cc-csv').addEventListener('click', csv);
-['cc-scope', 'cc-match', 'cc-case', 'cc-diac', 'cc-lang', 'cc-width'].forEach(id => $(id).addEventListener('change', () => { if ($('cc-q').value.trim()) run(); }));
+['cc-scope', 'cc-match', 'cc-case', 'cc-diac', 'cc-lang', 'cc-width', 'cc-n', 'cc-unit', 'cc-min'].forEach(id => $(id).addEventListener('change', () => {
+  $('cc-unit').disabled = $('cc-scope').value !== 'forms';
+  if ($('cc-q').value.trim()) run();
+}));
 document.addEventListener('change', e => { if (e.target.classList.contains('cc-src-box') && $('cc-q').value.trim()) run(); });
 
 bindLoginModal();
 checkAuth();
+setView('kwic');
 loadInfo().then(() => { if (restore()) run(); });
 </script>
 </body>
