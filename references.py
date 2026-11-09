@@ -581,6 +581,436 @@ def to_endnote(refs, ctx=None):
     return '\n'.join(enw_entry(r, ctx) for r in ctx.sorted())
 
 
+# ───────────────────────── import: BibTeX, EndNote (tagged format) and RIS ─────────────────────────
+# parse_references(text) reads a list of references in any of these formats and gives, for each, either a reference as the form
+# would make it (validated by clean()) or the reason why it could not be read. merge_import() then sets them beside the references
+# that exist: those that are already there are skipped, a key that is taken is replaced by a free one.
+MAX_IMPORT_CHARS = 2_000_000
+MAX_IMPORT_ENTRIES = 5000
+
+_ACCENTS = {"'": '\u0301', '`': '\u0300', '^': '\u0302', '"': '\u0308', '~': '\u0303', '=': '\u0304', '.': '\u0307',
+            'u': '\u0306', 'v': '\u030c', 'c': '\u0327', 'H': '\u030b', 'k': '\u0328', 'r': '\u030a'}
+_LETTERS = {'ss': 'ß', 'o': 'ø', 'O': 'Ø', 'aa': 'å', 'AA': 'Å', 'ae': 'æ', 'AE': 'Æ', 'oe': 'œ', 'OE': 'Œ', 'l': 'ł', 'L': 'Ł',
+            'i': 'i', 'j': 'j', 'dh': 'ð', 'DH': 'Ð', 'th': 'þ', 'TH': 'Þ', 'ng': 'ŋ', 'NG': 'Ŋ'}
+_PARTICLES = {'von', 'van', 'de', 'der', 'den', 'del', 'della', 'di', 'da', 'du', 'la', 'le', 'ter', 'ten', 'al', 'el', 'bin', 'ibn',
+              'dos', 'das', 'do', 'zu', 'af', "d'", 'des', 'los', 'las'}
+_ORG_WORDS = re.compile(r'\b(university|universit\w+|institute|institut|association|organi[sz]ation|society|press|committee|council|department|'
+                        r'ministry|bureau|group|project|agency|cent(?:re|er)|foundation|commission|survey|office|board|library|museum|school|'
+                        r'college|academy|inc|ltd|company|consortium|network|program(?:me)?|team|laboratory)\b', re.I)
+
+
+def unlatex(s):
+    """A BibTeX value as plain text: LaTeX accents and special letters become the letters, escaped characters become themselves,
+    protective braces go."""
+    s = str(s or '')
+    if '\\' in s or '{' in s or '~' in s or '$' in s or '--' in s:
+        s = re.sub(r'\\([&%$#_{}])', lambda m: m.group(1), s)
+        s = re.sub(r"\\(['`^\"~=.])\s*(?:\{\s*\\?([A-Za-z])\s*\}|\\?([A-Za-z]))", lambda m: (m.group(2) or m.group(3)) + _ACCENTS[m.group(1)], s)
+        s = re.sub(r'\\([uvcHkr])(?:\s*\{\s*\\?([A-Za-z])\s*\}|\s+\\?([A-Za-z]))', lambda m: (m.group(2) or m.group(3)) + _ACCENTS[m.group(1)], s)
+        s = re.sub(r'\\([A-Za-z]+)(?![A-Za-z])\s?', lambda m: _LETTERS.get(m.group(1), ''), s)
+        s = s.replace('$', '').replace('{', '').replace('}', '').replace('\\', '')
+        s = s.replace('~', ' ').replace('---', '—').replace('--', '–')
+    return re.sub(r'\s+', ' ', unicodedata.normalize('NFC', s)).strip()
+
+
+def _key_of(s):
+    k = re.sub(r'[^a-z0-9_-]+', '-', str(s or '').strip().lower()).strip('-_')
+    return k[:80]
+
+
+def _top_split(s, sep_re):
+    """Split at the places that match sep_re and are not inside braces."""
+    out, depth, start = [], 0, 0
+    for m in re.finditer(r'[{}]|' + sep_re, s):
+        t = m.group(0)
+        if t == '{': depth += 1
+        elif t == '}': depth = max(0, depth - 1)
+        elif depth == 0:
+            out.append(s[start:m.start()]); start = m.end()
+    out.append(s[start:])
+    return [x.strip() for x in out if x.strip()]
+
+
+def _person_from_words(words):
+    """['John', 'von', 'Neumann'] -> {'family': 'von Neumann', 'given': 'John'}"""
+    if not words:
+        return None
+    i = len(words) - 1
+    while i > 0 and words[i - 1][:1].islower() and words[i - 1].lower() in _PARTICLES:
+        i -= 1
+    fam, giv = ' '.join(words[i:]), ' '.join(words[:i])
+    return {'family': fam, 'given': giv} if giv else {'family': fam}
+
+
+def _split_name(raw, comma_is_org=False):
+    """One name as written in a list of references -> a person {'family', 'given'}, an organisation {'org'}, or None."""
+    raw = raw.strip()
+    if not raw or raw.lower() in ('others', 'et al', 'et al.'):
+        return None
+    if raw.startswith('{') and raw.endswith('}') and _balanced_group(raw):             # {World Health Organization}: one name, not to be split
+        return {'org': unlatex(raw[1:-1])}
+    parts = _top_split(raw, r'\s*,\s*')
+    if len(parts) == 1 and raw.rstrip().endswith(','):                          # "Name,": an organisation, or a family name alone
+        n = unlatex(parts[0])
+        return {'org': n} if (' ' in n or _ORG_WORDS.search(n)) else {'family': n}
+    if len(parts) >= 2:
+        fam, giv = unlatex(parts[0]), unlatex(parts[-1])
+        p = {'family': fam}
+        if giv: p['given'] = giv
+        if len(parts) == 3 and unlatex(parts[1]): p['suffix'] = unlatex(parts[1])
+        return p
+    words = _top_split(raw, r'\s+')
+    n = unlatex(raw)
+    if _ORG_WORDS.search(n) and len(words) > 1:
+        return {'org': n}
+    return _person_from_words([unlatex(w) for w in words])
+
+
+def _balanced_group(raw):
+    depth = 0
+    for i, c in enumerate(raw):
+        depth += (c == '{') - (c == '}')
+        if depth == 0 and i < len(raw) - 1:
+            return False
+    return depth == 0
+
+
+def _names_bibtex(raw):
+    return [p for p in (_split_name(x) for x in _top_split(raw, r'\s+and\s+')) if p]
+
+
+# ── BibTeX ──
+_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+_BRACE = re.compile(r'[{}\\]')
+
+
+def _read_braced(s, i):
+    """s[i] == '{': the text up to the matching brace, and the position after it (an unclosed brace takes the rest)."""
+    depth, j, n = 0, i, len(s)
+    while True:
+        m = _BRACE.search(s, j)
+        if not m:
+            return s[i + 1:], n
+        c = m.group(0)
+        if c == '\\': j = m.end() + 1; continue
+        depth += 1 if c == '{' else -1
+        j = m.end()
+        if depth == 0:
+            return s[i + 1:m.start()], j
+
+
+def _read_quoted(s, i):
+    depth, j, n = 0, i + 1, len(s)
+    while j < n:
+        c = s[j]
+        if c == '\\': j += 2; continue
+        if c == '{': depth += 1
+        elif c == '}': depth = max(0, depth - 1)
+        elif c == '"' and depth == 0:
+            return s[i + 1:j], j + 1
+        j += 1
+    return s[i + 1:], n
+
+
+def _bib_value(s, i, macros):
+    parts, n = [], len(s)
+    while i < n:
+        while i < n and s[i] in ' \t\r\n': i += 1
+        if i >= n: break
+        c = s[i]
+        if c == '{': v, i = _read_braced(s, i)
+        elif c == '"': v, i = _read_quoted(s, i)
+        else:
+            m = re.compile(r'[A-Za-z0-9_:.+/-]+').match(s, i)
+            if not m: break
+            word = m.group(0); i = m.end()
+            v = word if word.isdigit() else macros.get(word.lower(), word)
+        parts.append(v)
+        while i < n and s[i] in ' \t\r\n': i += 1
+        if i < n and s[i] == '#': i += 1; continue
+        break
+    return ''.join(parts), i
+
+
+def parse_bibtex(text):
+    """-> [{'type', 'key', 'fields': {lower case name: raw value}}]; @string macros are expanded, @comment and @preamble skipped."""
+    s, n, i, out = str(text or ''), len(str(text or '')), 0, []
+    macros = {m[:3].lower(): m for m in _MONTHS}
+    head = re.compile(r'@\s*([A-Za-z]+)\s*([{(])')
+    while len(out) < MAX_IMPORT_ENTRIES:
+        i = s.find('@', i)
+        if i < 0: break
+        m = head.match(s, i)
+        if not m: i += 1; continue
+        kind, close = m.group(1).lower(), ('}' if m.group(2) == '{' else ')')
+        i = m.end()
+        if kind in ('comment', 'preamble'):
+            if m.group(2) == '{': _v, i = _read_braced(s, i - 1)
+            continue
+        key = ''
+        if kind != 'string':
+            mk = re.compile(r'\s*([^,\s{}()="]*)\s*(,|' + re.escape(close) + ')').match(s, i)
+            if not mk: continue
+            key, i = mk.group(1), mk.end()
+            if mk.group(2) == close:
+                continue
+        fields = {}
+        while i < n:
+            while i < n and s[i] in ' \t\r\n,': i += 1
+            if i >= n or s[i] == close: i += 1; break
+            if s[i] == '@': break                                    # a missing closing brace: the next entry begins
+            mf = re.compile(r'([^\s=,{}()"#]+)\s*=').match(s, i)
+            if not mf:
+                nxt = re.compile(r'[,' + re.escape(close) + r']').search(s, i + 1)
+                i = nxt.start() if nxt else n
+                continue
+            name = mf.group(1).lower(); i = mf.end()
+            val, i = _bib_value(s, i, macros)
+            if kind == 'string': macros[name] = val
+            else: fields[name] = val
+        if kind != 'string':
+            out.append({'type': kind, 'key': key, 'fields': fields})
+    return out
+
+
+def _clean_year(v):
+    v = unlatex(v)
+    if re.fullmatch(r'\d{4}[a-z]?', v): return v
+    if re.fullmatch(r'(?i)(in press|forthcoming|accepted|to appear)', v): return 'in press'
+    if re.fullmatch(r'(?i)n\.?\s?d\.?', v): return 'n.d.'
+    m = re.search(r'(?<!\d)(\d{4})(?!\d)', v)
+    return m.group(1) if m else ''
+
+
+def _pages_in(v):
+    return re.sub(r'\s*(?:--|—|–|-)+\s*', '–', unlatex(v)) if v else ''
+
+
+def _month_text(v):
+    v = unlatex(v)
+    if re.fullmatch(r'0?([1-9]|1[0-2])', v): return _MONTHS[int(v) - 1]
+    return v
+
+
+_BIB_KIND = {'article': 'article', 'book': 'book', 'mvbook': 'book', 'inbook': 'chapter', 'incollection': 'chapter', 'inreference': 'chapter',
+             'bookinbook': 'chapter', 'suppbook': 'chapter', 'inproceedings': 'conference', 'conference': 'conference', 'proceedings': 'edited',
+             'collection': 'edited', 'mvcollection': 'edited', 'mvproceedings': 'edited', 'phdthesis': 'thesis', 'mastersthesis': 'thesis', 'thesis': 'thesis',
+             'techreport': 'report', 'report': 'report', 'manual': 'report', 'unpublished': 'unpublished', 'online': 'web', 'electronic': 'web',
+             'www': 'web', 'dataset': 'dataset'}
+
+
+def bib_to_form(e):
+    """A parsed BibTeX entry -> (the data of a reference as the form gives it, [warnings])."""
+    f, kind, warn = e['fields'], e['type'], []
+    g = lambda *names: next((unlatex(f[k]) for k in names if f.get(k) and unlatex(f[k])), '')
+    ty = _BIB_KIND.get(kind, 'other')
+    authors, editors = _names_bibtex(f.get('author', '')), _names_bibtex(f.get('editor', ''))
+    if ty == 'book' and editors and not authors: ty = 'edited'
+    if ty == 'other' and kind in ('misc',) and g('url') and not g('publisher', 'howpublished'): ty = 'web'
+    if ty == 'edited': authors, editors = authors or editors, []
+    dataset_note = next((m for m in (re.fullmatch(r'(?i)data ?set(?:,\s*version\s+(.+))?', p.strip()) for p in re.split(r'\.\s+', g('note'))) if m), None)
+    if ty == 'other' and dataset_note:                                         # what the site writes for a data set
+        ty = 'dataset'
+    title = g('title')
+    if title and g('subtitle'): title += ': ' + g('subtitle')
+    form = {'type': ty, 'authors': authors, 'editors': editors if ty == 'chapter' else [], 'title': title, 'id': _key_of(e['key'])}
+    year = _clean_year(f.get('year', '')) or _clean_year(f.get('date', ''))
+    if not year and re.search(r'(?i)in press|forthcoming', f.get('note', '')):
+        year = 'in press'
+    form['year'] = year
+    if ty == 'article': form['container'] = g('journal', 'journaltitle', 'journal-title')
+    elif ty in ('chapter', 'conference'): form['container'] = g('booktitle', 'maintitle')
+    elif ty == 'web': form['container'] = g('organization', 'website')
+    form['volume'] = g('volume')
+    if ty == 'article': form['issue'] = g('number', 'issue')
+    if ty in ('report', 'thesis'): form['number'] = g('number')
+    form['pages'] = _pages_in(f.get('pages')) or g('eid', 'articleno')
+    form['edition'] = g('edition', 'version') or ((dataset_note.group(1) or '').strip() if dataset_note else '')
+    if ty == 'report': form['publisher'] = g('institution', 'publisher', 'organization')
+    elif ty == 'thesis': form['institution'] = g('school', 'institution', 'publisher')
+    else: form['publisher'] = g('publisher')
+    form['place'] = g('address', 'location')
+    if ty in ('conference', 'web') and f.get('month'): form['dateText'] = _month_text(f['month'])
+    if ty == 'thesis': form['level'] = g('type') or ("Master's thesis" if kind == 'mastersthesis' else 'Doctoral dissertation')
+    note = g('note', 'howpublished')
+    if ty == 'unpublished': form['descriptor'] = note
+    elif ty == 'other': form['note'] = note
+    elif ty == 'dataset': form['note'] = ''
+    elif ty == 'web':
+        m = re.match(r'(?i)accessed\s+(.*)', note)
+        if m: form['accessed'] = m.group(1)
+    if g('urldate'): form['accessed'] = g('urldate')
+    doi = g('doi')
+    form['doi'] = re.sub(r'^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)', '', doi, flags=re.I)
+    url = g('url')
+    if url and not re.match(r'^https?://\S+$', url, re.I):
+        warn.append('the URL was left out (it does not start with http:// or https://)'); url = ''
+    form['url'] = url
+    if f.get('author', '').lower().rstrip().endswith('others'): warn.append('"and others" was left out')
+    return form, warn
+
+
+# ── EndNote, tagged format (.enw / Refer) ──
+_ENW_KIND = {'journal article': 'article', 'magazine article': 'article', 'newspaper article': 'article', 'book': 'book', 'edited book': 'edited',
+             'book section': 'chapter', 'conference paper': 'conference', 'conference proceedings': 'conference', 'thesis': 'thesis',
+             'report': 'report', 'web page': 'web', 'electronic source': 'web', 'online multimedia': 'web', 'dataset': 'dataset',
+             'manuscript': 'unpublished', 'unpublished work': 'unpublished'}
+
+
+def parse_endnote(text):
+    """-> [{'tags': {tag character: [values]}}]: the entries of a file in EndNote's tagged format (a line per tag, %0 begins an entry)."""
+    out, cur, last = [], None, None
+    for raw in str(text or '').lstrip('\ufeff').splitlines():
+        line = raw.rstrip('\r\n')
+        m = re.match(r'^%(\S)(?:\s+(.*))?$', line)
+        if m:
+            tag, val = m.group(1), (m.group(2) or '').strip()
+            if tag == '0' or cur is None:
+                if len(out) >= MAX_IMPORT_ENTRIES: break
+                cur = {}; out.append({'tags': cur})
+            cur.setdefault(tag, []).append(val); last = (tag, len(cur[tag]) - 1)
+        elif not line.strip():
+            cur, last = None, None
+        elif cur is not None and last:
+            cur[last[0]][last[1]] = (cur[last[0]][last[1]] + ' ' + line.strip()).strip()
+    return [e for e in out if e['tags']]
+
+
+def _names_list(values):
+    return [p for p in (_split_name(v) for v in values) if p]
+
+
+def enw_to_form(e):
+    t, warn = e['tags'], []
+    first = lambda *tags: next((t[k][0].strip() for k in tags if t.get(k) and t[k][0].strip()), '')
+    ty = _ENW_KIND.get(first('0').lower(), 'other')
+    authors, editors = _names_list(t.get('A', [])), _names_list(t.get('E', []))
+    if ty == 'edited': authors, editors = authors or editors, []
+    form = {'type': ty, 'authors': authors, 'editors': editors if ty == 'chapter' else [], 'title': first('T'), 'id': _key_of(first('F'))}
+    z = [x.strip() for v in t.get('Z', []) for x in re.split(r'\.\s+', v) if x.strip()]
+    year = _clean_year(first('D'))
+    if not year and any(x.lower().rstrip('.') == 'in press' for x in z): year = 'in press'
+    z = [x for x in z if x.lower().rstrip('.') != 'in press']
+    form['year'] = year
+    form['container'] = first('J', 'B') if ty == 'article' else first('B', 'J')
+    form['volume'], form['issue'], form['pages'], form['edition'] = first('V'), first('N'), _pages_in(first('P')), first('7')
+    if ty == 'thesis': form['institution'], form['level'] = first('I'), first('9') or 'Doctoral dissertation'
+    else: form['publisher'] = first('I')
+    form['place'], form['dateText'] = first('C'), (first('8') if ty in ('conference', 'web') else '')
+    if ty in ('report', 'thesis'): form['number'] = first('@')
+    form['doi'] = re.sub(r'^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)', '', first('R'), flags=re.I)
+    url = first('U')
+    if url and not re.match(r'^https?://\S+$', url, re.I): warn.append('the URL was left out (it does not start with http:// or https://)'); url = ''
+    form['url'], form['accessed'] = url, first('[')
+    if ty == 'unpublished': form['descriptor'] = '. '.join(z)
+    elif ty == 'other': form['note'] = '. '.join(z)
+    return form, warn
+
+
+# ── RIS ──
+_RIS_KIND = {'JOUR': 'article', 'MGZN': 'article', 'NEWS': 'article', 'JFULL': 'article', 'BOOK': 'book', 'EBOOK': 'book', 'EDBOOK': 'edited',
+             'CHAP': 'chapter', 'ECHAP': 'chapter', 'CONF': 'conference', 'CPAPER': 'conference', 'THES': 'thesis', 'RPRT': 'report',
+             'ELEC': 'web', 'WEB': 'web', 'BLOG': 'web', 'DATA': 'dataset', 'UNPB': 'unpublished', 'MANSCPT': 'unpublished'}
+
+
+def parse_ris(text):
+    out, cur = [], None
+    for raw in str(text or '').lstrip('\ufeff').splitlines():
+        m = re.match(r'^([A-Z][A-Z0-9])  - ?(.*)$', raw.rstrip('\r\n'))
+        if not m: continue
+        tag, val = m.group(1), m.group(2).strip()
+        if tag == 'TY':
+            if len(out) >= MAX_IMPORT_ENTRIES: break
+            cur = {'TY': [val]}; out.append({'tags': cur})
+        elif tag == 'ER': cur = None
+        elif cur is not None: cur.setdefault(tag, []).append(val)
+    return out
+
+
+def ris_to_form(e):
+    t, warn = e['tags'], []
+    first = lambda *tags: next((t[k][0] for k in tags if t.get(k) and t[k][0]), '')
+    ty = _RIS_KIND.get(first('TY').upper(), 'other')
+    authors, editors = _names_list(t.get('AU', []) + t.get('A1', [])), _names_list(t.get('A2', []) + t.get('ED', []))
+    if ty == 'edited': authors, editors = authors or editors, []
+    form = {'type': ty, 'authors': authors, 'editors': editors if ty == 'chapter' else [], 'title': first('TI', 'T1'), 'id': _key_of(first('ID'))}
+    form['year'] = _clean_year(first('PY', 'Y1', 'DA'))
+    form['container'] = first('JF', 'JO', 'T2', 'BT', 'JA') if ty in ('article', 'chapter', 'conference', 'web') else ''
+    form['volume'], form['issue'], form['edition'] = first('VL'), first('IS'), first('ET')
+    sp, ep = first('SP'), first('EP')
+    form['pages'] = _pages_in(sp + '-' + ep) if sp and ep else sp
+    if ty == 'thesis': form['institution'], form['level'] = first('PB'), first('M3') or 'Doctoral dissertation'
+    else: form['publisher'] = first('PB')
+    form['place'], form['dateText'] = first('CY'), (first('DA') if ty in ('conference', 'web') else '')
+    form['doi'] = re.sub(r'^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)', '', first('DO'), flags=re.I)
+    url = first('UR')
+    if url and not re.match(r'^https?://\S+$', url, re.I): warn.append('the URL was left out (it does not start with http:// or https://)'); url = ''
+    form['url'], form['accessed'] = url, first('Y2')
+    if ty == 'unpublished': form['descriptor'] = first('N1')
+    elif ty == 'other': form['note'] = first('N1')
+    return form, warn
+
+
+def detect_format(text):
+    t = str(text or '').lstrip('\ufeff')
+    if re.search(r'(?m)^\s*@\s*[A-Za-z]+\s*[{(]', t) or re.search(r'@\s*(?:article|book|booklet|conference|inbook|incollection|inproceedings|manual|mastersthesis|misc|phdthesis|proceedings|techreport|unpublished|'
+                 r'online|report|thesis|string|comment|preamble|dataset|software|collection|inreference|mvbook|electronic|www)\s*[{(]', t, re.I): return 'bibtex'
+    if re.search(r'(?m)^TY  - ', t): return 'ris'
+    if re.search(r'(?m)^%[0A-Za-z@\[7-9]\s', t): return 'endnote'
+    return None
+
+
+def parse_references(text):
+    """-> (format or None, [{'ref': a validated reference or None, 'error': why not, 'warnings': [...], 'what': a short description}])."""
+    t = str(text or '')[:MAX_IMPORT_CHARS]
+    fmt = detect_format(t)
+    if not fmt:
+        return None, []
+    if fmt == 'bibtex':   raw, conv = parse_bibtex(t), bib_to_form
+    elif fmt == 'endnote': raw, conv = parse_endnote(t), enw_to_form
+    else:                 raw, conv = parse_ris(t), ris_to_form
+    items = []
+    for e in raw:
+        try:
+            form, warn = conv(e)
+        except Exception:
+            items.append({'ref': None, 'error': 'it could not be read', 'warnings': [], 'what': ''}); continue
+        what = (form.get('title') or e.get('key') or '')[:80]
+        if not form.get('title'):
+            items.append({'ref': None, 'error': 'it has no title', 'warnings': warn, 'what': e.get('key') or what}); continue
+        ref, err = clean(form)
+        if ref is None:
+            items.append({'ref': None, 'error': err, 'warnings': warn, 'what': what}); continue
+        items.append({'ref': ref, 'error': None, 'warnings': warn, 'what': what})
+    return fmt, items
+
+
+def _signature(r):
+    return (_authors_key(r), _title_key(r), split_year(r.get('year'))[0])
+
+
+def merge_import(existing, items):
+    """Set imported references beside those that exist. Returns (the references to add, a report for each item):
+    status 'new', 'renamed' (its key was taken by another reference: it has a free one), 'duplicate' (same authors, year and title:
+    skipped) or 'rejected' (it could not be read)."""
+    taken, sigs, add, report = {r['id'] for r in existing}, {_signature(r): r['id'] for r in existing}, [], []
+    for it in items:
+        r = it.get('ref')
+        if r is None:
+            report.append(dict(it, status='rejected', id='')); continue
+        sig = _signature(r)
+        if sig in sigs:
+            report.append(dict(it, status='duplicate', id=sigs[sig])); continue
+        status = 'new'
+        if r['id'] and r['id'] in taken:
+            r['id'], status = suggest_id(r, taken), 'renamed'
+        elif not r['id']:
+            r['id'] = suggest_id(r, taken)
+        taken.add(r['id']); sigs[sig] = r['id']; add.append(r)
+        report.append(dict(it, status=status, id=r['id']))
+    return add, report
+
+
 # ───────────────────────── LaTeX ─────────────────────────
 def latex_list(refs, escape, ctx=None):
     """The reference list for the LaTeX export: one hanging paragraph per entry. `escape` is the exporter's LaTeX escaper."""
