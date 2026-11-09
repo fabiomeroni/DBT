@@ -1181,7 +1181,7 @@ def suite_references(browser, args):
     unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_references.py")], capture_output=True, text=True, timeout=120)
     last = [l for l in unit.stdout.strip().split("\n") if l][-1] if unit.stdout.strip() else unit.stderr[-200:]
     check(S, "the formatting engine passes its own direct tests (APA 7 templates, initials, year letters, order, in-text, exports)", unit.returncode == 0, last + ("" if unit.returncode == 0 else "\n" + unit.stdout[-600:]))
-    site = Site()
+    site = Site(prepare=_one_reference)           # the group starts from one known reference, whatever the project holds
     try:
         vis = new_context(browser, site, 1280); va = vis.request
         au = new_context(browser, site, 1280, author=True); aa = au.request
@@ -2465,12 +2465,155 @@ def suite_ngrams_and_stats(browser, args):
     finally:
         site.stop()
 
+
+# ───────────────────────── 12. references: importing lists (BibTeX, EndNote, RIS) and each reference as a file ─────────────────────────
+_SAMPLE_BIB = r"""% a small bibliography exported from a reference manager
+@article{Meroni:2024,
+  author  = {Meroni, Fabio and Fran{\c c}ois, Alexandre},
+  title   = {{Reduplication and aspect in the languages of Gaua}},
+  journal = {Oceanic Linguistics},
+  year    = {2024}, volume = {63}, number = {1}, pages = {12--48},
+  doi     = {10.1353/ol.2024.0001}
+}
+@book{Lynch:2002, author = {Lynch, John and Ross, Malcolm and Crowley, Terry}, title = {The {O}ceanic Languages}, publisher = {Curzon Press}, address = {Richmond}, year = 2002}
+@incollection{Blust:2009, author={Blust, Robert}, editor={Adelaar, K. Alexander and Himmelmann, Nikolaus P.}, title={The Austronesian languages of {A}sia}, booktitle={The {A}ustronesian Languages of {A}sia and {M}adagascar}, publisher={Routledge}, pages={1--40}, year={2005}}
+@article{francois2026b, author={Fran{\c c}ois, Alexandre}, title={Negation in Dorig}, year=2026}
+@misc{broken, author={Nobody, N.}, year=2020}
+"""
+_SAMPLE_ENW = "%0 Journal Article\n%A Tavo, Linda\n%T Vowel harmony in Mota\n%J Studies in Language\n%D 2018\n%V 42\n%P 100-130\n\n%0 Book\n%A Rule, Rex\n%T Rules of the road\n%I Open Press\n%D 2011\n"
+_SAMPLE_RIS = "TY  - JOUR\nAU  - Okafor, Ngozi\nTI  - Tone in Oceanic languages\nJO  - Oceanic Linguistics\nPY  - 2019\nVL  - 58\nSP  - 1\nEP  - 30\nER  - \n"
+
+def _one_reference(d):
+    """The group starts from one known reference, whatever the project holds (the author's own list is theirs)."""
+    (d / "project" / "references.json").write_text(json.dumps({"references": [{"id": "francois2026b", "type": "chapter", "authors": [{"family": "François", "given": "Alexandre"}],
+        "editors": [{"family": "Miestamo", "given": "M."}, {"family": "Veselinova", "given": "L."}], "year": "2026b", "title": "Negation in Dorig",
+        "container": "Negation in the world’s languages III: Papunesia, Australia, and the Americas", "pages": "73–128", "publisher": "Language Science Press", "doi": "10.5281/zenodo.18234067"}]}, ensure_ascii=False), encoding="utf-8")
+
+def suite_refimport(browser, args):
+    S = "refimport"
+    section("references: importing BibTeX, EndNote and RIS lists, and each reference as a file")
+    site = Site(prepare=_one_reference)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        refs_ = lambda c=aa: c.get(site.url + "api/references").json()["references"]
+        imp = lambda data, c=aa: _jcall(c, "post", site.url + "api/references/import", data)
+
+        # ── each reference as a file, for everybody ──
+        r = va.get(site.url + "api/references/francois2026b/export/bibtex"); body = r.text()
+        check(S, "a visitor can download one reference as BibTeX: a file named after its key, with that reference alone", r.status == 200 and "francois2026b.bib" in r.headers.get("content-disposition", "") and body.startswith("@incollection{francois2026b,") and body.count("@") == 1 and "author = {François, Alexandre}" in body and "pages = {73--128}" in body and "doi = {10.5281/zenodo.18234067}" in body, body[:120])
+        r = va.get(site.url + "api/references/francois2026b/export/endnote"); body = r.text()
+        check(S, "…and as EndNote", r.status == 200 and "francois2026b.enw" in r.headers.get("content-disposition", "") and body.startswith("%0 Book Section") and body.count("%0 ") == 1 and "%A François, Alexandre" in body and "%F francois2026b" in body, body[:120])
+        codes = [va.get(site.url + p).status for p in ("api/references/nope/export/bibtex", "api/references/francois2026b/export/ris", "api/references/..%2Fapp/export/bibtex")]
+        check(S, "an unknown reference or format is a 404", codes == [404, 404, 404], str(codes))
+
+        # ── importing: only the author, and a preview saves nothing ──
+        codes = [imp({"text": _SAMPLE_BIB}, va)[0], imp({"text": _SAMPLE_BIB, "commit": True}, va)[0]]
+        check(S, "a visitor cannot import (401), preview or not", codes == [401, 401] and len(refs_()) == 1, str(codes))
+        st, j = imp({"text": _SAMPLE_BIB})
+        check(S, "the preview of a BibTeX list says what would happen to each reference: three new, one that is already there (the project's own, though its year has a letter), one that has no title", st == 200 and [e["status"] for e in j["entries"]] == ["new", "new", "new", "duplicate", "rejected"] and j["counts"] == {"new": 3, "renamed": 0, "duplicate": 1, "rejected": 1} and j["committed"] is False, str(j.get("counts")))
+        check(S, "…and it names the format and the source, and the reason for the one it cannot read", j["formats"] == [{"name": "the pasted text", "format": "BibTeX", "count": 5}] and j["entries"][4]["error"] == "it has no title" and j["entries"][3]["id"] == "francois2026b", str(j["formats"]))
+        check(S, "the preview saved nothing", len(refs_()) == 1)
+        st, j = imp({"text": _SAMPLE_BIB, "commit": True})
+        got = {r_["id"]: r_["text"] for r_ in refs_()}
+        check(S, "the import adds the three, with keys made from the file's (a colon, a capital) and accents and braces resolved", st == 200 and j["committed"] and sorted(got) == ["blust-2009", "francois2026b", "lynch-2002", "meroni-2024"], str(sorted(got)))
+        check(S, "…each in APA 7 as if typed in the form", got["meroni-2024"] == "Meroni, F., & François, A. (2024). Reduplication and aspect in the languages of Gaua. Oceanic Linguistics, 63(1), 12–48. https://doi.org/10.1353/ol.2024.0001" and got["lynch-2002"] == "Lynch, J., Ross, M., & Crowley, T. (2002). The Oceanic Languages. Curzon Press." and got["blust-2009"].startswith("Blust, R. (2005). The Austronesian languages of Asia. In K. A. Adelaar & N. P. Himmelmann (Eds.), The Austronesian Languages of Asia and Madagascar (pp. 1–40)."), str(got))
+        st, j = imp({"text": _SAMPLE_BIB, "commit": True})
+        check(S, "importing the same list again adds nothing: they are all duplicates (or unreadable)", j["counts"] == {"new": 0, "renamed": 0, "duplicate": 4, "rejected": 1} and j["committed"] is False and len(refs_()) == 4, str(j["counts"]))
+        st, j = imp({"text": "@article{meroni-2024, author={Other, Ann}, title={Another paper}, year={2024}, journal={J}}", "commit": True})
+        check(S, "a key that another reference already has is replaced by a free one, and the reference that had it is not touched", j["entries"][0]["status"] == "renamed" and j["entries"][0]["id"] == "other2024" and got["meroni-2024"] == {r_["id"]: r_["text"] for r_ in refs_()}["meroni-2024"], str(j["entries"][0]))
+
+        # ── EndNote, RIS and several sources in one go ──
+        st, j = imp({"files": [{"name": "list.enw", "text": _SAMPLE_ENW}, {"name": "more.ris", "text": _SAMPLE_RIS}], "text": "@misc{k, author={Pasted, P.}, title={From the clipboard}, year=2020}", "commit": True})
+        check(S, "files in EndNote and RIS and pasted text are read together, each named with its format and count", st == 200 and j["formats"] == [{"name": "list.enw", "format": "EndNote", "count": 2}, {"name": "more.ris", "format": "RIS", "count": 1}, {"name": "the pasted text", "format": "BibTeX", "count": 1}] and j["counts"]["new"] == 4, str(j.get("formats")))
+        got = {r_["id"]: r_["text"] for r_ in refs_()}
+        check(S, "…and their references are in the list, in APA 7 (keys from author and year when the file has none; the key of the pasted entry is its own)", got.get("tavo2018") == "Tavo, L. (2018). Vowel harmony in Mota. Studies in Language, 42, 100–130." and got.get("rule2011") == "Rule, R. (2011). Rules of the road. Open Press." and got.get("okafor2019") == "Okafor, N. (2019). Tone in Oceanic languages. Oceanic Linguistics, 58, 1–30." and "k" in got, str(sorted(got)))
+        bad = {"a file that is not a list": {"files": [{"name": "x.pdf", "text": "%PDF-1.4 binary junk"}]}, "nothing": {}, "empty text": {"text": "  "}, "not text": {"files": [{"name": "x", "text": 5}]}}
+        res = {k: imp(v)[0] for k, v in bad.items()}
+        check(S, "what is not a list of references is refused with a reason (400), and nothing changes", all(v == 400 for v in res.values()) and "BibTeX" in imp(bad["a file that is not a list"])[1]["error"] and len(refs_()) == 9, str(res))
+        check(S, "…and too much at once is refused (413)", imp({"text": "@misc{k, title={T}}" + " " * 2_100_000})[0] == 413)
+        st, j = imp({"text": "@misc{h, author={Evil, E.}, title={<img src=x onerror=alert(1)> and <b>bold</b>}, url={javascript:alert(1)}, year=2020}"})
+        check(S, "markup in an imported title is shown as text, and a URL that is not http(s) is left out with a warning", "<img" not in j["entries"][0]["html"] and "&lt;img" in j["entries"][0]["html"] and j["entries"][0]["warnings"] != [] and "javascript" not in j["entries"][0]["html"], j["entries"][0]["html"][:160])
+        # the site's own export reads back into the site: delete one reference, import the whole export, only that one is new
+        whole = va.get(site.url + "api/references/export/bibtex").text()
+        before = {r_["id"]: r_["text"] for r_ in refs_()}
+        aa.delete(site.url + "api/references/lynch-2002")
+        st, j = imp({"text": whole, "commit": True})
+        after = {r_["id"]: r_["text"] for r_ in refs_()}
+        check(S, "the whole BibTeX export of the site, imported again, restores exactly what was deleted and nothing else", j["counts"]["new"] == 1 and j["counts"]["duplicate"] == len(before) - 1 and after == before, str(j["counts"]))
+        st, jj = _jcall(aa, "post", site.url + "api/grammar/zz_import", {"source": "As {{source: Lynch et al. 2002}} and {{source: Tavo 2018, p. 105}} say.\n"})
+        check(S, "an imported reference can be cited in the grammar by author and year, like the others", "(Lynch et al., 2002)" in re.sub(r"<[^>]+>", "", jj.get("html", "")) and "(Tavo, 2018, p. 105)" in re.sub(r"<[^>]+>", "", jj.get("html", "")) and "references.html#lynch-2002" in jj.get("html", ""), jj.get("html", "")[:200])
+        for rid in [r_["id"] for r_ in refs_()]:
+            b = va.get(site.url + f"api/references/{rid}/export/bibtex").text(); e = va.get(site.url + f"api/references/{rid}/export/endnote").text()
+            if not (b.startswith("@") and e.startswith("%0 ") and b.count("\n@") == 0 and e.count("\n%0 ") == 0): break
+        else: rid = None
+        check(S, "every reference of the list can be downloaded in both formats, one reference per file", rid is None, str(rid))
+
+        # ── in the browser: the little buttons ──
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "references.html", ".ref-entry", 900)
+        n = page.locator(".ref-entry").count()
+        e0 = page.locator(".ref-entry").first; tb = e0.locator(".ref-body").bounding_box(); db = e0.locator(".ref-dl").bounding_box()
+        check(S, "a visitor sees, to the right of each reference, a small BibTeX and a small EndNote button", n == len(refs_()) and page.locator(".ref-dl a").count() == 2 * n and db["x"] >= tb["x"] + tb["width"] - 2 and not page.locator("#ref-import").is_visible() and not page.locator(".ref-author").first.is_visible(), f"{tb} {db}")
+        with page.expect_download() as dl:
+            e0.locator('.ref-dl a', has_text="BibTeX").click()
+        d = dl.value; first_id = page.locator(".ref-entry").first.get_attribute("id")
+        txt = Path(d.path()).read_text(encoding="utf-8")
+        check(S, "…the BibTeX button downloads that reference's file", d.suggested_filename == f"{first_id}.bib" and txt.startswith("@") and txt.count("\n@") == 0 and first_id in txt.split("\n")[0], f"{d.suggested_filename} {txt[:60]}")
+        with page.expect_download() as dl:
+            e0.locator('.ref-dl a', has_text="EndNote").click()
+        d = dl.value; txt = Path(d.path()).read_text(encoding="utf-8")
+        check(S, "…and the EndNote button the .enw file", d.suggested_filename == f"{first_id}.enw" and txt.startswith("%0 ") and f"%F {first_id}" in txt)
+        check(S, "the page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        for w in (600, 390, 320):
+            cc = new_context(browser, site, w); p = cc.new_page(); open_page(p, site, "references.html", ".ref-entry", 700)
+            ca = new_context(browser, site, w, author=True); pa_ = ca.new_page(); open_page(pa_, site, "references.html", ".ref-entry", 700)
+            wide = [p.evaluate("document.documentElement.scrollWidth"), pa_.evaluate("document.documentElement.scrollWidth")]
+            vis_dl = all(a.is_visible() for a in p.locator(".ref-dl a").all()[:4])
+            cc.close(); ca.close()
+            check(S, f"at {w}px, as a visitor and as the author, the list with its buttons does not scroll sideways and the downloads are there", max(wide) <= w and vis_dl, str(wide))
+
+        # ── in the browser: the author imports ──
+        page = au.new_page(); errs = []; watch(page, errs); page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        for rid in [r_["id"] for r_ in refs_() if r_["id"] != "francois2026b"]: aa.delete(site.url + f"api/references/{rid}")
+        open_page(page, site, "references.html", ".ref-entry", 900)
+        check(S, "the author has an Import button, and the author's buttons are under the downloads", page.locator("#ref-import").is_visible() and page.locator(".ref-entry").first.locator(".ref-author .edit-tab").first.is_visible())
+        page.click("#ref-import"); page.wait_for_selector("#imp-modal.visible")
+        page.set_input_files("#imp-file", {"name": "sample.bib", "mimeType": "text/plain", "buffer": _SAMPLE_BIB.encode("utf-8")}); page.wait_for_selector(".imp-item")
+        check(S, "choosing a file shows the preview at once: the counts, and for each reference its status and its APA 7 line", "5 references found (sample.bib: 5 in BibTeX): 3 new, 1 already in the list, 1 not read" in page.inner_text("#imp-summary") and [i.get_attribute("data-status") for i in page.locator(".imp-item").all()] == ["new", "new", "new", "duplicate", "rejected"] and "Meroni, F., & François, A. (2024)." in page.locator(".imp-item").first.inner_text(), page.inner_text("#imp-summary"))
+        check(S, "…the button says how many will be imported, and nothing has been added yet", page.inner_text("#imp-go") == "Import 3 references" and page.locator("#imp-go").is_enabled() and page.locator(".ref-entry").count() == 1)
+        page.click("#imp-go"); page.wait_for_selector("#imp-modal:not(.visible)", state="attached"); page.wait_for_function("document.querySelectorAll('.ref-entry').length === 4")
+        check(S, "confirming adds them: the window closes, the list shows them, and a notice says what was done", "3 references imported; 1 already in the list; 1 could not be read." in page.inner_text("#refs-notice") and page.locator("#refs-count").inner_text().startswith("4 references") and page.locator(".ref-entry#meroni-2024").count() == 1, page.inner_text("#refs-notice"))
+        page.click("#ref-import"); page.set_input_files("#imp-file", {"name": "sample.bib", "mimeType": "text/plain", "buffer": _SAMPLE_BIB.encode("utf-8")}); page.wait_for_selector(".imp-item")
+        check(S, "importing the same file again: everything is already there, the button says so and is off", page.inner_text("#imp-go") == "Nothing to import" and page.locator("#imp-go").is_disabled() and "0" not in page.inner_text("#imp-go"), page.inner_text("#imp-summary"))
+        page.set_input_files("#imp-file", [{"name": "a.enw", "mimeType": "text/plain", "buffer": b"%0 Journal Article\n%A Dupont, Zo\xe9\n%T Une \xe9tude de cas\n%J Revue\n%D 2001\n"}, {"name": "b.ris", "mimeType": "application/x-research-info-systems", "buffer": _SAMPLE_RIS.encode("utf-8")}])
+        page.wait_for_function("document.querySelectorAll('.imp-item').length === 2")
+        check(S, "several files at once, in different formats; a file saved in Windows-1252 (an é as one byte) is read right", "a.enw: 1 in EndNote" in page.inner_text("#imp-summary") and "b.ris: 1 in RIS" in page.inner_text("#imp-summary") and "Dupont, Z. (2001). Une étude de cas." in page.inner_text("#imp-list"), page.inner_text("#imp-list")[:160])
+        page.set_input_files("#imp-file", []); page.fill("#imp-text", "@misc{h, author={Evil, E.}, title={<img src=x onerror=alert(1)> loud}, year=2020}"); page.click("#imp-read"); page.wait_for_selector(".imp-item")
+        check(S, "pasted text works too, and markup in it is shown as text: no element is made, nothing runs", page.locator("#imp-list img, #imp-list b").count() == 0 and "<img src=x" in page.inner_text("#imp-list") and not [e for e in errs if "DIALOG" in e])
+        page.fill("#imp-text", "this is not a list of references"); page.click("#imp-read"); page.wait_for_function("document.getElementById('imp-msg').textContent.length > 0")
+        check(S, "text that is not a list gives its reason in the window, and the button is off", "No references were found" in page.inner_text("#imp-msg") and page.locator("#imp-go").is_disabled() and page.locator(".imp-item").count() == 0, page.inner_text("#imp-msg"))
+        page.fill("#imp-text", _SAMPLE_ENW); page.click("#imp-read"); page.wait_for_selector(".imp-item"); page.click("#imp-go"); page.wait_for_function("document.querySelectorAll('.ref-entry').length === 6")
+        check(S, "a pasted EndNote list is imported: the list now has six references, among them Tavo and Rule", page.locator("#tavo2018").count() == 1 and page.locator("#rule2011").count() == 1)
+        page.click("#ref-import"); page.click("#imp-cancel"); page.click("#ref-import"); page.mouse.click(5, 5)
+        check(S, "the window closes with Close and by a click outside it", not page.locator("#imp-modal.visible").count())
+        check(S, "the import raised no JavaScript or loading error, and no dialog", not [e for e in errs if "400" not in e], "; ".join(errs[:2]))
+        cw = new_context(browser, site, 390, author=True); p = cw.new_page(); open_page(p, site, "references.html", ".ref-entry", 700)
+        p.click("#ref-import"); p.set_input_files("#imp-file", {"name": "sample.bib", "mimeType": "text/plain", "buffer": _SAMPLE_BIB.encode("utf-8")}); p.wait_for_selector(".imp-item")
+        mb = p.locator("#imp-modal .imp-modal").bounding_box()
+        check(S, "on a phone the import window fits the screen and its buttons can be reached", mb["x"] >= 0 and mb["x"] + mb["width"] <= 391 and p.locator("#imp-go").is_visible() and p.evaluate("document.documentElement.scrollWidth") <= 390, str(mb))
+        cw.close()
+        vis.close(); au.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -2492,6 +2635,7 @@ def main():
             if args.only in (None, "dictionary"): suite_dictionary(browser, args)
             if args.only in (None, "concordance"): suite_concordance(browser, args)
             if args.only in (None, "textstats"): suite_ngrams_and_stats(browser, args)
+            if args.only in (None, "refimport"): suite_refimport(browser, args)
             browser.close()
     finally:
         site.stop()
