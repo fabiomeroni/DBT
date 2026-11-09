@@ -149,5 +149,187 @@ check('suggested key', (R.suggest_id(fr), R.suggest_id(fr, taken={'francois2026b
 b = R.to_bibtex([fr]); e = R.to_endnote([fr])
 check('BibTeX chapter', all(x in b for x in ('@incollection{francois2026b,', 'author = {François, Alexandre}', 'editor = {Miestamo, M. and Veselinova, L.}', 'booktitle = {Negation in the world’s languages III', 'pages = {73--128}', 'year = {2026}', 'publisher = {Language Science Press}', 'doi = {10.5281/zenodo.18234067}')), True)
 check('EndNote chapter', all(x in e for x in ('%0 Book Section', '%A François, Alexandre', '%E Miestamo, M.', '%T Negation in Dorig', '%B Negation in the world’s languages III', '%D 2026', '%P 73–128', '%I Language Science Press', '%R 10.5281/zenodo.18234067')), True)
+
+# ═════════ import: BibTeX, EndNote (tagged format) and RIS ═════════
+import time
+def one(text):
+    fmt, items = R.parse_references(text)
+    return fmt, items
+def imp(text):
+    fmt, items = R.parse_references(text)
+    return [i['ref'] for i in items]
+def apa_of(r, rs=None): return text(r, rs)
+
+# ── the round trip: what the site exports, it reads back as the same references ──
+RT = [
+    ref('a1', 'article', authors=[P('Smith', 'John A.'), P('Jones', 'Mary')], title='A study of questions & answers: 50% of _cases_', container='Journal of Testing', volume='12', issue='3', pages='45-67', doi='10.1000/xyz123', year='2020'),
+    ref('a2', 'article', authors=[{'org': 'World Health Organization'}], title='Annual report on health', container='Bulletin', volume='9', year='in press'),
+    ref('a3', 'article', authors=[P('François', 'Alexandre'), P('Müller', 'Hans')], title='Négation en dorig: étude', container='Revue de linguistique', volume='4', pages='1-20', year='2019'),
+    ref('b1', 'book', authors=[P('Brown', 'Peter')], title='The language of trees', edition='2nd', publisher='Language Science Press', year='2015'),
+    ref('b2', 'book', authors=[P('Brown', 'Peter')], title='Trees again', publisher='Brill', year='n.d.'),
+    ref('e1', 'edited', authors=[P('Miestamo', 'Matti'), P('Veselinova', 'Ljuba')], title='Negation in the world’s languages', publisher='Language Science Press', year='2026'),
+    ref('c1', 'chapter', authors=[P('François', 'Alexandre')], editors=[P('Miestamo', 'M.'), P('Veselinova', 'L.')], title='Negation in Dorig', container='Negation in the world’s languages III', pages='73-128', publisher='Language Science Press', doi='10.5281/zenodo.18234067', year='2026b'),
+    ref('k1', 'conference', authors=[P('Lee', 'Kim')], title='Talking about time', container='Proceedings of the Pacific Conference', place='Honolulu, HI', dateText='June 5–8', year='2018'),
+    ref('t1', 'thesis', authors=[P('Nguyen', 'An')], title='Verb serialisation in an Oceanic language', institution='Australian National University', level='Doctoral dissertation', url='https://example.org/thesis', year='2017'),
+    ref('t2', 'thesis', authors=[P('Nguyen', 'An')], title='A smaller thesis', institution='University of Sydney', level="Master's thesis", year='2012'),
+    ref('r1', 'report', authors=[{'org': 'Vanuatu Cultural Centre'}], title='Language survey of the Banks Islands', publisher='Vanuatu Cultural Centre', number='42', year='2010'),
+    ref('w1', 'web', authors=[{'org': 'Ethnologue'}], title='Languages of Vanuatu', container='SIL International', url='https://www.ethnologue.com/country/VU', accessed='May 3, 2024', year='2024'),
+    ref('d1', 'dataset', authors=[P('Taylor', 'Sam')], title='Corpus of Banks Islands narratives', edition='2.1', publisher='Zenodo', doi='10.5281/zenodo.1', year='2021'),
+    ref('u1', 'unpublished', authors=[P('Ray', 'Ana')], title='Notes on reduplication', descriptor='Unpublished manuscript, University of Paris', year='2023'),
+    ref('o1', 'other', authors=[P('Cole', 'Ed')], title='Personal communication topics', note='Fieldwork recording', year='2022'),
+]
+RTR = {r['id']: r for r in RT}
+for fmt_name, export in (('BibTeX', R.to_bibtex), ('EndNote', R.to_endnote)):
+    bad_rt = []
+    for r in RT:
+        r = dict(r, year=R.split_year(r['year'])[0])                      # the formats have no year letters: the site gives them
+        ctx = R.Context([r])
+        want = R.apa(r, ctx)[1]
+        fmt, items = R.parse_references(export([r]))
+        got_r = items[0]['ref'] if items else None
+        got = R.apa(got_r, R.Context([got_r]))[1] if got_r else None
+        if got != want or (got_r and got_r['type'] != r['type']) or (got_r and got_r['id'] != r['id']): bad_rt.append((r['id'], want, got))
+    check(f'round trip {fmt_name}: every type is read back as the same reference (same APA text, type and key)', bad_rt, [])
+check('round trip: the whole list at once', len([i for i in R.parse_references(R.to_bibtex(RT))[1] if i['ref']]), len(RT))
+check('round trip: the formats are recognised', (R.parse_references(R.to_bibtex(RT))[0], R.parse_references(R.to_endnote(RT))[0]), ('bibtex', 'endnote'))
+
+# ── BibTeX as people write it ──
+b = imp(r"""
+% a comment line
+@preamble{ "\newcommand{\noopsort}[1]{}" }
+@string{jfl = "Journal of Foo"}
+@comment{ @article{ignored, title = {not read}} }
+@Article{Smith:2020a,
+  Author = {Fran{\c c}ois, Alexandre and M{\"u}ller, Hans and John von Neumann and Doe, Jr., J. and {World Health Organization} and others},
+  TITLE = {A {DNA} study of {\'E}mile's ``{T}rees''},
+  journal = jfl # " Letters",
+  year = {2020}, volume = 12, number = "3", pages = {12--34},
+  doi = {https://doi.org/10.1000/abc}
+}
+@book(plain2001, title = "T", author = "Roe, R.", year = 2001, publisher = {P}) 
+""")
+a = b[0]
+check('BibTeX: accents, names (given family, family given, a particle, a suffix, an organisation, "others"), macros', (
+    [(p.get('family'), p.get('given'), p.get('suffix'), p.get('org')) for p in a['authors']]),
+    [('François', 'Alexandre', None, None), ('Müller', 'Hans', None, None), ('von Neumann', 'John', None, None), ('Doe', 'J.', 'Jr.', None), (None, None, None, 'World Health Organization')])
+check('BibTeX: braces, accents and a macro joined to a string in the title and the journal; pages; DOI; key', (a['title'], a['container'], a['pages'], a['doi'], a['volume'], a['issue'], a['id'], a['year']),
+      ('A DNA study of Émile’s “Trees”'.replace('’', "'").replace('“', '``').replace('”', "''") if False else "A DNA study of Émile's ``Trees''", 'Journal of Foo Letters', '12–34', '10.1000/abc', '12', '3', 'smith-2020a', '2020'))
+check('BibTeX: parentheses as delimiters, and a number or a string as a value', (b[1]['type'], b[1]['title'], b[1]['year'], b[1]['publisher'], b[1]['id']), ('book', 'T', '2001', 'P', 'plain2001'))
+check('BibTeX: comments and @comment are skipped', len(b), 2)
+check('BibTeX: a title in double braces and a title that carries a line break', imp('@misc{x, title = {{The {Old} Title}\n   continues}, year={1999}}')[0]['title'], 'The Old Title continues')
+t1 = imp('@phdthesis{p, author={A, B}, title={T}, school={ANU}, year={2000}}')[0]; t2 = imp('@mastersthesis{m, author={A, B}, title={T}, school={ANU}, year={2000}}')[0]
+check('BibTeX: theses by their level', (t1['type'], t1['level'], t1['institution'], t2['level']), ('thesis', 'Doctoral dissertation', 'ANU', "Master's thesis"))
+check('BibTeX: types: a book with editors only is an edited book, @misc with a url is a web page, @misc without is "other", @inproceedings is a conference paper, an unknown type is "other"',
+      [imp(s_)[0]['type'] for s_ in ('@book{k, editor={E, A}, title={T}, year=2000}', '@misc{k, title={T}, url={https://x.org/a}, year=2000}', '@misc{k, title={T}, year=2000}',
+                                     '@inproceedings{k, title={T}, booktitle={B}, year=2000}', '@whatever{k, title={T}, year=2000}')], ['edited', 'web', 'other', 'conference', 'other'])
+check('BibTeX: edited book: the editors are its authors', imp('@book{k, editor={Ed, A and Ee, B}, title={T}, year=2000}')[0]['authors'], [{'family': 'Ed', 'given': 'A'}, {'family': 'Ee', 'given': 'B'}])
+check('BibTeX: year from a date, "in press", and none', [imp(f'@misc{{k, title={{T}}, {y}}}')[0]['year'] for y in ('date={2020-05-01}', 'year={in press}', 'author={A, B}')], ['2020', 'in press', 'n.d.'])
+check('BibTeX: months as names or numbers (a conference)', [imp(f'@inproceedings{{k, title={{T}}, month={m}, year=2000}}')[0]['dateText'] for m in ('jun', '{3}', '{Spring}')], ['June', 'March', 'Spring'])
+check('BibTeX: keys are made safe, or made up', [imp(f'@misc{{{k}, author={{Roe, R.}}, title={{T}}, year=2000}}')[0]['id'] for k in ('Smith:2020/a', '', '  ')], ['smith-2020-a', '', ''])
+f_, it = one('@article{k, author={Roe, R.}, year=2000}')
+check('BibTeX: an entry with no title is reported, not imported', (it[0]['ref'], it[0]['error']), (None, 'it has no title'))
+f_, it = one('@misc{k, title={T}, url={ftp://x.org/f}, doi={doi:10.1/x}, year=2000}')
+check('BibTeX: a URL that is not http(s) is left out with a warning, and "doi:" is dropped', (it[0]['ref']['url'], it[0]['ref']['doi'], len(it[0]['warnings'])), ('', '10.1/x', 1))
+# junk and hostile input: no crash, no hang
+t0 = time.time()
+junk = ['@article{a, title = {unclosed', '@article{x,' + '{' * 100000, '{' * 50000 + '@misc{k, title={ok}}', '@' * 30000, '@misc{k,' + 'title = {' + 'a' * 500000 + '}}', '\x00\x01@misc{k, title={T}, year=2000}\x02', '@article{a, title = "x' + '\\' * 1000]
+res = [R.parse_references(j) for j in junk]
+check('junk and hostile input does not crash nor hang, and what can be read is read', (time.time() - t0 < 5, res[5][1][0]['ref']['title'], res[2][0]), (True, 'T', 'bibtex'))
+check('what is not a list of references is not recognised', [R.parse_references(x)[0] for x in ('', 'Hello world', '<html></html>', '{"a": 1}', '\ufeff')], [None] * 5)
+
+# ── EndNote, tagged format ──
+enw = """\ufeff%0 Journal Article
+%A Smith, John A.
+%A Jones, Mary
+%A World Health Organization,
+%T A study of
+ questions
+%J Journal of Testing
+%D 2020
+%V 12
+%N 3
+%P 45-67
+%R 10.1000/xyz123
+%F smith2020
+
+%0 Edited Book
+%E Ed, Ann
+%T Edited things
+%I Brill
+%D 2019
+
+%0 Book Section
+%A Roe, R.
+%E Ed, Ann
+%E Ee, Bo
+%T A chapter
+%B The book
+%P 5-9
+%Z in press
+
+%0 Thesis
+%A Pat, Lee
+%T A thesis
+%I Uni X
+%9 Master's thesis
+%D 2005
+
+%0 Newspaper Article
+%A Nobody
+%T No year here
+"""
+e = imp(enw)
+check('EndNote: types and authors (a trailing comma marks an organisation); a title over two lines; the label is the key', (e[0]['type'], [p.get('family') or p.get('org') for p in e[0]['authors']], e[0]['title'], e[0]['id'], e[0]['pages'], e[0]['issue']),
+      ('article', ['Smith', 'Jones', 'World Health Organization'], 'A study of questions', 'smith2020', '45–67', '3'))
+check('EndNote: an edited book (%E are its authors), a chapter (%A authors, %E editors)', ([p['family'] for p in e[1]['authors']], e[1]['type'], [p['family'] for p in e[2]['authors']], [p['family'] for p in e[2]['editors']]), (['Ed'], 'edited', ['Roe'], ['Ed', 'Ee']))
+check('EndNote: "in press" in the notes is the year; a thesis has its level and institution; no year is n.d.', (e[2]['year'], e[3]['level'], e[3]['institution'], e[4]['year'], e[4]['type']), ('in press', "Master's thesis", 'Uni X', 'n.d.', 'article'))
+check('EndNote: five references, the first begins after a byte order mark', len(e), 5)
+
+# ── RIS ──
+ris = """TY  - JOUR
+AU  - Smith, John
+AU  - Jones, Mary
+TI  - On things
+JO  - Journal of Things
+PY  - 2020///
+VL  - 5
+IS  - 2
+SP  - 10
+EP  - 20
+DO  - 10.1/abc
+UR  - https://example.org/x
+ID  - sm20
+ER  - 
+
+TY  - THES
+AU  - Lee, Pat
+TI  - A thesis
+PB  - Uni X
+M3  - PhD thesis
+PY  - 2001/05/01
+ER  - 
+"""
+r_ = imp(ris)
+check('RIS: an article (authors, journal, year with slashes, pages from SP and EP, DOI, URL, key)', (r_[0]['type'], [p['family'] for p in r_[0]['authors']], r_[0]['container'], r_[0]['year'], r_[0]['pages'], r_[0]['doi'], r_[0]['url'], r_[0]['id']),
+      ('article', ['Smith', 'Jones'], 'Journal of Things', '2020', '10–20', '10.1/abc', 'https://example.org/x', 'sm20'))
+check('RIS: a thesis with its level and institution', (r_[1]['type'], r_[1]['level'], r_[1]['institution'], r_[1]['year']), ('thesis', 'PhD thesis', 'Uni X', '2001'))
+check('the format is found from what is in the file, not from its name', [R.detect_format(x) for x in ('@book{a,}', ris, enw, 'xx\n@article {k, title={T}}')], ['bibtex', 'ris', 'endnote', 'bibtex'])
+
+# ── setting them beside the references that exist ──
+have = [dict(RTR['a1'], id='smith2020'), dict(RTR['b1'], id='brown2015')]
+new_text = ('@article{smith2020, author={Smith, John A. and Jones, Mary}, title={A study of questions & answers: 50% of _cases_}, journal={Journal of Testing}, year={2020}}\n'       # the same, same key
+            '@article{other, author={Smith, John A. and Jones, Mary}, title={A study of questions & answers: 50% of _cases_}, journal={Journal of Testing}, year={2020}}\n'    # the same, another key
+            '@article{brown2015, author={Brown, Pat}, title={A different paper}, journal={J}, year={2015}}\n'                                                                      # another reference, key taken
+            '@article{fresh, author={Fresh, Fay}, title={Fresh}, journal={J}, year={2022}}\n'
+            '@misc{, author={Nokey, Ned}, title={No key}, year={2021}}\n'
+            '@article{fresh2, author={Fresh, Fay}, title={Fresh}, journal={J}, year={2022}}\n'                                                                                     # a duplicate in the file
+            '@article{notitle, author={Bad, Bo}, year={2022}}\n')
+f_, items = R.parse_references(new_text)
+add, rep = R.merge_import(have, items)
+check('merge: the statuses', [x['status'] for x in rep], ['duplicate', 'duplicate', 'renamed', 'new', 'new', 'duplicate', 'rejected'])
+check('merge: a taken key is replaced by a free one; a missing key is made from author and year; the duplicates name what they duplicate', ([r['id'] for r in add], rep[0]['id'], rep[1]['id'], rep[5]['id']), (['brown2015-2', 'fresh', 'nokey2021'], 'smith2020', 'smith2020', 'fresh'))
+check('merge: what exists is not touched', [r['id'] for r in have], ['smith2020', 'brown2015'])
+check('merge: all of them, in a second import, are duplicates', set(x['status'] for x in R.merge_import(have + add, R.parse_references(new_text)[1])[1]), {'duplicate', 'rejected'})
+
 print(f"\n{ok} passed, {bad} failed")
 sys.exit(1 if bad else 0)
