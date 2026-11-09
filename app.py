@@ -1083,6 +1083,60 @@ def references_export_endnote():
     return Response(refs_lib.to_endnote(_refs_load()), mimetype='text/plain; charset=utf-8',
                     headers={'Content-Disposition': f'attachment; filename="{_export_name("enw")}"'})
 
+# One reference as a file, for anybody: BibTeX or EndNote, to drop into one's own reference manager
+@app.route('/api/references/<ref_id>/export/<fmt>')
+def references_export_one(ref_id, fmt):
+    if fmt not in ('bibtex', 'endnote'):
+        return jsonify({'error': 'Unknown format.'}), 404
+    ref = next((r for r in _refs_load() if r['id'] == ref_id), None)
+    if ref is None:
+        return jsonify({'error': 'Reference not found.'}), 404
+    body = refs_lib.to_bibtex([ref]) if fmt == 'bibtex' else refs_lib.to_endnote([ref])
+    return Response(body, mimetype='text/plain; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename="{ref_id}.{"bib" if fmt == "bibtex" else "enw"}"'})
+
+_FORMAT_NAMES = {'bibtex': 'BibTeX', 'endnote': 'EndNote', 'ris': 'RIS'}
+
+@app.route('/api/references/import', methods=['POST'])
+def references_import():
+    """Read lists of references in BibTeX, EndNote (tagged format) or RIS: {files: [{name, text}], text: 'pasted', commit: false}.
+    Without commit nothing is saved: the answer says what would happen to each reference (new, renamed, duplicate, rejected)."""
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    if (request.content_length or 0) > 3 * refs_lib.MAX_IMPORT_CHARS:
+        return jsonify({'ok': False, 'error': 'That is too much to read at once (more than 2 million characters).'}), 413
+    data = request.get_json(silent=True) or {}
+    sources = [(str(f.get('name') or 'file')[:120], f.get('text')) for f in (data.get('files') or [])[:50] if isinstance(f, dict)]
+    if isinstance(data.get('text'), str) and data['text'].strip():
+        sources.append(('the pasted text', data['text']))
+    sources = [(n, t) for n, t in sources if isinstance(t, str)]
+    if not sources:
+        return jsonify({'ok': False, 'error': 'Choose a file, or paste the references.'}), 400
+    if sum(len(t) for _n, t in sources) > refs_lib.MAX_IMPORT_CHARS:
+        return jsonify({'ok': False, 'error': 'That is too much to read at once (more than 2 million characters).'}), 413
+    items, formats, unrecognised = [], [], []
+    for name, text in sources:
+        fmt, found = refs_lib.parse_references(text)
+        if not fmt:
+            unrecognised.append(name); continue
+        formats.append({'name': name, 'format': _FORMAT_NAMES[fmt], 'count': len(found)})
+        items += [dict(it, source=name) for it in found]
+    if not items:
+        return jsonify({'ok': False, 'error': 'No references were found: the file should be in BibTeX (.bib), EndNote (.enw) or RIS (.ris) format.',
+                        'unrecognised': unrecognised}), 400
+    commit = bool(data.get('commit'))
+    with _REFS_LOCK:
+        existing = _refs_load()
+        add, report = refs_lib.merge_import(existing, items)
+        if commit and add:
+            _refs_save(existing + add)
+    ctx = refs_lib.Context(existing + add)
+    byid = {r['id']: r for r in add}
+    entries = [{'status': x['status'], 'id': x['id'], 'source': x['source'], 'what': x.get('what', ''), 'error': x.get('error'), 'warnings': x.get('warnings', []),
+                'html': refs_lib.apa(byid[x['id']], ctx)[0] if x['status'] in ('new', 'renamed') else ''} for x in report]
+    counts = {k: sum(1 for e in entries if e['status'] == k) for k in ('new', 'renamed', 'duplicate', 'rejected')}
+    return jsonify({'ok': True, 'committed': bool(commit and add), 'counts': counts, 'formats': formats, 'unrecognised': unrecognised, 'entries': entries})
+
 # ══════════════════════════════════════════════════════════════
 #  GRAMMAR RENDERER
 #  Pass 1: Markdown → HTML
