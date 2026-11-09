@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DBT regression harness (the "safety net").
+DBT regression harness
 
 It starts the site on a PRIVATE COPY of the repository with clean data (your real uploads, edits
 and settings are never touched), then checks three things:
