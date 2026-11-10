@@ -453,6 +453,9 @@ async function loadSection(id) {
         <button class="editor-toolbar-btn" onclick="insertMarkup('${id}','table')"
                 title="Table skeleton">⊞ Table</button>
         <div class="editor-toolbar-sep"></div>
+        <span style="position:relative;display:inline-block;"><button class="editor-toolbar-btn" onclick="toggleRefMenu('${id}', this)"
+                title="Refer to a table or a figure of the grammar: inserts {{ref: label}}">🔗 Reference</button></span>
+        <div class="editor-toolbar-sep"></div>
         <label class="editor-toolbar-btn" title="Upload and insert image" style="cursor:pointer;">
           📷 Image
           <input type="file" accept="image/*" style="display:none;"
@@ -474,7 +477,8 @@ async function loadSection(id) {
           <li><code>{{example: ID}}</code> — numbered example from "Examples from papers"</li>
           <li><code>{{entry: ID}}</code> — inline word chip from dictionary XML</li>
           <li><code>{{source: Author 2020}}</code> — cite a reference: (Author, 2020). Add <code>, p. 12</code> for a page, <code>, narrative</code> for Author (2020), or cite several with <code>;</code>. The reference's key works too</li>
-          <li><code>![the caption](images/file.jpg)</code> — uploaded image. On a line of its own it is a <b>figure</b>: the caption you write between the brackets goes below it as “Figure 3 – …”, the number being automatic through the whole grammar (an image in the middle of a line of text has no caption). Charts made in the Phonological table tab are numbered as tables, above.</li>
+          <li><code>![the caption](images/file.jpg)</code> — uploaded image. On a line of its own it is a <b>figure</b>: the caption you write between the brackets goes below it as “Figure 3 – …”, the number being automatic through the whole grammar (an image in the middle of a line of text has no caption). Charts made in the Phonological table tab are numbered as tables, above. To be able to refer to a figure, give it a label after the image: <code>![the caption](images/map.png){#map}</code> (a chart has a Label box).</li>
+        <li><code>{{ref: label}}</code> — a link that reads “Table 2” or “Figure 3”, with the number it has now (<code>{{ref: a, b}}</code> for several). The 🔗 Reference button lists what can be referred to. It works in the dictionary too.</li>
         </ul>
         <li><code>{{cite: file.xml#sentId}}</code> — numbered example from a transcribed narrative</li>
           <li><code>{{cite: fieldnotes#0#d01.Road:01}}</code> — numbered example from fieldnotes</li>
@@ -599,8 +603,11 @@ async function uploadAndInsertImage(id, input) {
     if (d.ok) {
       const ta  = document.getElementById('textarea-' + id);
       const slot = 'Write the caption of the figure here';
-      const md  = `\n![${slot}](${d.url})\n`;
-      const at  = ta.selectionStart + 3;                // inside the brackets, after "\n!["
+      const label = String(d.filename || '').replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 40);
+      // a figure is an image alone in its paragraph: blank lines on both sides, even when the cursor is at the end of a line of text.
+      // The label lets the text refer to the figure: {{ref: label}}
+      const md  = `\n\n![${slot}](${d.url})${label ? '{#' + label + '}' : ''}\n\n`;
+      const at  = ta.selectionStart + 4;                // inside the brackets, after "\n\n!["
       insertAtCursor(ta, md);
       ta.setSelectionRange(at, at + slot.length);       // the caption is typed over the placeholder
     } else {
@@ -608,6 +615,34 @@ async function uploadAndInsertImage(id, input) {
     }
   } catch(e) { alert('Upload error: ' + e.message); }
   input.value = ''; // reset so same file can be re-selected
+}
+
+// ── Referring to a table or a figure: the menu inserts {{ref: label}} ──
+async function toggleRefMenu(id, btn) {
+  const old = document.getElementById('xref-menu-' + id);
+  if (old) { old.remove(); return; }
+  let d = { items: [], duplicates: [] };
+  try { d = await (await fetch('/api/captions')).json(); } catch (e) { /* an empty menu says so */ }
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const menu = document.createElement('div'); menu.id = 'xref-menu-' + id; menu.className = 'xref-menu';
+  const dup = new Set((d.duplicates || []).map(x => x.toLowerCase()));
+  menu.innerHTML = (d.items.length ? d.items.map(it => it.label
+      ? `<button type="button" data-label="${esc(it.label)}"><b>${esc(it.name)}</b> <small>${esc(it.label)}${dup.has(it.label.toLowerCase()) ? ' — used twice' : ''}</small><br>${esc(it.text) || '<small>(no caption)</small>'}</button>`
+      : `<div class="xref-none"><b>${esc(it.name)}</b> has no label${esc(it.text) ? ' (' + esc(it.text) + ')' : ''}: a chart has a Label box, a figure ends with {#name}</div>`).join('')
+    : '<div class="xref-none">There is no table or figure in the grammar yet.</div>');
+  btn.parentElement.appendChild(menu);
+  menu.addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-label]'); if (!b) return;
+    insertAtCursor(document.getElementById('textarea-' + id), '{{ref: ' + b.dataset.label + '}}');
+    menu.remove();
+  });
+  setTimeout(() => document.addEventListener('click', function away(ev) { if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener('click', away); } }), 0);
+}
+// a link such as grammar.html#tab-consonants goes to the table or the figure, once the sections are on the page
+function scrollToHash() {
+  if (location.hash.length < 2) return;
+  const el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
 }
 
 // ── Delete section ─────────────────────────────────────────────
@@ -707,6 +742,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   buildTOC();
   bindScrollspy();
   bindAddSection();
+  scrollToHash();
 });
 
 // ── Dictionary lookup for cited examples ─────────────────────
