@@ -54,7 +54,7 @@ const PhonoEditor = (() => {
       const blocks = blocksOf(ta.value);
       root.innerHTML = `<p class="pt-help">Make a chart of the consonants or of the vowels without writing any markup: choose the rows and the columns, type the sounds of ${several ? 'each language' : 'the language'}, and insert it into the text.</p>
         <h4>Charts in this section</h4>
-        <div class="pt-bar" id="pt-list-${id}">${blocks.length ? blocks.map((b, i) => `<button type="button" class="pt-chip" data-act="edit" data-i="${i}">${b.spec && KIND_NAME[b.spec.kind] ? esc(b.spec.title || (KIND_NAME[b.spec.kind] + ' chart')) + ' <small>(' + KIND_NAME[b.spec.kind] + ')</small>' : 'unreadable chart (see the Text tab)'}</button>`).join('') : '<span class="pt-help" style="margin:0;">None yet.</span>'}</div>
+        <div class="pt-bar" id="pt-list-${id}">${blocks.length ? blocks.map((b, i) => `<button type="button" class="pt-chip" data-act="edit" data-i="${i}">${b.spec && KIND_NAME[b.spec.kind] ? esc(b.spec.caption ?? b.spec.title ?? '') + ' <small>(' + KIND_NAME[b.spec.kind] + (b.spec.caption || b.spec.title ? '' : ', no caption') + ')</small>' : 'unreadable chart (see the Text tab)'}</button>`).join('') : '<span class="pt-help" style="margin:0;">None yet.</span>'}</div>
         <h4>Make a new one</h4>
         <div class="pt-bar"><button type="button" class="pt-btn primary" data-act="new" data-kind="consonants">＋ Consonant chart</button><button type="button" class="pt-btn primary" data-act="new" data-kind="vowels">＋ Vowel chart</button></div>
         <div class="pt-msg" id="pt-msg-${id}">${message ? esc(message) : ''}</div>`;
@@ -65,7 +65,9 @@ const PhonoEditor = (() => {
       st.spec = spec; st.index = index; st.lang = langs[0].code;
       const k = KIND_NAME[spec.kind];
       root.innerHTML = `<div class="pt-bar" style="justify-content:space-between;"><strong>${index === null ? 'New' : 'Edit the'} ${k} chart</strong><button type="button" class="pt-btn" data-act="back">← Charts of this section</button></div>
-        <h4>Title</h4><div class="pt-field"><input type="text" id="pt-title-${id}" value="${esc(spec.title)}" maxlength="200" aria-label="Title of the chart"></div>
+        <h4>Caption</h4>
+        <p class="pt-help">Shown above the chart as “${esc(D.captions.table)} 3${esc(D.captions.separator)}…”: you write only the text, the number is automatic and goes on through the whole grammar. Leave it empty for the number alone.</p>
+        <div class="pt-field"><input type="text" id="pt-caption-${id}" value="${esc(spec.caption)}" maxlength="400" aria-label="Caption of the chart"></div>
         <h4>Columns and rows</h4>
         <p class="pt-help">Start from the suggested order and change what you need: rename, move (↑ ↓), remove (✕), or add rows and columns of your own, with any names.</p>
         <div class="pt-axes"><div class="pt-axis" data-axis="columns"></div><div class="pt-axis" data-axis="rows"></div></div>
@@ -127,12 +129,16 @@ const PhonoEditor = (() => {
       const s = st.spec, inv = {};
       for (const [code, byRow] of Object.entries(s.inventory)) for (const [r, byCol] of Object.entries(byRow)) for (const [c, t] of Object.entries(byCol))
         if (t.trim() && s.rows.includes(r) && s.columns.includes(c)) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t.trim();
-      return { kind: s.kind, title: s.title.trim(), columns: s.columns, rows: s.rows, inventory: inv };
+      return { kind: s.kind, caption: s.caption.trim(), columns: s.columns, rows: s.rows, inventory: inv };
+    }
+    function position() {                                // how many charts come before this one in the section (its number follows from that)
+      if (st.index !== null) return st.index;
+      return blocksOf(ta.value.slice(0, ta.selectionStart ?? ta.value.length)).length;
     }
     async function preview() {
       const my = ++st.run, box = $('#pt-preview-' + id), msg = $('#pt-msg-' + id);
       try {
-        const r = await fetch('/api/phonotable/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: cleanSpec() }) });
+        const r = await fetch('/api/phonotable/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: cleanSpec(), section: id, position: position() }) });
         let j = null; try { j = await r.json(); } catch (e) { /* not JSON: an old server answers with a page */ }
         if (my !== st.run) return;
         if (!j || !r.ok || !j.ok) { box.innerHTML = ''; msg.className = 'pt-msg error'; msg.textContent = (j && j.error) || `The server could not make the preview (HTTP ${r.status}). ${OLD_SERVER}`; return; }
@@ -170,7 +176,7 @@ const PhonoEditor = (() => {
       const inv = {};
       for (const [code, byRow] of Object.entries(b.spec.inventory || {})) if (langs.some(l => l.code === code) && byRow && typeof byRow === 'object')
         for (const [r, byCol] of Object.entries(byRow)) if (byCol && typeof byCol === 'object') for (const [c, t] of Object.entries(byCol)) if (typeof t === 'string' && t.trim()) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t;
-      return { kind: b.spec.kind, title: String(b.spec.title || D.titles[b.spec.kind]), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv };
+      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv };
     }
 
     // ── what the author does ──
@@ -178,7 +184,7 @@ const PhonoEditor = (() => {
       const t = ev.target.closest('[data-act], [data-lang]'); if (!t) return;
       if (t.dataset.lang) { st.lang = t.dataset.lang; root.querySelectorAll('.pt-lang').forEach(b => b.classList.toggle('active', b.dataset.lang === st.lang)); renderGrid(); return; }
       const act = t.dataset.act, axis = t.dataset.axis, i = +t.dataset.i;
-      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, title: D.titles[k], columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {} }, null); }
+      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {} }, null); }
       else if (act === 'edit') { const s = fromBlock(i); if (s) openBuilder(s, i); }
       else if (act === 'back') showList();
       else if (act === 'write') write();
@@ -197,7 +203,7 @@ const PhonoEditor = (() => {
     root.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset.add) { ev.preventDefault(); root.querySelector(`[data-act="add"][data-axis="${ev.target.dataset.add}"]`).click(); } });
     root.addEventListener('input', ev => {
       const t = ev.target;
-      if (t.id === 'pt-title-' + id) { st.spec.title = t.value; schedule(); }
+      if (t.id === 'pt-caption-' + id) { st.spec.caption = t.value; schedule(); }
       else if (t.classList.contains('pt-cell')) { setCell(st.lang, st.spec.rows[+t.dataset.r], st.spec.columns[+t.dataset.c], t.value); schedule(); }
       else if (t.dataset.axis && t.dataset.i !== undefined && t.tagName === 'INPUT') {
         const axis = t.dataset.axis, i = +t.dataset.i, v = t.value.trim(), others = st.spec[axis].filter((_, j) => j !== i);
