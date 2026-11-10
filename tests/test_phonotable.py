@@ -91,6 +91,15 @@ check('the charts are numbered in the order of the text, from the number after t
 check('…and how many charts a section has is counted the same way (the readable ones)', (PT.count_valid(blocks, LANGS), PT.count_valid([], LANGS)), (3, 0))
 check('the LaTeX table has the caption and no number of its own (LaTeX numbers it)', ('\\caption{two}' in PT.put_back('PHONOTABLEXZ0ZX', [VALID('two')], LANGS, 'latex', start=9), 'Table 10' in PT.put_back('PHONOTABLEXZ0ZX', [VALID('two')], LANGS, 'latex', start=9)), (True, False))
 
+# ── the label: how the text refers to a chart ──
+check('a chart may have a label (letters, digits, - and _: the rest becomes -), and has none unless the author gives one', (PT.clean({'kind': 'vowels', 'label': ' my chart! ', 'columns': ['a'], 'rows': ['b']}, CODES)[0]['label'], PT.clean({'kind': 'vowels', 'columns': ['a'], 'rows': ['b']}, CODES)[0]['label'], PT.clean({'kind': 'vowels', 'label': 5, 'columns': ['a'], 'rows': ['b']}, CODES)[0]['label']), ('my-chart', '', ''))
+hl = PT.render_html(spec({}, caption='x') | {'label': 'cons'}, LANGS, number=2)
+check('a chart with a label has the anchor that links go to (tab-label); one without has none', ('id="tab-cons" data-label="cons"' in hl, 'id="tab-' in PT.render_html(spec({}, caption='x'), LANGS, number=2)), (True, False))
+check('a preview has no anchor (the page would have the id twice)', 'id="tab-' in PT.render_html(spec({}, caption='x') | {'label': 'cons'}, LANGS, number=2, anchors=False), False)
+check('in LaTeX the label comes after the caption', '\\caption{x}\n\\label{tab:cons}\n' in PT.render_latex(spec({}, caption='x') | {'label': 'cons'}, LANGS), True)
+LBL = lambda lab, cap: '{"kind":"vowels","label":"%s","caption":"%s","columns":["Front"],"rows":["Close"],"inventory":{}}' % (lab, cap)
+check('the charts of a section that can be referred to, in order: label and caption (a block that cannot be read is not one)', PT.list_charts([LBL('a', 'One'), '{broken', LBL('', 'Two'), LBL('c', 'Three')], LANGS), [('a', 'One'), ('', 'Two'), ('c', 'Three')])
+
 # ── LaTeX ──
 tex = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p b'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}, 'Nasal': {'Alveolar': 'n_#'}}}, caption='A & B'), LANGS)
 check('LaTeX: a table with the caption, the columns and the rows, in booktabs style, scaled to the line', ('\\caption{A \\& B}' in tex, '\\resizebox{\\linewidth}' in tex, '\\toprule' in tex, ' & Bilabial & Alveolar \\\\' in tex, 'Plosive & ' in tex), (True,) * 5)
