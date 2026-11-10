@@ -467,6 +467,99 @@ def find_reference(what, refs, ctx):
     return None, 'not found'
 
 
+# ───────────────────────── same authors, same year: the author chooses the letters ─────────────────────────
+# APA tells apart works by the same authors in the same year with letters (2026a, 2026b ...), and the letter must be the same in the
+# reference list and in every citation. When a reference is saved that shares its authors and year with another, the author decides
+# which is which (the engine suggests an order); the choice is stored in the year, and the citations in the grammar follow.
+LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+
+
+def with_letter(base, letter):
+    """('2026', 'a') -> '2026a'; ('n.d.', 'a') -> 'n.d.-a'; ('in press', 'a') -> 'in press-a'"""
+    return base if not letter else (f'{base}-{letter}' if not str(base).isdigit() else f'{base}{letter}')
+
+
+def _group_key(r):
+    return (_authors_key(r) or ('~' + _title_key(r),), split_year(r.get('year'))[0])
+
+
+def groups_needing_choice(before, after, touched):
+    """The groups of two or more references with the same authors and year, in `after`, that the author has to give letters to: those that
+    contain a reference of `touched` (added, or edited), whose membership is not what it was in `before`, and in which some
+    reference has no letter of its own (or two have the same). Returns [(key, [references in the order of `after`])]."""
+    def groups(refs):
+        g = {}
+        for r in refs:
+            g.setdefault(_group_key(r), []).append(r['id'])
+        return g
+    gb, ga, byid, out = groups(before), groups(after), {r['id']: r for r in after}, []
+    for key, ids in ga.items():
+        if len(ids) < 2 or not any(i in touched for i in ids) or set(gb.get(key, [])) == set(ids):
+            continue
+        letters = [split_year(byid[i].get('year'))[1] for i in ids]
+        if all(letters) and len(set(letters)) == len(letters):
+            continue
+        out.append((key, [byid[i] for i in ids]))
+    return out
+
+
+def suggest_letters(members, cited):
+    """{id: letter}. The ones that already have a letter keep it. The others get the free letters in this order: those the grammar
+    cites already, in the order it first cites them (the first cited is a); then the rest, the older ones first, the new one last
+    (the author will say which will be cited first). `cited` is {id: position of its first citation in the grammar}."""
+    taken = {split_year(r.get('year'))[1] for r in members} - {''}
+    free = iter(c for c in LETTERS if c not in taken)
+    out = {r['id']: split_year(r.get('year'))[1] for r in members if split_year(r.get('year'))[1]}
+    order = sorted((i for i, r in enumerate(members) if not split_year(r.get('year'))[1]),
+                   key=lambda i: (0, cited[members[i]['id']]) if members[i]['id'] in cited else (1, i))
+    for i in order:
+        out[members[i]['id']] = next(free)
+    return out
+
+
+def apply_letters(refs, groups, letters):
+    """Give each reference of the groups the letter chosen. Returns (the references, None) or (None, why not): every reference of a
+    group needs its letter, a letter is one of a-z, and no two of a group share one."""
+    letters = letters if isinstance(letters, dict) else {}
+    chosen = {}
+    for _key, members in groups:
+        seen = set()
+        for r in members:
+            l = letters.get(r['id'])
+            if not (isinstance(l, str) and len(l) == 1 and l in LETTERS):
+                return None, 'Choose a letter, from a to z, for each of the references.'
+            if l in seen:
+                return None, f'The letter {l} is given to two references: each needs its own.'
+            seen.add(l); chosen[r['id']] = l
+    out = []
+    for r in refs:
+        out.append(dict(r, year=with_letter(split_year(r.get('year'))[0], chosen[r['id']])) if r['id'] in chosen else r)
+    return out, None
+
+
+_YEAR_TOKEN = re.compile(r'(?<![\w.])(' + _YEAR + r')(?![\w])', re.I)
+
+
+def rewrite_source_spec(spec, old_refs, new_refs):
+    """The text of a {{source: …}} with the year of each citation that was written by author and year (Smith 2026) made the year the
+    reference now has (Smith 2026a): the citation is read in the references as they were and written for the references as they are.
+    Citations by key, and those that did not find a reference, are left as they were. Returns (spec, [(old, new)])."""
+    old_ctx, new_ctx = Context(old_refs), Context(new_refs)
+    keys, new_by = {r['id'] for r in old_refs}, {r['id']: r for r in new_refs}
+    out, changes = [], []
+    for chunk in str(spec).split(';'):
+        items = parse_source_spec(chunk, keys)
+        ref = find_reference(items[0][0], old_refs, old_ctx)[0] if len(items) == 1 else None
+        if ref and ref['id'] in new_by and items[0][0].lower() != ref['id']:
+            now = new_ctx.year(new_by[ref['id']])
+            m = _YEAR_TOKEN.search(chunk)
+            if m and m.group(1).lower() != now.lower():
+                changes.append((m.group(1), now))
+                chunk = chunk[:m.start(1)] + now + chunk[m.end(1):]
+        out.append(chunk)
+    return ';'.join(out), changes
+
+
 # ───────────────────────── export: BibTeX ─────────────────────────
 def _bib_escape(s):
     s = str(s or '').replace('\\', r'\textbackslash{}')
