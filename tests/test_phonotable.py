@@ -17,8 +17,8 @@ def check(name, got, want):
 
 LANGS = [{'code': 'aaa', 'name': 'Alpha', 'color': '#2e5c8a'}, {'code': 'bbb', 'name': 'Beta', 'color': '#c07820'}, {'code': 'ccc', 'name': 'Gamma', 'color': '#2f7a3a'}]
 CODES = {l['code'] for l in LANGS}
-def spec(inv, cols=('Bilabial', 'Alveolar'), rows=('Plosive', 'Nasal'), kind='consonants', title='T'):
-    s, err = PT.clean({'kind': kind, 'title': title, 'columns': list(cols), 'rows': list(rows), 'inventory': inv}, CODES)
+def spec(inv, cols=('Bilabial', 'Alveolar'), rows=('Plosive', 'Nasal'), kind='consonants', caption='T'):
+    s, err = PT.clean({'kind': kind, 'caption': caption, 'columns': list(cols), 'rows': list(rows), 'inventory': inv}, CODES)
     assert err is None, err
     return s
 def html(inv, langs=LANGS, **kw): return PT.render_html(spec(inv, **kw), langs)
@@ -30,13 +30,15 @@ check('suggested columns and rows of the vowels', (PT.DEFAULT_AXES['vowels']['co
 
 # ── the definition ──
 s, err = PT.clean({'kind': 'vowels', 'columns': [' Front ', 'front', 'Back', '', 5, 'Labial-velar'], 'rows': ['Close', 'close', 'Open'], 'inventory': {}}, CODES)
-check('columns and rows are stripped, the empty and the repeated (case ignored) are dropped, anything the author invents is kept, and the order is the author’s', (s['columns'], s['rows'], s['title']), (['Front', 'Back', 'Labial-velar'], ['Close', 'Open'], 'Vowel phonemes'))
+check('columns and rows are stripped, the empty and the repeated (case ignored) are dropped, anything the author invents is kept, and the order is the author’s', (s['columns'], s['rows'], s['caption']), (['Front', 'Back', 'Labial-velar'], ['Close', 'Open'], ''))
 check('an unknown kind, no rows, no columns, not an object: refused with a reason', [PT.clean(x, CODES)[1] is not None for x in ({'kind': 'tones', 'columns': ['a'], 'rows': ['b']}, {'kind': 'vowels', 'columns': ['a'], 'rows': []}, {'kind': 'vowels', 'columns': [], 'rows': ['a']}, [], 'x')], [True] * 5)
 s = spec({'aaa': {'Plosive': {'Bilabial': ' p,  b  p ɓ ', 'Velar': 'k'}, 'Nasal': {'Alveolar': 'n'}, 'Trill': {'Bilabial': 'r'}}, 'zzz': {'Plosive': {'Bilabial': 'x'}}})
 check('an inventory in a row or column that does not exist, or of a language that is not in the project, is dropped; sounds are split at spaces and commas, no repeats', s['inventory'], {'aaa': {'Plosive': {'Bilabial': 'p b ɓ'}, 'Nasal': {'Alveolar': 'n'}}})
 check('rows and columns of the inventory are found whatever their case', spec({'aaa': {'plosive': {'BILABIAL': 'p'}}})['inventory'], {'aaa': {'Plosive': {'Bilabial': 'p'}}})
 check('limits: a sound longer than 16 characters is dropped, at most 24 to a cell and 40 rows or columns', (PT.phonemes('a ' + 'x' * 17 + ' b'), len(PT.phonemes(' '.join(f's{i}' for i in range(40)))), len(spec({}, cols=[f'c{i}' for i in range(60)])['columns'])), (['a', 'b'], 24, 40))
-check('a title is kept (shortened), or made from the kind', (spec({}, title='  My  table ')['title'], spec({}, title='')['title'], spec({}, kind='vowels', title=None)['title']), ('My table', 'Consonant phonemes', 'Vowel phonemes'))
+check('a chart has a caption, not a title: the caption is kept as written (spaces collapsed), and there is none unless the author gives one', (spec({}, caption='  My  table ')['caption'], spec({}, caption='')['caption'], 'title' in spec({}), spec({}, kind='vowels', caption=None)['caption']), ('My table', '', False, ''))
+check('an old block that has a title (before captions) keeps its text, as its caption; a caption wins over a title', (PT.clean({'kind': 'vowels', 'title': 'Old title', 'columns': ['a'], 'rows': ['b']}, CODES)[0]['caption'], PT.clean({'kind': 'vowels', 'title': 'Old', 'caption': 'New', 'columns': ['a'], 'rows': ['b']}, CODES)[0]['caption']), ('Old title', 'New'))
+check('a caption can be a sentence (400 characters), not a label (the axes are cut at 60)', len(spec({}, caption='x ' * 300)['caption']), 399)
 check('the two spellings of a letter are one sound', PT.phonemes('n\u0304 ' + 'n\u0304'), ['n\u0304'])
 check('a block that is not JSON is refused with a reason, and a huge one too', (PT.parse_block('{oops')[1] is not None, PT.parse_block('x' * 300000)[1]), (True, 'The table is too large.'))
 
@@ -65,15 +67,32 @@ check('every sound says which languages have it, whatever its colour', all('data
 check('the table has the columns and rows as defined, in that order, and the author’s own', (lambda hh: (hh.index('Alveolar') > hh.index('Bilabial'), hh.index('Nasal') > hh.index('Plosive')))(html({}, cols=('Bilabial', 'Alveolar'))), (True, True))
 hv = html({'aaa': {'Close': {'Front': 'i y', 'Back': 'u'}}}, cols=('Front', 'Central', 'Back', 'Labial-velar'), rows=('Close', 'Open'), kind='vowels')
 check('a vowel chart is a chart of its own, with its own axes', ('data-kind="vowels"' in hv, 'Labial-velar' in hv, hv.count('<tr>')), (True, True, 3))
-bad_h = html({'aaa': {'Plosive': {'Bilabial': '<img src=x onerror=alert(1)> p'}}}, title='<b>x</b>', rows=('<i>row</i>', 'Plosive'))
+bad_h = html({'aaa': {'Plosive': {'Bilabial': '<img src=x onerror=alert(1)> p'}}}, caption='<b>x</b>', rows=('<i>row</i>', 'Plosive'))
 check('everything typed is escaped: no element is made', ('<img' in bad_h, '<b>' in bad_h, '<i>' in bad_h, '&lt;img' in bad_h), (False, False, False, True))
 hc = html({'aaa': {'Plosive': {'Bilabial': 'p'}}}, langs=[{'code': 'aaa', 'name': 'A', 'color': 'red;background:url(//evil)'}, {'code': 'bbb', 'name': 'B', 'color': '#abc'}]).replace('\n', '')
 hc2 = html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial': 'k'}}}, langs=[{'code': 'aaa', 'name': 'A', 'color': 'red;background:url(//evil)'}, {'code': 'bbb', 'name': 'B', 'color': '#abc'}])
 check('a colour that is not a hex colour is replaced by grey, so nothing can be slipped into the style; #abc becomes #aabbcc', ('evil' in hc2, '#808080' in hc2, '#aabbcc' in hc2), (False, True, True))
 check('a colour that is not a hex colour never reaches the check boxes either', ('evil' in hc2, 'data-color="#808080"' in hc2, 'data-color="#aabbcc"' in hc2), (False, True, True))
 
+# ── the caption: above the table, numbered by the caller, in the words of the project ──
+hc = PT.render_html(spec({'aaa': {'Plosive': {'Bilabial': 'p'}}}, caption='The consonants of Alpha'), LANGS, number=3)
+check('the caption is above the table: “Table 3 – The consonants of Alpha”, in a caption element that comes before the table', ('<figcaption class="caption caption-table"><span class="cap-label">Table 3</span><span class="cap-text"> – The consonants of Alpha</span></figcaption>' in hc, hc.index('<figcaption') < hc.index('<table')), (True, True))
+check('without a caption text only the label and the number are shown', '<figcaption class="caption caption-table"><span class="cap-label">Table 7</span></figcaption>' in PT.render_html(spec({}, caption=''), LANGS, number=7), True)
+check('there is no title anywhere in the chart (no heading, no title element before the caption)', ('<h' in hc, hc.count('<figcaption')), (False, 1))
+hl = PT.render_html(spec({}, caption='Les consonnes'), LANGS, number=2, lab={'table': 'Tableau', 'figure': 'Figure', 'separator': ' : '})
+check('the words and the separator are the project’s: “Tableau 2 : Les consonnes”', 'Tableau 2</span><span class="cap-text"> : Les consonnes' in hl, True)
+check('the caption text is escaped', ('<b>' in PT.render_html(spec({}, caption='<b>x</b>'), LANGS, number=1), '&lt;b&gt;x' in PT.render_html(spec({}, caption='<b>x</b>'), LANGS, number=1)), (False, True))
+
+# ── the numbers through a section ──
+VALID = lambda cap: '{"kind":"vowels","caption":"%s","columns":["Front"],"rows":["Close"],"inventory":{}}' % cap
+blocks = [VALID('one'), '{broken', VALID('two'), '{"kind":"nope"}', VALID('three')]
+out = PT.put_back(''.join(f'<p>PHONOTABLEXZ{i}ZX</p>' for i in range(5)), blocks, LANGS, start=4)
+check('the charts are numbered in the order of the text, from the number after those of the earlier sections; a block that cannot be shown has a message and takes no number', re.findall(r'Table (\d+)</span><span class="cap-text"> – (\w+)', out), [('5', 'one'), ('6', 'two'), ('7', 'three')])
+check('…and how many charts a section has is counted the same way (the readable ones)', (PT.count_valid(blocks, LANGS), PT.count_valid([], LANGS)), (3, 0))
+check('the LaTeX table has the caption and no number of its own (LaTeX numbers it)', ('\\caption{two}' in PT.put_back('PHONOTABLEXZ0ZX', [VALID('two')], LANGS, 'latex', start=9), 'Table 10' in PT.put_back('PHONOTABLEXZ0ZX', [VALID('two')], LANGS, 'latex', start=9)), (True, False))
+
 # ── LaTeX ──
-tex = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p b'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}, 'Nasal': {'Alveolar': 'n_#'}}}, title='A & B'), LANGS)
+tex = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p b'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}, 'Nasal': {'Alveolar': 'n_#'}}}, caption='A & B'), LANGS)
 check('LaTeX: a table with the caption, the columns and the rows, in booktabs style, scaled to the line', ('\\caption{A \\& B}' in tex, '\\resizebox{\\linewidth}' in tex, '\\toprule' in tex, ' & Bilabial & Alveolar \\\\' in tex, 'Plosive & ' in tex), (True,) * 5)
 check('LaTeX: a shared sound is plain, a sound of one language is in its colour, special characters are escaped', ('p' in tex, '\\textcolor[HTML]{2E5C8A}{b}' in tex, '\\textcolor[HTML]{C07820}{n\\_\\#}' in tex), (True, True, True))
 tex3 = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 't'}}, 'bbb': {'Plosive': {'Bilabial': 't'}}, 'ccc': {'Plosive': {'Bilabial': 'k'}}}), LANGS)
