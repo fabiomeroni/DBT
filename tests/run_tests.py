@@ -2974,12 +2974,102 @@ def suite_phonotable(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 15. the IPA of the site is shown in Charis SIL ─────────────────────────
+def _ipa_prepare(d):
+    (d / "project" / "grammar" / "zz_ipa.md").write_text("## IPA in prose\n\nThe sounds /ɣ/ and /ʧ/ and ʃ and β æ ŋ appear here, next to the orthography: ō, n̄, ē, ä, m̄ and plain text.\n\nPlain Latin only: the quick brown fox.\n", encoding="utf-8")
+
+def suite_ipafont(browser, args):
+    S = "ipafont"
+    section("IPA: Charis SIL")
+    site = Site(prepare=_ipa_prepare)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        # ── the font files, and what the server will not serve ──
+        bad = []
+        for style in ("Regular", "Italic", "Bold", "BoldItalic"):
+            r = va.get(site.url + f"fonts/Charis-{style}.woff2"); body = r.body()
+            if r.status != 200 or body != (ROOT / "fonts" / f"Charis-{style}.woff2").read_bytes() or body[:4] != b"wOF2" or "woff2" not in r.headers.get("content-type", ""): bad.append(style)
+        check(S, "the four styles of Charis SIL (regular, italic, bold, bold italic) are served as the files of the repository, real WOFF2 files, with the font content type", not bad, str(bad))
+        lic = va.get(site.url + "fonts/OFL.txt").text()
+        check(S, "the license comes with them and is served: the SIL Open Font License, with the copyright of SIL Global", "SIL OPEN FONT LICENSE" in lic and "SIL Global" in lic)
+        def raw(path):
+            try: return urllib.request.urlopen(site.url + path, timeout=10).status
+            except urllib.error.HTTPError as e: return e.code
+        tricks = ["fonts/../app.py", "fonts/%2e%2e/app.py", "fonts/..%2fapp.py", "fonts/%2e%2e%2fapp.py", "fonts/Charis-Regular.woff2/../../app.py", "fonts/sub/Charis-Regular.woff2",
+                  "fonts/x.py", "fonts/Charis-Regular.woff2.py", "fonts/.hidden.woff2", "fonts/", "fonts", "fonts//app.py", "fonts/..\\\\app.py", "Charis-Regular.woff2", "fonts/README.txt", "fonts/OFL.txt.bak"]
+        res = {p: raw(p) for p in tricks}
+        check(S, "nothing else is served from the folder (path tricks, other types, hidden files, the folder itself, a font at the root): all 404", all(v == 404 for v in res.values()), str({k: v for k, v in res.items() if v != 404}))
+        check(S, "…and the rest of the site is as closed as before (code, data and project files)", all(raw(p) == 404 for p in ("app.py", "project/project.json", "project/grammar/s1.md", "phonotable.py", "fonts/../project/project.json")))
+        # ── the stylesheet: Charis SIL for the IPA-specific characters of the site's fonts, and never for combining marks ──
+        css = (ROOT / "style.css").read_text(encoding="utf-8")
+        ranges = set()
+        for m in re.finditer(r"@font-face\s*\{[^}]*font-family:\s*'(EB Garamond|Crimson Pro|Source Code Pro)'[^}]*unicode-range:\s*([^;}]*)", css):
+            for part in m.group(2).split(","):
+                a_, _, b_ = part.strip()[2:].partition("-"); ranges.add((int(a_, 16), int(b_ or a_, 16)))
+        has = lambda ch: any(lo <= ord(ch) <= hi for lo, hi in ranges)
+        check(S, "the site's own fonts are declared again with Charis SIL for the IPA letters only: ɣ ʧ ɪ ʊ ɛ ɔ ʔ, the modifier letters ʷ ː, ᵐ ⁿ, and æ ð ø œ ŋ β θ χ are covered", all(has(c) for c in "ɣʧɪʊɛɔʔʷːᵐⁿʃæðøœŋβθχ") and len(ranges) > 0)
+        check(S, "…but no ordinary letter, no digit, and no combining mark (the macron of ō and n̄, the tie bar): a letter and its mark must come from one font", not any(has(c) for c in "abcxyzABC019oōnäöüéè\u0304\u0308\u0361\u0329 .,;:") and not any(lo <= 0x0361 <= hi for lo, hi in ranges) and not any(lo <= 0x0304 <= hi for lo, hi in ranges))
+        faces = len(re.findall(r"@font-face\s*\{[^}]*font-family:\s*'(EB Garamond|Crimson Pro|Source Code Pro)'[^}]*unicode-range", css))
+        check(S, "every weight and style of the site's three fonts has its Charis SIL face (so that bold, italic and monospace text get it too): 10 + 5 + 3 = 13 faces … minus none", faces == 13, str(faces))
+
+        # ── what the browser really uses ──
+        page = vis.new_page(); errs = []; watch(page, errs); got = []
+        page.on("response", lambda r: got.append((r.status, r.url.rsplit("/", 1)[-1])) if "/fonts/" in r.url else None)
+        cdp = page.context.new_cdp_session(page); cdp.send("DOM.enable"); cdp.send("CSS.enable")
+        def used(selector):
+            doc = cdp.send("DOM.getDocument", {"depth": -1}); n = cdp.send("DOM.querySelector", {"nodeId": doc["root"]["nodeId"], "selector": selector})["nodeId"]
+            return [] if not n else [(f["postScriptName"] or f["familyName"], f["isCustomFont"], f["glyphCount"]) for f in cdp.send("CSS.getPlatformFontsForNode", {"nodeId": n})["fonts"]]
+        def settle(): page.evaluate("document.fonts.ready"); page.wait_for_timeout(700)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1200); settle()
+        cell = used("figure.phonotable td")
+        check(S, "in a phonological chart every character, the plain letters (t, k, m) as well as ʧ and the tie bars, is in Charis SIL", cell and all(f[0].startswith("Charis") and f[1] for f in cell), str(cell))
+        sound = used("figure.phonotable .ph[data-langs='olr lkn']")
+        check(S, "…a sound in two colours too", sound and all(f[0].startswith("Charis") for f in sound), str(sound))
+        prose = used("#content-zz_ipa p"); charis = [f for f in prose if f[0].startswith("Charis")]
+        check(S, "IPA typed in running text is in Charis SIL even without any markup: of a sentence that has /ɣ/, /ʧ/, ʃ, β, æ and ŋ among ordinary text, exactly those 6 characters are drawn in Charis", len(charis) == 1 and charis[0][2] == 6, str(prose))
+        check(S, "…and the orthography next to it (ō, n̄, ē, ä, m̄) is not: it stays in the site's font (the sentence has more than 60 other characters, none in Charis)", any(not f[0].startswith("Charis") and f[2] > 60 for f in prose))
+        plain = used("#content-zz_ipa p:nth-of-type(2)")
+        check(S, "a paragraph with no IPA does not use Charis SIL at all", plain and not any(f[0].startswith("Charis") for f in plain), str(plain))
+        check(S, "the font is loaded (in the browser's font set) under the name Charis SIL", page.evaluate("document.fonts.check('12px \"Charis SIL\"', 'ʧ')") is True)
+        check(S, "the font files come from the site itself (fonts/…, status 200 or 304), nothing else is asked for under /fonts/", got and all(s_ in (200, 304) and n.startswith("Charis-") and n.endswith(".woff2") for s_, n in got), str(got))
+
+        # ── the dictionary ──
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        aa.post(site.url + "api/dictionary/entry", headers={"Content-Type": "application/json"}, data=json.dumps({"forms": {"drg": "kɔɣa"}, "pos": "n.", "domain": "", "etyms": [{"ref": None, "lang": "POc", "form": "*[qa]liŋa-", "gloss": "voice", "langs": ["drg"]}], "senses": [{"ref": None, "definition": "ipa test entry", "shortGloss": "", "langs": []}]}))
+        pa = au.new_page(); watch(pa, errs); cdp2 = pa.context.new_cdp_session(pa); cdp2.send("DOM.enable"); cdp2.send("CSS.enable")
+        def used2(selector):
+            doc = cdp2.send("DOM.getDocument", {"depth": -1}); n = cdp2.send("DOM.querySelector", {"nodeId": doc["root"]["nodeId"], "selector": selector})["nodeId"]
+            return [] if not n else [(f["postScriptName"] or f["familyName"], f["isCustomFont"], f["glyphCount"]) for f in cdp2.send("CSS.getPlatformFontsForNode", {"nodeId": n})["fonts"]]
+        open_page(pa, site, "dictionary.html?lang=Dorig", ".entry-ipa", 1200); pa.evaluate("document.fonts.ready"); pa.wait_for_timeout(700)
+        ip = used2(".entry-ipa")
+        check(S, "in the dictionary the IPA beside a headword is in Charis SIL", ip and all(f[0].startswith("Charis") for f in ip), str(ip))
+        et = used2(".etym-tag .etym-form")
+        check(S, "…and the proto-form of an etymology is in Charis SIL (italic)", et and all(f[0].startswith("Charis") for f in et), str(et))
+        fam = lambda sel: pa.evaluate("(s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).fontFamily : ''; }", sel)
+        pa.locator(".entry >> text=Edit").first.click(); pa.wait_for_selector("#entry-modal.visible"); pa.wait_for_timeout(300)
+        check(S, "in the entry editor the IPA field is in Charis SIL", "Charis SIL" in fam(".em-ipa"), fam(".em-ipa"))
+        pa.click("#em-cancel"); pa.click("#settings-btn"); pa.wait_for_selector('input[data-f="ipa"]', timeout=6000)
+        check(S, "…in the settings the IPA column and the “try it” boxes are in Charis SIL, and the orthography column is not", "Charis SIL" in fam('input[data-f="ipa"]') and "Charis SIL" in fam("#st-try-ipa-in") and "Charis SIL" in fam("#st-try-ipa") and "Charis SIL" not in fam('input[data-f="orth"], #st-try-orth'), fam('input[data-f="ipa"]'))
+        pa.click("#st-cancel"); pa.click("#ortho-btn"); pa.wait_for_selector("#ortho-list .ipa-from", timeout=8000)
+        check(S, "…and in the IPA → orthography converter the forms written in IPA are in Charis SIL", "Charis SIL" in fam(".ipa-from"), fam(".ipa-from"))
+        pa.click("#ortho-cancel")
+        # the phonological editor
+        open_page(pa, site, "grammar.html", ".section-edit.visible", 900); pa.locator(".section-edit.visible").first.click(); pa.wait_for_selector(".md-editor-wrap.visible")
+        pa.locator('.md-editor-wrap.visible .ed-tab[data-tab="phono"]').click(); pa.locator('.md-editor-wrap.visible [data-act="new"][data-kind="consonants"]').click(); pa.wait_for_selector(".pt-grid input")
+        check(S, "in the grammar editor the cells where the sounds are typed are in Charis SIL", "Charis SIL" in fam(".pt-grid input"), fam(".pt-grid input"))
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close(); vis.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -3004,6 +3094,7 @@ def main():
             if args.only in (None, "refimport"): suite_refimport(browser, args)
             if args.only in (None, "refletters"): suite_refletters(browser, args)
             if args.only in (None, "phonotable"): suite_phonotable(browser, args)
+            if args.only in (None, "ipafont"): suite_ipafont(browser, args)
             browser.close()
     finally:
         site.stop()
