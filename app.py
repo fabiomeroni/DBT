@@ -1244,36 +1244,53 @@ def references_import():
 
 _MD = md_lib.Markdown(extensions=['extra', 'tables', 'attr_list', 'toc'])
 
-_CAPTION_COUNTS = {}                                           # (file, mtime, size) -> (tables, figures) of a section
+_SECTION_ITEMS = {}                                            # (file, mtime, size, languages) -> what a section can be referred to by
 
 def _count_captions(source):
-    """(tables, figures) of a section: the charts that can be shown and the images alone in their paragraph. Counted as the page numbers them."""
+    """(tables, figures) of a section: what the page numbers (see _section_items)."""
+    found = _section_items(source)
+    return len(found['tables']), len(found['figures'])
+
+def _section_items(source):
+    """What a section holds that has a number: its tables (the charts that can be shown) and its figures (the images alone in their paragraph),
+    each as (label, caption), in the order of the text."""
     md_text, blocks = phono.extract(source)
     html = md_lib.Markdown(extensions=['extra', 'tables', 'attr_list', 'toc']).convert(md_text)
-    return phono.count_valid(blocks, PROJECT['languages']), captions_lib.count_figures(html)
+    return {'tables': phono.list_charts(blocks, PROJECT['languages']), 'figures': captions_lib.list_figures(html)}
 
-def _caption_offsets(section_id):
-    """(tables, figures) in the sections before this one, in the order of the grammar: the numbers of its own begin after these."""
-    here = re.sub(r'[^a-zA-Z0-9_]', '', section_id) + '.md'
-    t = f = 0
+def _all_section_items():
+    """[(section id, items)] for all the sections, in the order of the grammar (the file names). A file is read again only when it changed."""
+    out = []
     try:
         names = sorted(n for n in os.listdir(GRAMMAR_FOLDER) if n.endswith('.md'))
     except OSError:
-        return 0, 0
+        return out
+    codes = tuple(l['code'] for l in PROJECT['languages'])
     for name in names:
-        if name >= here:
-            break
         path = os.path.join(GRAMMAR_FOLDER, name)
         try:
             st = os.stat(path)
-            key = (path, st.st_mtime_ns, st.st_size, tuple(l['code'] for l in PROJECT['languages']))
-            if key not in _CAPTION_COUNTS:
+            key = (path, st.st_mtime_ns, st.st_size, codes)
+            if key not in _SECTION_ITEMS:
                 with open(path, encoding='utf-8') as fh:
-                    _CAPTION_COUNTS[key] = _count_captions(fh.read())
-            a, b = _CAPTION_COUNTS[key]
+                    _SECTION_ITEMS[key] = _section_items(fh.read())
+            out.append((name[:-3], _SECTION_ITEMS[key]))
         except OSError:
             continue
-        t, f = t + a, f + b
+    return out
+
+def _caption_index():
+    """(items, by_label, duplicates): every numbered table and figure of the grammar, and what {{ref: label}} can refer to."""
+    return captions_lib.build_index(_all_section_items())
+
+def _caption_offsets(section_id):
+    """(tables, figures) in the sections before this one, in the order of the grammar: the numbers of its own begin after these."""
+    here = re.sub(r'[^a-zA-Z0-9_]', '', section_id)
+    t = f = 0
+    for sid, found in _all_section_items():
+        if sid + '.md' >= here + '.md':
+            break
+        t, f = t + len(found['tables']), f + len(found['figures'])
     return t, f
 
 def render_grammar(md_text, offsets=(0, 0)):
@@ -1301,7 +1318,8 @@ def render_grammar(md_text, offsets=(0, 0)):
         html
     )
     html = _SOURCE_RE.sub(lambda m: build_source_cite(_html.unescape(m.group(1)).strip()), html)
-    return phono.put_back(html, phono_blocks, PROJECT['languages'], 'html', offsets[0], PROJECT['captions'])
+    html = phono.put_back(html, phono_blocks, PROJECT['languages'], 'html', offsets[0], PROJECT['captions'])
+    return captions_lib.expand_refs(html, _caption_index()[1], PROJECT['captions'])        # {{ref: label}}: Table 2, Figure 3 ... with the number they have now
 
 
 def _section_path(section_id):
@@ -1595,6 +1613,14 @@ def get_grammar_html(section_id):
     return jsonify({'html': html, 'id': section_id})
 
 
+@app.route('/api/captions')
+def captions_list():
+    """The tables and figures of the grammar with their numbers and labels: what {{ref: label}} can refer to (the dictionary and the editor use it)."""
+    items, _by, dup = _caption_index()
+    lab = PROJECT['captions']
+    return jsonify({'items': [dict(i, url='grammar.html#' + i['anchor'] if i['anchor'] else '', name=f"{lab[i['kind']]} {i['number']}") for i in items],
+                    'duplicates': dup, 'captions': lab})
+
 # ── Phonological charts: what the editor starts from, and a preview made by the code that makes the page ──
 @app.route('/api/phonotable/defaults')
 def phonotable_defaults():
@@ -1613,8 +1639,16 @@ def phonotable_preview():
         position = max(0, int(data.get('position') or 0))
     except (TypeError, ValueError):
         position = 0
-    number = _caption_offsets(str(data.get('section') or ''))[0] + position + 1       # the number it will have in the grammar
-    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions']), 'spec': spec, 'number': number})
+    section = str(data.get('section') or '')
+    number = _caption_offsets(section)[0] + position + 1       # the number it will have in the grammar
+    taken = None
+    if spec['label']:                                           # a label belongs to one item: say if another one has it already
+        _items, by_label, _dup = _caption_index()
+        it = by_label.get(spec['label'].lower())
+        mine = it and bool(data.get('editing')) and it['kind'] == 'table' and it['section'] == section and it['kindIndex'] == position
+        if it and not mine:
+            taken = {'name': f"{PROJECT['captions'][it['kind']]} {it['number']}", 'section': it['section']}
+    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions'], anchors=False), 'spec': spec, 'number': number, 'labelTaken': taken})
 
 @app.route('/api/grammar/<section_id>/source')
 def get_grammar_source(section_id):
@@ -3273,6 +3307,15 @@ def _md_to_latex_body(source, cited=None):
     src = re.sub(r'\{\{\s*entry\s*:\s*([^\}]+)\}\}',
                  lambda m: _entry_latex(m.group(1).strip()), src)
     src = _SOURCE_RE.sub(lambda m: _source_latex(_html.unescape(m.group(1)).strip(), cited), src)
+    by_label = _caption_index()[1]                      # {{ref: label}}: the word of the project and LaTeX's own number (not inside a code block)
+    fenced, kept = False, []
+    for ln in src.split('\n'):
+        if ln.strip().startswith('```'):
+            fenced = not fenced
+        kept.append(ln if fenced or captions_lib.image_line(ln) else ''.join(                 # nor inside `inline code`
+            p if p.startswith('`') and p.endswith('`') and len(p) > 1 else captions_lib._REF.sub(lambda m: captions_lib.ref_latex(m.group(1), by_label), p)
+            for p in re.split(r'(`[^`\n]*`)', ln)))
+    src = '\n'.join(kept)
 
     lines = src.split('\n')
     out   = []
@@ -3327,7 +3370,7 @@ def _md_to_latex_body(source, cited=None):
         # An image alone on a line: a figure, its caption below (LaTeX numbers it)
         img = None if in_fence else captions_lib.image_line(line)
         if img:
-            out.append(captions_lib.figure_latex(img[0], img[1], _le)); continue
+            out.append(captions_lib.figure_latex(img[0], img[1], lambda t: captions_lib.latex_text(t, by_label, _le), img[2])); continue
 
         # Already a LaTeX block (shortcode output)
         if line.strip().startswith('\\begin{') or line.strip().startswith('\\end{'):
@@ -3341,7 +3384,7 @@ def _md_to_latex_body(source, cited=None):
     # Merge consecutive prose lines into paragraphs
     result = '\n'.join(out)
     result = re.sub(r'\n{3,}', '\n\n', result)
-    return phono.put_back(result, phono_blocks, PROJECT['languages'], 'latex')
+    return phono.put_back(result, phono_blocks, PROJECT['languages'], 'latex', render_text=lambda t: captions_lib.latex_text(t, by_label, _le))
 
 def _apply_inline(text):
     """Apply inline Markdown formatting and escape for LaTeX."""
