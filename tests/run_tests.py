@@ -1225,11 +1225,13 @@ def suite_references(browser, args):
         def add(data): return _jcall(aa, "post", site.url + "api/references", data)
         cm = dict(type="article", authors=[_P("Collier", "K."), _P("McManus", "J.")], year="2005", container="J", volume="1")
         st, a1 = add(dict(cm, title="Setting up learning partnerships in vocational education and training: Lessons learnt"))
-        st2, a2 = add(dict(cm, title="Bridging the gap: The use of learning partnerships to enhance workplace learning"))
+        bridging = dict(cm, title="Bridging the gap: The use of learning partnerships to enhance workplace learning")
+        st_ask, ask = add(bridging)                                  # the same authors and year as the first: the author is asked, nothing is saved yet
+        st2, a2 = add(dict(bridging, letters={"collier2005": "b", "collier2005-2": "a"}))      # the author chooses (here, the order of the titles)
         lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
         years = {r["id"]: r["yearDisplay"] for r in lst}
-        check(S, "a key is made from the author and the year when none is given", a1.get("id") == "collier2005" and a2.get("id") == "collier2005-2", f"{a1} {a2}")
-        check(S, "two works by the same authors in the same year get a and b, in the order of their titles (guide 11.08)", years == {"francois2026b": "2026b", "collier2005": "2005b", "collier2005-2": "2005a"}, str(years))
+        check(S, "a key is made from the author and the year when none is given", a1.get("id") == "collier2005" and a2.get("id") == "collier2005-2" and st_ask == 409 and [m["id"] for m in ask["needsLetters"][0]["members"]] == ["collier2005", "collier2005-2"], f"{a1} {a2} {st_ask}")
+        check(S, "two works by the same authors in the same year have the letters the author chose (here a and b in the order of their titles, guide 11.08)", years == {"francois2026b": "2026b", "collier2005": "2005b", "collier2005-2": "2005a"}, str(years))
         check(S, "the list is in alphabetical order of the first author", [r["id"] for r in lst] == ["collier2005-2", "collier2005", "francois2026b"], str([r["id"] for r in lst]))
         check(S, "a key that is already used is refused (409)", add(dict(cm, title="t", id="collier2005"))[0] == 409)
         st, _ = _jcall(aa, "put", site.url + "api/references/collier2005", dict(cm, title="Setting up learning partnerships: A new title", id="collier2005"))
@@ -1272,7 +1274,7 @@ def suite_references(browser, args):
         # ── citing by author and year, as one writes it in a text ──
         _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Miestamo", "Matti")], year="2020", title="Negation", publisher="P", id="miestamo2020"))
         _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Alpha first", publisher="P", id="roepoe-a"))
-        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Beta second", publisher="P", id="roepoe-b"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Beta second", publisher="P", id="roepoe-b", letters={"roepoe-a": "a", "roepoe-b": "b"}))
         src = ("## §9 Forms\n\nOne {{source: François 2026b}}. Two {{source: François 2026b; Miestamo 2020}}. Three {{source: François 2026b, narrative}}. "
                "Four {{source: François, 2026b, p. 128}}. Five {{source: Francois 2026}}. Six {{source: Miestamo 2020, narrative, p. 4}}. Seven {{source: Nobody 2000}}. "
                "Eight {{source: Roe & Poe 2010}}. Nine {{source: Roe & Poe 2010a}}.\n")
@@ -2608,12 +2610,142 @@ def suite_refimport(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 13. references: the same authors and year, the author chooses the letters ─────────────────────────
+def _letters_seed(d):
+    P_ = lambda i, ty, fam, giv, y, title, **kw: dict({"id": i, "type": ty, "authors": [{"family": fam, "given": giv}], "editors": [], "year": y, "title": title, "publisher": "P"}, **kw)
+    refs = [P_("francois2026b", "book", "François", "A.", "2026b", "Negation in Dorig"), P_("smith-alpha", "book", "Smith", "J.", "2026", "Alpha: the first account"),
+            P_("lee-book", "book", "Lee", "K.", "2001", "Lee book"), P_("zed-a", "book", "Zed", "Z.", "2022", "Zed A"), P_("zed-b", "book", "Zed", "Z.", "2022", "Zed B"),
+            P_("yu-1", "book", "Yu", "Y.", "2018", "Yu one"), P_("yu-2", "book", "Yu", "Y.", "2018", "Yu two")]
+    (d / "project" / "references.json").write_text(json.dumps({"references": refs}, ensure_ascii=False), encoding="utf-8")
+    g = d / "project" / "grammar"
+    (g / "s1.md").write_text("## One\n\nFirst {{source: Smith 2026, p. 12}}; then {{source: lee-book}} and {{source: Lee 2001}}. Narrative {{source: Smith 2026, narrative}}. Also {{source: zed-b}}.\n", encoding="utf-8")
+    (g / "s2.md").write_text("## Two\n\nLater {{source: zed-a}}.\n", encoding="utf-8")
+
+def suite_refletters(browser, args):
+    S = "refletters"
+    section("references: the same authors and year: the author chooses the letters")
+    site = Site(prepare=_letters_seed)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        gdir = site.dir / "project" / "grammar"
+        refs_ = lambda: {r["id"]: r for r in aa.get(site.url + "api/references").json()["references"]}
+        add = lambda data: _jcall(aa, "post", site.url + "api/references", data)
+        bk = lambda fam, giv, y, title, **kw: dict(type="book", authors=[_P(fam, giv)], year=y, title=title, publisher="P", **kw)
+
+        # ── a save that would make the same authors and year: the author is asked, and nothing is saved ──
+        n0 = len(refs_())
+        st, j = add(bk("Smith", "J.", "2026", "Beta: a later view", id="smith-beta"))
+        g = (j.get("needsLetters") or [{}])[0]
+        check(S, "a new reference with the authors and the year of another is not saved: the answer is 409, with the references that will share the year", st == 409 and g.get("who") == "Smith" and g.get("year") == "2026" and [m["id"] for m in g["members"]] == ["smith-alpha", "smith-beta"] and len(refs_()) == n0, str(j)[:200])
+        check(S, "…it says which is new, and what the grammar already cites", [m["isNew"] for m in g["members"]] == [False, True] and g["members"][0]["cited"] and g["members"][0]["citedIn"] == ["s1"] and not g["members"][1]["cited"] and g["anyCited"], str(g["members"][0])[:200])
+        check(S, "…and it suggests a for the one the grammar cites already, b for the new one", [m["suggested"] for m in g["members"]] == ["a", "b"], str([m["suggested"] for m in g["members"]]))
+        check(S, "…with each reference as it will read, with its year but no letter yet", g["members"][0]["text"] == "Smith, J. (2026). Alpha: the first account. P." and g["members"][1]["text"] == "Smith, J. (2026). Beta: a later view. P.", str([m["text"] for m in g["members"]]))
+        bad = {"nothing": None, "a missing one": {"smith-alpha": "a"}, "the same letter": {"smith-alpha": "a", "smith-beta": "a"}, "a capital": {"smith-alpha": "A", "smith-beta": "b"}, "a number": {"smith-alpha": "1", "smith-beta": "b"}}
+        res = {k: add(dict(bk("Smith", "J.", "2026", "Beta: a later view", id="smith-beta"), **({"letters": v} if v else {})))[0] for k, v in bad.items()}
+        check(S, "letters that will not do are refused (400, with the reason) and nothing is saved: none, one missing, a repeat, a capital, a digit", res == {"nothing": 409, "a missing one": 400, "the same letter": 400, "a capital": 400, "a number": 400} and len(refs_()) == n0, str(res))
+        check(S, "a visitor cannot send letters either (401)", _jcall(va, "post", site.url + "api/references", dict(bk("Smith", "J.", "2026", "X", id="smith-x"), letters={}))[0] == 401)
+
+        # ── the author chooses: the letters are stored, and the grammar follows ──
+        st, j = add(dict(bk("Smith", "J.", "2026", "Beta: a later view", id="smith-beta"), letters={"smith-alpha": "b", "smith-beta": "a"}))
+        r = refs_(); s1 = (gdir / "s1.md").read_text(encoding="utf-8")
+        check(S, "with the letters (here swapped: the author wants the new one to be a) both are saved with them", st == 200 and j["lettered"] and r["smith-alpha"]["year"] == "2026b" and r["smith-beta"]["year"] == "2026a" and r["smith-alpha"]["yearDisplay"] == "2026b", str(j))
+        check(S, "…the citations in the grammar written by author and year now carry the letter of their reference; those by key, and the others, are untouched", "{{source: Smith 2026b, p. 12}}" in s1 and "{{source: Smith 2026b, narrative}}" in s1 and "{{source: lee-book}}" in s1 and "{{source: Lee 2001}}" in s1 and "{{source: zed-b}}" in s1, s1)
+        check(S, "…and the answer says which sections were changed, and how", j["updatedCitations"] == [{"section": "s1", "changes": [["2026", "2026b"], ["2026", "2026b"]]}], str(j["updatedCitations"]))
+        h = aa.get(site.url + "api/grammar/s1").text()
+        check(S, "…the grammar still shows them: (Smith, 2026b, p. 12), Smith (2026b), and no “not found” or “ambiguous”", "Smith, 2026b, p. 12" in h and "Smith (2026b)" in h and "not found" not in h and "mbiguous" not in h, re.sub(r"<[^>]+>", "", h)[:240])
+        check(S, "the list is in the order of the letters (a before b)", list(refs_()).index("smith-beta") < list(refs_()).index("smith-alpha"))
+
+        # ── a third, and the suggestion when the letters are already there ──
+        st, j = add(bk("Smith", "J.", "2026", "Gamma: and more", id="smith-gamma"))
+        g = j["needsLetters"][0]
+        check(S, "a third one: the two that have their letters keep them in the suggestion, the new one gets the next", st == 409 and {m["id"]: m["suggested"] for m in g["members"]} == {"smith-alpha": "b", "smith-beta": "a", "smith-gamma": "c"} and {m["id"]: m["letter"] for m in g["members"]} == {"smith-alpha": "b", "smith-beta": "a", "smith-gamma": ""}, str(g["members"])[:300])
+        check(S, "…and if the author gives it a letter that is taken, that is refused", add(dict(bk("Smith", "J.", "2026", "Gamma: and more", id="smith-gamma"), letters={"smith-alpha": "b", "smith-beta": "a", "smith-gamma": "b"}))[0] == 400)
+        check(S, "a reference with its own letter typed in the year, that no other has, is saved without a question", add(bk("Smith", "J.", "2026c", "Gamma: and more", id="smith-gamma"))[0] == 200 and refs_()["smith-gamma"]["yearDisplay"] == "2026c")
+
+        # ── what the suggestion follows: the order in which the grammar cites ──
+        st, j = add(bk("Zed", "Z.", "2022", "Zed C", id="zed-c")); g = j["needsLetters"][0]
+        check(S, "the suggestion follows the order of the citations across the sections: zed-b (cited in s1) is a, zed-a (cited later, in s2) is b, the new one c", {m["id"]: m["suggested"] for m in g["members"]} == {"zed-b": "a", "zed-a": "b", "zed-c": "c"} and g["anyCited"], str({m["id"]: m["suggested"] for m in g["members"]}))
+        st, j = add(bk("Yu", "Y.", "2018", "Yu three", id="yu-3")); g = j["needsLetters"][0]
+        check(S, "when none is cited yet, the older ones come first and the new one last; the window will say that a goes to the one cited first", {m["id"]: m["suggested"] for m in g["members"]} == {"yu-1": "a", "yu-2": "b", "yu-3": "c"} and not g["anyCited"], str({m["id"]: m["suggested"] for m in g["members"]}))
+        # no question when the citations are not the same
+        quiet = [add(bk("Smith", "J.", "2027", "Other year", id="smith-2027"))[0], add(bk("Smith", "K.", "2026", "Other initial", id="smith-k"))[0], add(bk("Jones", "J.", "2026", "Other author", id="jones-2026"))[0]]
+        check(S, "other year, other first-name initial, other author: no question (they are cited differently)", quiet == [200, 200, 200], str(quiet))
+        # no year
+        add(bk("Nad", "N.", "n.d.", "No date one", id="nad-1")); st, j = add(bk("Nad", "N.", "n.d.", "No date two", id="nad-2"))
+        st2, j2 = add(dict(bk("Nad", "N.", "n.d.", "No date two", id="nad-2"), letters={"nad-1": "a", "nad-2": "b"}))
+        check(S, "works with no date are a group too: the letters are written n.d.-a, n.d.-b", st == 409 and j["needsLetters"][0]["year"] == "n.d." and st2 == 200 and refs_()["nad-1"]["year"] == "n.d.-a" and refs_()["nad-2"]["yearDisplay"] == "n.d.-b", str(refs_()["nad-1"]["year"]))
+
+        # ── editing ──
+        put = lambda rid, data: _jcall(aa, "put", site.url + f"api/references/{rid}", data)
+        st, j = put("smith-gamma", dict(bk("Smith", "J.", "2026c", "Gamma: and more, revised", id="smith-gamma")))
+        check(S, "editing a reference in a group without changing its authors or year asks nothing", st == 200 and not j["lettered"])
+        st, j = put("jones-2026", dict(bk("Smith", "J.", "2026", "Was Jones", id="jones-2026")))
+        g = (j.get("needsLetters") or [{}])[0]
+        check(S, "editing a reference so that it now has the authors and the year of others asks for the letters, and saves nothing", st == 409 and sorted(m["id"] for m in g["members"]) == ["jones-2026", "smith-alpha", "smith-beta", "smith-gamma"] and refs_()["jones-2026"]["authors"][0]["family"] == "Jones", str(g)[:200])
+        st, j = put("jones-2026", dict(bk("Smith", "J.", "2026", "Was Jones", id="jones-2026"), letters={"smith-beta": "a", "smith-alpha": "b", "smith-gamma": "c", "jones-2026": "d"}))
+        check(S, "…and with the letters it is saved", st == 200 and j["lettered"] and refs_()["jones-2026"]["yearDisplay"] == "2026d", str(j))
+        check(S, "a reference whose key is changed, with nothing else, is not asked about", put("lee-book", dict(bk("Lee", "K.", "2001", "Lee book", id="lee-book-2")))[0] == 200)
+        vis.close()
+
+        # ── the page: the form ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "references.html", ".ref-entry", 900)
+        def fill_form(title, fam="Lee", giv="Kim", year="2001"):
+            page.click("#ref-add"); page.wait_for_selector("#ref-modal.visible"); page.select_option("#rf-type", "book")
+            page.fill("#rf-authors .rf-person input[data-f=family]", fam); page.fill("#rf-authors .rf-person input[data-f=given]", giv)
+            page.fill("#rf-year", year); page.fill("#rf-title-in", title); page.fill("#rf-publisher", "Routledge"); page.wait_for_timeout(500)
+        fill_form("Second Lee")
+        check(S, "while the author types, a note says that another reference has the same authors and year, shows it, and says the letters will be chosen at the save", page.locator("#rf-share").is_visible() and "told apart by letters" in page.inner_text("#rf-share") and "Lee, K. (2001). Lee book." in page.inner_text("#rf-share"), page.inner_text("#rf-share"))
+        page.click("#rf-save"); page.wait_for_selector("#let-modal.visible")
+        rows = page.locator(".let-row")
+        check(S, "Save opens a window: it says what is going on, lists the references with a letter for each, suggests a for the one the grammar cites and b for the new one", "letters after the year" in page.inner_text("#let-intro") and rows.count() == 2 and [r.locator("select").input_value() for r in rows.all()] == ["a", "b"] and "new" in rows.nth(1).inner_text() and "cited in the grammar (s1)" in rows.nth(0).inner_text() and "follows the grammar" in page.inner_text("#let-groups"), page.inner_text("#let-groups")[:300])
+        check(S, "…it is in front of the form, not behind it", page.evaluate("(() => { const r = document.getElementById('let-go').getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return e && e.closest('#let-modal') !== null; })()"))
+        rows.nth(1).locator("select").select_option("a")
+        check(S, "giving the same letter twice is shown at once: the two rows are marked, a message says so, and Save is off", page.locator(".let-row.dup").count() == 2 and "own letter" in page.inner_text("#let-msg") and page.locator("#let-go").is_disabled())
+        page.click("#let-cancel")
+        check(S, "Cancel saves nothing: the form is still there with what was typed, and says so", not page.locator("#let-modal.visible").count() and page.locator("#ref-modal.visible").count() == 1 and page.input_value("#rf-title-in") == "Second Lee" and "letters were not chosen" in page.inner_text("#rf-msg") and "lee-book-2" in refs_() and len(refs_()) == len(refs_()), page.inner_text("#rf-msg"))
+        before_n = len(refs_())
+        page.click("#rf-save"); page.wait_for_selector("#let-modal.visible")
+        page.locator(".let-row").nth(0).locator("select").select_option("b"); page.locator(".let-row").nth(1).locator("select").select_option("a")
+        check(S, "swapping them (the new one a, the old b) clears the warning", page.locator(".let-row.dup").count() == 0 and page.locator("#let-go").is_enabled())
+        page.click("#let-go"); page.wait_for_function("document.getElementById('let-modal').classList.contains('visible') === false && document.getElementById('ref-modal').classList.contains('visible') === false")
+        page.wait_for_function(f"document.querySelectorAll('.ref-entry').length === {before_n + 1}")
+        t_ = page.inner_text("#refs-notice"); r = refs_()
+        check(S, "Save with these letters saves both with the letters chosen and says that the citations in the grammar were updated (and in which)", r["lee-book-2"]["yearDisplay"] == "2001b" and any(x["yearDisplay"] == "2001a" for x in r.values() if x["id"].startswith("lee")) and "The letters were saved" in t_ and "s1: 2001 → 2001b" in t_, t_)
+        check(S, "…and the grammar reads Lee 2001b where it said Lee 2001, and the citation by key (which the earlier rename had made lee-book-2) is untouched", "{{source: Lee 2001b}}" in (gdir / "s1.md").read_text(encoding="utf-8") and "{{source: lee-book-2}}" in (gdir / "s1.md").read_text(encoding="utf-8"))
+        # ── the page: an import ──
+        bib = "@book{chan1, author={Chan, Amy}, title={Chan first}, publisher={P}, year=2020}\n@book{chan2, author={Chan, Amy}, title={Chan second}, publisher={P}, year=2020}\n@book{sole, author={Solo, Sam}, title={Alone}, publisher={P}, year=2020}\n"
+        page.click("#ref-import"); page.set_input_files("#imp-file", {"name": "chan.bib", "mimeType": "text/plain", "buffer": bib.encode("utf-8")}); page.wait_for_selector(".imp-item")
+        check(S, "the import preview says that some of the references share their authors and year and that the letters will be chosen at the import", "1 group of references share their author(s) and year" in page.inner_text("#imp-summary"), page.inner_text("#imp-summary"))
+        n_before = len(refs_())
+        page.click("#imp-go"); page.wait_for_selector("#let-modal.visible")
+        check(S, "Import opens the window for the pair, with the suggestion in the order of the file (the file's second one is b)", page.locator(".let-group").count() == 1 and [r_.locator("select").input_value() for r_ in page.locator(".let-row").all()] == ["a", "b"] and "None of them is cited" in page.inner_text("#let-groups") and len(refs_()) == n_before, page.inner_text("#let-groups")[:200])
+        page.click("#let-go"); page.wait_for_function("document.getElementById('imp-modal').classList.contains('visible') === false")
+        page.wait_for_function(f"document.querySelectorAll('.ref-entry').length === {n_before + 3}")
+        r = refs_()
+        check(S, "confirming imports all three: the pair with its letters, the other with none", r["chan1"]["yearDisplay"] == "2020a" and r["chan2"]["yearDisplay"] == "2020b" and r["sole"]["yearDisplay"] == "2020", str({k: r[k]["yearDisplay"] for k in ("chan1", "chan2", "sole")}))
+        st, j = _jcall(aa, "post", site.url + "api/references/import", {"text": "@book{chan3, author={Chan, Amy}, title={Chan third}, publisher={P}, year=2020}", "commit": True})
+        check(S, "an import that adds one to an existing group is paused too, and without letters saves nothing", st == 409 and [m["id"] for m in j["needsLetters"][0]["members"]] == ["chan1", "chan2", "chan3"] and "chan3" not in refs_())
+        check(S, "the page raised no JavaScript or loading error", not [e for e in errs if "409" not in e and "400" not in e], "; ".join(errs[:2]))
+        au.close()
+        cn = new_context(browser, site, 390, author=True); p = cn.new_page(); open_page(p, site, "references.html", ".ref-entry", 800)
+        p.click("#ref-add"); p.wait_for_selector("#ref-modal.visible"); p.select_option("#rf-type", "book")
+        p.fill("#rf-authors .rf-person input[data-f=family]", "Chan"); p.fill("#rf-authors .rf-person input[data-f=given]", "Amy"); p.fill("#rf-year", "2020"); p.fill("#rf-title-in", "Chan fourth"); p.fill("#rf-publisher", "P"); p.wait_for_timeout(500)
+        p.click("#rf-save"); p.wait_for_selector("#let-modal.visible"); mb = p.locator("#let-modal .let-modal").bounding_box()
+        check(S, "on a phone the letters window fits the screen and its buttons can be reached", mb["x"] >= 0 and mb["x"] + mb["width"] <= 391 and p.locator("#let-go").is_visible() and p.locator("#let-cancel").is_visible() and p.evaluate("document.documentElement.scrollWidth") <= 390, str(mb))
+        cn.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -2636,6 +2768,7 @@ def main():
             if args.only in (None, "concordance"): suite_concordance(browser, args)
             if args.only in (None, "textstats"): suite_ngrams_and_stats(browser, args)
             if args.only in (None, "refimport"): suite_refimport(browser, args)
+            if args.only in (None, "refletters"): suite_refletters(browser, args)
             browser.close()
     finally:
         site.stop()
