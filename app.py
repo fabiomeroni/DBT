@@ -19,6 +19,7 @@ import markdown as md_lib
 import security
 import references as refs_lib
 import concordance as conc
+import phonotable as phono
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -1242,6 +1243,7 @@ def references_import():
 _MD = md_lib.Markdown(extensions=['extra', 'tables', 'attr_list', 'toc'])
 
 def render_grammar(md_text):
+    md_text, phono_blocks = phono.extract(md_text)            # the phonological charts are lifted out before Markdown can touch them
     _MD.reset()
     html = _MD.convert(md_text)
 
@@ -1263,7 +1265,7 @@ def render_grammar(md_text):
         html
     )
     html = _SOURCE_RE.sub(lambda m: build_source_cite(_html.unescape(m.group(1)).strip()), html)
-    return html
+    return phono.put_back(html, phono_blocks, PROJECT['languages'])
 
 
 def _section_path(section_id):
@@ -1392,6 +1394,20 @@ def papers_tx(index):
         import traceback
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
+_GLOSS_LOCK = _threading.Lock()
+
+def _store_gloss(key, sent_id, gloss):
+    """Keep the glosses of one sentence. The file is read, changed and written under a lock, and written through a temporary file of its
+    own, so that saves arriving together (the author tabbing quickly from one box to the next) all take effect and none fails."""
+    with _GLOSS_LOCK:
+        p = _gloss_path(key)
+        stored = _load_stored_glosses(key)                  # robust: handles corrupted files
+        stored[sent_id] = gloss
+        tmp = f'{p}.{os.getpid()}.{_threading.get_ident()}.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(stored, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, p)
+
 @app.route('/api/papers/tx/<int:index>/glosses', methods=['GET'])
 def get_papers_glosses(index):
     # the alignment and glosses as published, overlaid with whatever the author has saved
@@ -1407,12 +1423,7 @@ def save_papers_gloss(index):
     sent_id = data.get('sentence_id', '')
     if not sent_id:
         return jsonify({'error': 'No sentence_id'}), 400
-    stored = _load_stored_glosses('papers_0')
-    stored[sent_id] = data.get('gloss', '')
-    p, tmp = _gloss_path('papers_0'), _gloss_path('papers_0') + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(stored, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, p)
+    _store_gloss('papers_0', sent_id, data.get('gloss', ''))
     return jsonify({'ok': True})
 
 @app.route('/api/fieldnotes/tx/<int:index>/glosses', methods=['GET'])
@@ -1430,13 +1441,7 @@ def save_fieldnotes_gloss(index):
     gloss   = data.get('gloss', '')
     if not sent_id:
         return jsonify({'error': 'No sentence_id'}), 400
-    p      = _gloss_path(f'fieldnotes_{index}')
-    stored = _load_stored_glosses(f'fieldnotes_{index}')   # robust: handles corrupted files
-    stored[sent_id] = gloss
-    tmp = p + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(stored, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, p)
+    _store_gloss(f'fieldnotes_{index}', sent_id, gloss)
     return jsonify({'ok': True})
 
 @app.route('/api/fieldnotes/tx/<int:index>')
@@ -1553,6 +1558,21 @@ def get_grammar_html(section_id):
         html = f'<div class="shortcode-error">Render error: {e}</div>'
     return jsonify({'html': html, 'id': section_id})
 
+
+# ── Phonological charts: what the editor starts from, and a preview made by the code that makes the page ──
+@app.route('/api/phonotable/defaults')
+def phonotable_defaults():
+    return jsonify({'axes': phono.DEFAULT_AXES, 'titles': phono.DEFAULT_TITLES,
+                    'languages': [{'code': l['code'], 'name': l['name'], 'abbr': l['abbr'], 'color': l['color']} for l in PROJECT['languages']]})
+
+@app.route('/api/phonotable/preview', methods=['POST'])
+def phonotable_preview():
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    spec, err = phono.clean((request.get_json(silent=True) or {}).get('spec'), {l['code'] for l in PROJECT['languages']})
+    if spec is None:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages']), 'spec': spec})
 
 @app.route('/api/grammar/<section_id>/source')
 def get_grammar_source(section_id):
@@ -3183,6 +3203,7 @@ def _md_to_latex_body(source, cited=None):
     references cited with {{source: …}} (they make the References section)."""
     cited = cited if cited is not None else set()
     counter = [0]
+    source, phono_blocks = phono.extract(source)
 
     def resolve_cite(m):
         counter[0] += 1; spec = m.group(1).strip(); n = counter[0]
@@ -3269,7 +3290,7 @@ def _md_to_latex_body(source, cited=None):
     # Merge consecutive prose lines into paragraphs
     result = '\n'.join(out)
     result = re.sub(r'\n{3,}', '\n\n', result)
-    return result
+    return phono.put_back(result, phono_blocks, PROJECT['languages'], 'latex')
 
 def _apply_inline(text):
     """Apply inline Markdown formatting and escape for LaTeX."""
@@ -3291,6 +3312,7 @@ _LATEX_DOC = r"""\documentclass[12pt, a4paper]{{article}}
 \usepackage{{microtype}}
 \usepackage{{hyperref}}
 \usepackage{{xcolor}}
+\usepackage{{graphicx}}
 {latex_colors}
 \title{{{latex_title}\\
 \large {latex_subtitle}}}
@@ -3519,14 +3541,7 @@ def save_gloss(text_key):
     gloss   = data.get('gloss', '')
     if not sent_id:
         return jsonify({'error': 'No sentence_id'}), 400
-    p       = _gloss_path(text_key)
-    glosses = _load_stored_glosses(text_key)   # robust: handles corrupted files
-    glosses[sent_id] = gloss
-    # Atomic write: temp file + rename prevents corruption on interrupted saves
-    tmp = p + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(glosses, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, p)
+    _store_gloss(text_key, sent_id, gloss)
     return jsonify({'ok': True})
 
 @app.route('/api/upload/transcription', methods=['POST'])
