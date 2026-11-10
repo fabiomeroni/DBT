@@ -14,9 +14,14 @@ const PhonoEditor = (() => {
   const KIND_NAME = { consonants: 'consonant', vowels: 'vowel' };
 
   async function defaults() {
-    if (!DEFAULTS) DEFAULTS = await (await fetch('/api/phonotable/defaults')).json();
+    if (!DEFAULTS) {
+      const r = await fetch('/api/phonotable/defaults');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      DEFAULTS = await r.json();
+    }
     return DEFAULTS;
   }
+  const OLD_SERVER = 'The page is newer than the application running on the server: update the files there (git pull), restart the application (python app.py, or the service that runs it), and reload this page.';
   // the charts that are in a text: [{start, end, raw, spec or null}]
   function blocksOf(text) {
     const out = [];
@@ -32,7 +37,14 @@ const PhonoEditor = (() => {
   async function mount(id) {
     const root = document.getElementById('pt-' + id), ta = document.getElementById('textarea-' + id);
     if (!root || !ta) return;
-    const D = await defaults();
+    let D;
+    try { D = await defaults(); }
+    catch (e) {                                           // never an empty pane: say what is wrong
+      root.innerHTML = `<div class="pt-msg error" style="font-size:1rem;"><b>The phonological table tool could not start.</b> The server did not give the suggested rows and columns (${esc(e.message)}). ${OLD_SERVER}</div>
+        <div class="pt-bar" style="margin-top:0.5rem;"><button type="button" class="pt-btn" data-retry>Try again</button></div>`;
+      root.querySelector('[data-retry]').addEventListener('click', () => { DEFAULTS = null; mount(id); }, { once: true });
+      return;
+    }
     const langs = D.languages, several = langs.length > 1;
     const st = { index: null, spec: null, lang: langs[0].code, timer: null, run: 0 };
 
@@ -121,9 +133,9 @@ const PhonoEditor = (() => {
       const my = ++st.run, box = $('#pt-preview-' + id), msg = $('#pt-msg-' + id);
       try {
         const r = await fetch('/api/phonotable/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: cleanSpec() }) });
-        const j = await r.json();
+        let j = null; try { j = await r.json(); } catch (e) { /* not JSON: an old server answers with a page */ }
         if (my !== st.run) return;
-        if (!r.ok || !j.ok) { box.innerHTML = ''; msg.className = 'pt-msg error'; msg.textContent = j.error || 'The chart could not be made.'; return; }
+        if (!j || !r.ok || !j.ok) { box.innerHTML = ''; msg.className = 'pt-msg error'; msg.textContent = (j && j.error) || `The server could not make the preview (HTTP ${r.status}). ${OLD_SERVER}`; return; }
         box.innerHTML = j.html; if (msg.className.includes('error')) { msg.className = 'pt-msg'; msg.textContent = ''; }
       } catch (e) { /* offline: keep what is there */ }
     }
