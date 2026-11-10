@@ -126,6 +126,31 @@ chosen: only the entries that have a form in that language are listed, with that
   of the languages *that sense applies to*, since the words that merely mean the same belong to a sense, not to the entry as a whole).
   For a project with one language there is nothing to tick.
 
+## Phonological charts (grammar)
+
+In the editor of a grammar section there are two tabs: **Text** and **Phonological table**. The second makes a chart of the **consonants** or of
+the **vowels** (each is a chart of its own; a section can have both) without any markup:
+
+- **Columns and rows.** A new chart starts from the suggested order: for the consonants the columns Bilabial, Labiodental, Dental, Alveolar,
+  Postalveolar, Retroflex, Palatal, Velar, Uvular, Pharyngeal, Glottal and the rows Plosive, Nasal, Trill, Tap or flap, Fricative, Lateral
+  fricative, Approximant, Lateral approximant; for the vowels the columns Front, Central, Back and the rows Close, Near-close, Close-mid,
+  Mid, Open-mid, Near-open, Open. Rename, move (↑ ↓), remove (✕) or add rows and columns of your own, with any names (the names are free text: nothing
+  is suggested but the standard lists above); *Suggested columns and rows* puts the lists back. The suggested lists are in `phonotable.py` (`DEFAULT_AXES`).
+- **Inventories.** The author types the sounds of each language of the project in the cells (separated by spaces: `p b`); a project with
+  one language has one grid. A sound is one to sixteen characters (`t͡ʃ`, `kʷ`, `ᵐb` ...).
+- **The chart.** One chart for all the languages: a sound that **all the languages that have an inventory share is black**; a sound
+  **specific to one language is in that language's colour** (`color` in `project.json`); a sound of **several, but not all, shows their
+  colours together** in the one character (it is split into as many coloured parts as there are languages). Under the chart the **legend is a set of check boxes, one for each language**: untick a language to leave its sounds
+  out and see only the inventory of the languages of interest. The colours are then worked out again for the languages that remain ticked: black
+  for what all of them share (so with a single language ticked its whole inventory is black), the language's colour for what is specific to
+  one, their colours together for what is shared by some. The rows and columns stay, so charts stay comparable. (This works in the page, in
+  the preview of the editor and for visitors; the LaTeX export prints the full chart.)
+  The preview in the tab is made by the server with the same code as the page. In the LaTeX export a sound of several languages is
+  printed once for each, in its colour (the graphicx package is loaded).
+- **In the text.** *Insert into the text* writes the chart into the section where the cursor is, as a block (`&#96;&#96;&#96;phonotable` ... `&#96;&#96;&#96;`)
+  that the tab reads and rewrites: *Update in the text* changes it, *Remove this chart from the text* takes it out. Press *Save & render* to
+  keep it. Nothing in the block needs to be typed by hand.
+
 ## Searching the texts (the concordance)
 
 The **Search the texts** tab of the Texts page searches every sentence of the corpus (the fieldnotes, the recordings and the examples
