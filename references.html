@@ -41,6 +41,21 @@ body:not(.is-author) .ref-author { display: none; }
 .ref-dl a:hover { color: var(--ink); background: #efe4cd; border-color: var(--gold); }
 .refs-notice { background: #eaf3e4; border: 1px solid #b9d3a8; border-radius: 3px; padding: 0.4rem 0.8rem; margin: 0 0 0.6rem; font-size: 0.95rem; color: #2f5a1f; }
 
+/* ── the letters: same authors, same year ── */
+.let-modal { max-width: 760px; width: 94vw; max-height: 92vh; display: flex; flex-direction: column; padding: 1.2rem 1.8rem 1.1rem; }
+.let-modal h3 { margin: 0 0 0.3rem; font-size: 1.3rem; }
+.let-groups { overflow-y: auto; min-height: 0; flex: 1 1 auto; margin: 0.4rem 0; }
+.let-group { border: 1px solid var(--border); border-radius: 4px; background: #faf6ef; padding: 0.55rem 0.8rem 0.4rem; margin-bottom: 0.7rem; }
+.let-group h4 { margin: 0 0 0.15rem; font-family: 'EB Garamond', serif; font-size: 1.12rem; font-weight: 500; color: var(--ink); }
+.let-why { font-size: 0.9rem; color: var(--ink-light); margin: 0 0 0.4rem; }
+.let-row { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr); gap: 0.7rem; align-items: start; padding: 0.35rem 0; border-top: 1px solid var(--border-lt); }
+.let-row select { font: inherit; font-size: 1.05rem; font-weight: 700; padding: 0.15rem 0.3rem; border: 1px solid var(--border); border-radius: 3px; background: #fff; width: 100%; }
+.let-row.dup select { border-color: #c0432a; background: #fbe9e4; }
+.let-text { font-family: 'EB Garamond', serif; font-size: 1.04rem; line-height: 1.4; overflow-wrap: anywhere; }
+.let-sub { display: block; font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink-light); }
+.rf-share { margin-top: 0.5rem; background: #fbf1d6; border: 1px solid #e3cf95; border-radius: 4px; padding: 0.35rem 0.7rem; font-size: 0.9rem; color: #6a5010; }
+.rf-share span { display: block; font-family: 'EB Garamond', serif; font-size: 0.98rem; color: var(--ink); margin-top: 0.15rem; }
+
 /* ── importing a list ── */
 .imp-modal { max-width: 760px; width: 94vw; max-height: 92vh; display: flex; flex-direction: column; padding: 1.2rem 1.8rem 1.1rem; }
 .imp-modal h3 { margin: 0 0 0.3rem; font-size: 1.3rem; }
@@ -76,7 +91,7 @@ body:not(.is-author) .ref-author { display: none; }
 .rf-preview .out { font-family: 'EB Garamond', serif; font-size: 1.08rem; line-height: 1.45; min-height: 1.4rem; overflow-wrap: anywhere; padding-left: 2.2rem; text-indent: -2.2rem; }
 .rf-preview .out.plain { padding-left: 0; text-indent: 0; }
 .rf-preview .out.soft { color: var(--ink-light); font-style: italic; }
-@media (max-width: 720px) { .ref-entry { flex-wrap: wrap; } .ref-actions { flex: 1 1 100%; max-width: calc(100% - 2.2rem); flex-direction: row; flex-wrap: wrap; align-items: center; margin-left: 2.2rem; } .imp-item { grid-template-columns: 1fr; } .refs-main { padding: 1.2rem 1rem 4rem; } .rf-grid { grid-template-columns: 1fr; } .rf-person { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .let-row { grid-template-columns: 1fr; } .ref-entry { flex-wrap: wrap; } .ref-actions { flex: 1 1 100%; max-width: calc(100% - 2.2rem); flex-direction: row; flex-wrap: wrap; align-items: center; margin-left: 2.2rem; } .imp-item { grid-template-columns: 1fr; } .refs-main { padding: 1.2rem 1rem 4rem; } .rf-grid { grid-template-columns: 1fr; } .rf-person { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
 <body>
@@ -194,10 +209,26 @@ body:not(.is-author) .ref-author { display: none; }
       <h4>In the text</h4><div class="out plain soft" id="rf-prev-text"></div>
       <h4 style="margin-top:0.55rem;">In the reference list</h4><div class="out soft" id="rf-prev-ref">Fill in the title to see the reference.</div>
     </div>
+    <div class="rf-share" id="rf-share" hidden></div>
     <div class="dbt-modal-msg" id="rf-msg" style="margin:0.4rem 0 0.2rem;"></div>
     <div class="dbt-modal-row">
       <button class="modal-btn" id="rf-cancel">Cancel</button>
       <button class="modal-btn primary" id="rf-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── the letters of references with the same authors and year (author) ── -->
+<div class="dbt-modal-backdrop" id="let-modal">
+  <div class="dbt-modal let-modal">
+    <h3>Same author(s), same year</h3>
+    <p class="modal-desc" id="let-intro">In the text, these references would be cited in exactly the same way. APA tells them apart with <b>letters after the year</b>
+      (2026a, 2026b, …), and the letter is part of every citation, so each reference needs its own. Choose which is which.</p>
+    <div class="let-groups" id="let-groups"></div>
+    <div class="dbt-modal-msg" id="let-msg"></div>
+    <div class="dbt-modal-row">
+      <button type="button" class="modal-btn" id="let-cancel">Cancel: do not save</button>
+      <button type="button" class="modal-btn primary" id="let-go">Save with these letters</button>
     </div>
   </div>
 </div>
@@ -279,6 +310,69 @@ async function deleteRef(r) {
   const res = await fetch('/api/references/' + encodeURIComponent(r.id), { method: 'DELETE' });
   if (res.ok) loadRefs(); else alert((await res.json()).error || 'Could not delete.');
 }
+// ── references that share their authors and year: the author chooses the letters ──
+// A save (a new reference, a change, an import) that would put references in such a group is answered 409 with the groups; the window
+// asks for the letters, and the same request is sent again with them.
+let letterAsk = null;
+function askLetters(groups) {
+  return new Promise(resolve => {
+    letterAsk = resolve;
+    document.getElementById('let-groups').innerHTML = groups.map((g, gi) => {
+      const n = g.members.length, letters = 'abcdefghijklmnopqrstuvwxyz'.slice(0, Math.max(n + 2, 6));
+      const why = g.anyCited
+        ? 'The suggestion follows the grammar: the references it already cites come first, in the order it first cites them (so the first one cited is <b>a</b>), then the others.'
+        : 'None of them is cited in the grammar yet. Give <b>a</b> to the one you will cite first, <b>b</b> to the next, and so on. The suggestion is the order in which they were added.';
+      return `<div class="let-group" data-g="${gi}"><h4>${esc(g.who)} (${esc(g.year)}): ${n} references, to be cited as ${esc(g.year)}a, ${esc(g.year)}b${n > 2 ? ', …' : ''}</h4><p class="let-why">${why}</p>` +
+        g.members.map(m => `<div class="let-row" data-id="${esc(m.id)}">
+          <select aria-label="Letter for ${esc(m.id)}">${[...new Set([...letters, m.suggested])].map(l => `<option value="${l}"${l === m.suggested ? ' selected' : ''}>${esc(g.year)}${l}</option>`).join('')}</select>
+          <div class="let-text">${m.html}<span class="let-sub">${m.isNew ? '<b>new</b> · ' : ''}key: ${esc(m.id)}${m.citedIn.length ? ' · cited in the grammar (' + m.citedIn.map(esc).join(', ') + ')' : m.cited ? '' : ' · not cited yet'}${m.letter ? ' · it has the letter ' + esc(m.letter) + ' now' : ''}</span></div></div>`).join('') + '</div>';
+    }).join('');
+    document.getElementById('let-modal').classList.add('visible');
+    checkLetters();
+  });
+}
+function checkLetters() {
+  let ok = true;
+  document.querySelectorAll('#let-groups .let-group').forEach(g => {
+    const rows = [...g.querySelectorAll('.let-row')], count = {};
+    rows.forEach(r => { const v = r.querySelector('select').value; count[v] = (count[v] || 0) + 1; });
+    rows.forEach(r => { const dup = count[r.querySelector('select').value] > 1; r.classList.toggle('dup', dup); if (dup) ok = false; });
+  });
+  document.getElementById('let-msg').textContent = ok ? '' : 'Each reference needs its own letter.';
+  document.getElementById('let-msg').className = 'dbt-modal-msg' + (ok ? '' : ' error');
+  document.getElementById('let-go').disabled = !ok;
+}
+function closeLetters(answer) {
+  document.getElementById('let-modal').classList.remove('visible');
+  const f = letterAsk; letterAsk = null; if (f) f(answer);
+}
+document.getElementById('let-groups').addEventListener('change', checkLetters);
+document.getElementById('let-cancel').addEventListener('click', () => closeLetters(null));
+document.getElementById('let-go').addEventListener('click', () => {
+  const letters = {};
+  document.querySelectorAll('#let-groups .let-row').forEach(r => { letters[r.dataset.id] = r.querySelector('select').value; });
+  closeLetters(letters);
+});
+// Send a request that may need letters: if the server asks for them, ask the author and send it again. -> { r, j } or null if the author cancelled
+async function sendWithLetters(url, method, body) {
+  const send = b => fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  let r = await send(body), j = await r.json();
+  if (r.status === 409 && j.needsLetters) {
+    const letters = await askLetters(j.needsLetters);
+    if (!letters) return null;
+    r = await send({ ...body, letters }); j = await r.json();
+  }
+  return { r, j };
+}
+function showNotice(text) {
+  const note = document.getElementById('refs-notice'); note.textContent = text; note.hidden = false;
+  clearTimeout(showNotice.t); showNotice.t = setTimeout(() => { note.hidden = true; }, 12000);
+}
+function lettersNotice(j) {
+  const parts = (j.updatedCitations || []).map(u => `${u.section}: ${[...new Set(u.changes.map(c => c[0] + ' → ' + c[1]))].join(', ')}`);
+  return 'The letters were saved' + (parts.length ? '; the citations in the grammar were updated (' + parts.join('; ') + ')' : '') + '.';
+}
+
 // ── importing a list of references: BibTeX, EndNote or RIS, files or pasted; first a preview, then the author confirms ──
 const BADGE = { new: 'New', renamed: 'Key changed', duplicate: 'Already there', rejected: 'Not read' };
 let impRun = 0;
@@ -314,7 +408,8 @@ async function impPreview() {
   const fmts = res.formats.map(f => `${esc(f.name)}: ${f.count} in ${esc(f.format)}`).join(' · ');
   sum.innerHTML = `<b>${res.entries.length}</b> reference${res.entries.length === 1 ? '' : 's'} found (${fmts}): <b>${c.new}</b> new` +
     (c.renamed ? `, ${c.renamed} with a new key` : '') + (c.duplicate ? `, ${c.duplicate} already in the list` : '') + (c.rejected ? `, ${c.rejected} not read` : '') +
-    (res.unrecognised.length ? `. Not recognised: ${res.unrecognised.map(esc).join(', ')}` : '') + '.';
+    (res.unrecognised.length ? `. Not recognised: ${res.unrecognised.map(esc).join(', ')}` : '') + '.' +
+    (res.needsLetters ? ` <b>${res.needsLetters}</b> group${res.needsLetters === 1 ? '' : 's'} of references share their author(s) and year: you will choose their letters when you import.` : '');
   list.innerHTML = res.entries.map(e => {
     const body = (e.status === 'new' || e.status === 'renamed')
       ? `${e.html}<span class="imp-sub">key: ${esc(e.id)}${e.status === 'renamed' ? ' (the key in the file was already used by another reference)' : ''}${e.warnings.length ? ' · ' + e.warnings.map(esc).join('; ') : ''}</span>`
@@ -329,13 +424,15 @@ async function impCommit() {
   go.disabled = true; msg.textContent = '';
   let res, ok;
   try {
-    const r = await fetch('/api/references/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(await impBody(true)) });
-    ok = r.ok; res = await r.json();
+    const out = await sendWithLetters('/api/references/import', 'POST', await impBody(true));
+    if (!out) { msg.className = 'dbt-modal-msg error'; msg.textContent = 'Nothing was imported: the letters were not chosen.'; go.disabled = false; return; }
+    ok = out.r.ok; res = out.j;
   } catch (e) { res = { error: 'Could not import.' }; ok = false; }
   if (!ok) { msg.className = 'dbt-modal-msg error'; msg.textContent = res.error || 'Could not import.'; go.disabled = false; return; }
   closeImport();
   const n = res.counts.new + res.counts.renamed, note = document.getElementById('refs-notice');
-  note.textContent = `${n} reference${n === 1 ? '' : 's'} imported` + (res.counts.duplicate ? `; ${res.counts.duplicate} already in the list` : '') + (res.counts.rejected ? `; ${res.counts.rejected} could not be read` : '') + '.';
+  note.textContent = `${n} reference${n === 1 ? '' : 's'} imported` + (res.counts.duplicate ? `; ${res.counts.duplicate} already in the list` : '') + (res.counts.rejected ? `; ${res.counts.rejected} could not be read` : '') +
+    ((res.updatedCitations || []).length ? '; the citations in the grammar were updated (' + res.updatedCitations.map(u => u.section).join(', ') + ')' : '') + '.';
   note.hidden = false; setTimeout(() => { note.hidden = true; }, 9000);
   loadRefs();
 }
@@ -397,6 +494,9 @@ async function preview() {
   ref.className = 'out'; ref.innerHTML = j.view.html;
   txt.className = 'out plain'; txt.innerHTML = `${esc(j.view.intext)} &nbsp;·&nbsp; ${esc(j.view.narrative)}`;
   if (!keyTouched) document.getElementById('rf-id').value = j.view.suggestedId;
+  const share = document.getElementById('rf-share'), others = j.view.sharesYear || [];
+  share.hidden = !others.length;
+  if (others.length) share.innerHTML = `Same author(s) and year as ${others.length === 1 ? 'another reference' : others.length + ' other references'}: they will be told apart by letters, and you will choose which is which when you save.` + others.map(o => `<span>${esc(o.text)}</span>`).join('');
 }
 function openForm(ref) {
   editingId = ref ? ref.id : null; keyTouched = !!ref;
@@ -444,12 +544,13 @@ document.getElementById('rf-save').addEventListener('click', async () => {
   const msg = document.getElementById('rf-msg'), d = collect(); delete d.editing;
   msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg';
   try {
-    const r = await fetch(editingId ? '/api/references/' + encodeURIComponent(editingId) : '/api/references',
-      { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-    const j = await r.json();
+    const out = await sendWithLetters(editingId ? '/api/references/' + encodeURIComponent(editingId) : '/api/references', editingId ? 'PUT' : 'POST', d);
+    if (!out) { msg.textContent = 'Not saved: the letters were not chosen.'; msg.className = 'dbt-modal-msg error'; return; }
+    const { r, j } = out;
     if (!r.ok || !j.ok) throw new Error(j.error || 'HTTP ' + r.status);
     closeForm(); await loadRefs();
     document.getElementById(j.id)?.classList.add('flash');
+    if (j.lettered) showNotice(lettersNotice(j));
     if (j.updatedGrammarSections && j.updatedGrammarSections.length) alert('The key changed: the citations in the grammar were updated (' + j.updatedGrammarSections.join(', ') + ').');
   } catch (e) { msg.textContent = e.message; msg.className = 'dbt-modal-msg error'; }
 });
