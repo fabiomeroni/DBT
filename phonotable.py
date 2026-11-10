@@ -5,7 +5,7 @@ an inventory for each language of the project, merged in a single chart.
 In a grammar section a chart is a fenced block that the editor writes (the author never has to type it):
 
     ```phonotable
-    {"kind": "consonants", "title": "Consonant phonemes",
+    {"kind": "consonants", "caption": "The consonant phonemes",
      "columns": ["Bilabial", "Alveolar", "Velar"], "rows": ["Plosive", "Nasal"],
      "inventory": {"drg": {"Plosive": {"Bilabial": "p b", "Alveolar": "t d"}, "Nasal": {"Bilabial": "m"}}}}
     ```
@@ -20,6 +20,8 @@ import json
 import re
 import unicodedata
 
+import captions as _cap
+
 KINDS = ('consonants', 'vowels')
 
 # What the author starts from (and may change: add, remove, reorder). The IPA order of places and manners.
@@ -33,9 +35,7 @@ DEFAULT_AXES = {
         'rows': ['Close', 'Near-close', 'Close-mid', 'Mid', 'Open-mid', 'Near-open', 'Open'],
     },
 }
-DEFAULT_TITLES = {'consonants': 'Consonant phonemes', 'vowels': 'Vowel phonemes'}
-
-MAX_AXIS, MAX_LABEL, MAX_TITLE, MAX_PHONEMES, MAX_PHONEME, MAX_BLOCK = 40, 60, 200, 24, 16, 200_000
+MAX_AXIS, MAX_LABEL, MAX_PHONEMES, MAX_PHONEME, MAX_BLOCK = 40, 60, 24, 16, 200_000
 
 BLOCK_RE = re.compile(r'^[ \t]*```[ \t]*phonotable[ \t]*\r?\n(.*?)\r?\n[ \t]*```[ \t]*\r?$', re.S | re.M)
 
@@ -95,7 +95,9 @@ def clean(spec, language_codes=None):
                 ph = phonemes(text) if isinstance(text, str) else []
                 if c2 is not None and ph:
                     inv.setdefault(code, {}).setdefault(r2, {})[c2] = ' '.join(ph)
-    return {'kind': kind, 'title': _label(spec.get('title') or '')[:MAX_TITLE] or DEFAULT_TITLES[kind], 'columns': cols, 'rows': rows, 'inventory': inv}, None
+    # the caption is the text shown after "Table 3 –": there is no title (an old block's title is read as its caption)
+    caption = _cap.caption_text(spec['caption'] if isinstance(spec.get('caption'), str) else spec.get('title') if isinstance(spec.get('title'), str) else '')
+    return {'kind': kind, 'caption': caption, 'columns': cols, 'rows': rows, 'inventory': inv}, None
 
 
 def parse_block(text):
@@ -142,8 +144,9 @@ def _grad(colors):
     return 'linear-gradient(90deg,' + ','.join('%s %g%% %g%%' % (c, round(100 * i / n, 2), round(100 * (i + 1) / n, 2)) for i, c in enumerate(colors)) + ')'
 
 
-def render_html(spec, languages):
-    """The chart as HTML (the text of the table is escaped; the colours come from the languages of the project, never from the table)."""
+def render_html(spec, languages, number=None, lab=None):
+    """The chart as HTML, with its caption above it ("Table 3 – …"; the number is given by the caller). The text of the table is escaped;
+    the colours come from the languages of the project, never from the table."""
     e = _html.escape
     m = merge(spec, languages)
     present, by_code = m['languages'], {l['code']: l for l in languages}
@@ -169,7 +172,7 @@ def render_html(spec, languages):
         legend = (f'<div class="phono-legend"><span class="pl-title">Languages shown:</span> {boxes}'
                   '<div class="pl-note">In black: sounds found in all the languages shown. In colour: sounds found only in some of them, in the colour of the language; '
                   'a sound found in several of them, but not in all, shows their colours together. Untick a language to leave its sounds out.</div></div>')
-    return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}"><figcaption>{e(spec["title"])}</figcaption>'
+    return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}">{_cap.caption_html("table", number, spec["caption"], lab)}'
             f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner"></th>{head}</tr></thead><tbody>{body}</tbody></table></div>{legend}</figure>')
 
 
@@ -196,7 +199,7 @@ def render_latex(spec, languages):
         rows.append(f'{_tex(r)} & ' + ' & '.join(cells) + r' \\')
     head = ' & ' + ' & '.join(_tex(c) for c in spec['columns']) + r' \\'
     return ('\\begin{table}[ht]\n\\centering\n\\caption{%s}\n\\resizebox{\\linewidth}{!}{%%\n\\begin{tabular}{%s}\n\\toprule\n%s\n\\midrule\n%s\n\\bottomrule\n\\end{tabular}}\n\\end{table}\n'
-            % (_tex(spec['title']), cols, head, '\n'.join(rows)))
+            % (_tex(spec['caption']), cols, head, '\n'.join(rows)))
 
 
 # ── in a section: lift the blocks out before Markdown, put the charts in after ──
@@ -209,20 +212,32 @@ def extract(md_text):
     return BLOCK_RE.sub(take, md_text), blocks
 
 
-def render_block(text, languages, fmt='html'):
+def render_block(text, languages, fmt='html', number=None, lab=None):
     """One fenced block -> its chart; if it cannot be read, a message in its place (never an exception)."""
     spec, err = parse_block(text)
     if spec is not None:
         spec, err = clean(spec, {l['code'] for l in languages})
     if spec is None:
         return ('<div class="shortcode-error">Phonological table: %s</div>' % _html.escape(err)) if fmt == 'html' else '%% phonological table: %s\n' % err.replace('\n', ' ')
-    return render_html(spec, languages) if fmt == 'html' else render_latex(spec, languages)
+    return render_html(spec, languages, number, lab) if fmt == 'html' else render_latex(spec, languages)
 
 
-def put_back(rendered, blocks, languages, fmt='html'):
-    """Replace the markers in the converted text by the charts."""
+def count_valid(blocks, languages):
+    """How many of the blocks are charts that can be shown (so that will have a number)."""
+    codes = {l['code'] for l in languages}
+    return sum(1 for b in blocks if parse_block(b)[0] is not None and clean(parse_block(b)[0], codes)[0] is not None)
+
+
+def put_back(rendered, blocks, languages, fmt='html', start=0, lab=None):
+    """Replace the markers in the converted text by the charts. In HTML each chart that can be shown is numbered, from start + 1, in the
+    order of the text (a block that cannot be read has a message and no number); LaTeX numbers its own tables."""
+    codes, n = {l['code'] for l in languages}, start
     for i, b in enumerate(blocks):
-        out = render_block(b, languages, fmt)
+        spec = parse_block(b)[0]
+        ok = spec is not None and clean(spec, codes)[0] is not None
+        if ok:
+            n += 1
+        out = render_block(b, languages, fmt, n if ok else None, lab)
         marker = 'PHONOTABLEXZ%dZX' % i
         rendered = rendered.replace('<p>%s</p>' % marker, out).replace(marker, out)
     return rendered
