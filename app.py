@@ -20,6 +20,7 @@ import security
 import references as refs_lib
 import concordance as conc
 import phonotable as phono
+import captions as captions_lib
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -74,6 +75,7 @@ def _load_project():
     p['recordings'] = p.get('recordings') or {}
     p['latex'] = p.get('latex') or {}
     p['footer'] = str(p.get('footer') or '')
+    p['captions'] = captions_lib.labels(p.get('captions'))          # the words of "Table 3 –" and "Figure 2 –"
     p['redirects'] = p.get('redirects') or {}
     p['legacyFiles'] = p.get('legacyFiles') or {}
     p['grammaticalDomains'] = [str(x) for x in (p.get('grammaticalDomains') or ['Grammar'])]
@@ -1242,10 +1244,44 @@ def references_import():
 
 _MD = md_lib.Markdown(extensions=['extra', 'tables', 'attr_list', 'toc'])
 
-def render_grammar(md_text):
+_CAPTION_COUNTS = {}                                           # (file, mtime, size) -> (tables, figures) of a section
+
+def _count_captions(source):
+    """(tables, figures) of a section: the charts that can be shown and the images alone in their paragraph. Counted as the page numbers them."""
+    md_text, blocks = phono.extract(source)
+    html = md_lib.Markdown(extensions=['extra', 'tables', 'attr_list', 'toc']).convert(md_text)
+    return phono.count_valid(blocks, PROJECT['languages']), captions_lib.count_figures(html)
+
+def _caption_offsets(section_id):
+    """(tables, figures) in the sections before this one, in the order of the grammar: the numbers of its own begin after these."""
+    here = re.sub(r'[^a-zA-Z0-9_]', '', section_id) + '.md'
+    t = f = 0
+    try:
+        names = sorted(n for n in os.listdir(GRAMMAR_FOLDER) if n.endswith('.md'))
+    except OSError:
+        return 0, 0
+    for name in names:
+        if name >= here:
+            break
+        path = os.path.join(GRAMMAR_FOLDER, name)
+        try:
+            st = os.stat(path)
+            key = (path, st.st_mtime_ns, st.st_size, tuple(l['code'] for l in PROJECT['languages']))
+            if key not in _CAPTION_COUNTS:
+                with open(path, encoding='utf-8') as fh:
+                    _CAPTION_COUNTS[key] = _count_captions(fh.read())
+            a, b = _CAPTION_COUNTS[key]
+        except OSError:
+            continue
+        t, f = t + a, f + b
+    return t, f
+
+def render_grammar(md_text, offsets=(0, 0)):
+    """A section as HTML. `offsets` = the tables and figures of the sections before it, so that its captions are numbered on from them."""
     md_text, phono_blocks = phono.extract(md_text)            # the phonological charts are lifted out before Markdown can touch them
     _MD.reset()
     html = _MD.convert(md_text)
+    html, _n = captions_lib.number_figures(html, offsets[1], PROJECT['captions'])        # an image alone in its paragraph: a numbered figure
 
     # A shortcode alone on a line becomes <p>{{…}}</p>; the block it expands to must not sit in a <p>
     html = re.sub(r'<p>\s*(\{\{\s*(?:example|cite)\s*:[^}]*\}\})\s*</p>', r'\1', html)
@@ -1265,7 +1301,7 @@ def render_grammar(md_text):
         html
     )
     html = _SOURCE_RE.sub(lambda m: build_source_cite(_html.unescape(m.group(1)).strip()), html)
-    return phono.put_back(html, phono_blocks, PROJECT['languages'])
+    return phono.put_back(html, phono_blocks, PROJECT['languages'], 'html', offsets[0], PROJECT['captions'])
 
 
 def _section_path(section_id):
@@ -1553,7 +1589,7 @@ def get_grammar_html(section_id):
     with open(path, encoding='utf-8') as f:
         source = f.read()
     try:
-        html = render_grammar(source)
+        html = render_grammar(source, _caption_offsets(section_id))
     except Exception as e:
         html = f'<div class="shortcode-error">Render error: {e}</div>'
     return jsonify({'html': html, 'id': section_id})
@@ -1562,7 +1598,7 @@ def get_grammar_html(section_id):
 # ── Phonological charts: what the editor starts from, and a preview made by the code that makes the page ──
 @app.route('/api/phonotable/defaults')
 def phonotable_defaults():
-    return jsonify({'axes': phono.DEFAULT_AXES, 'titles': phono.DEFAULT_TITLES,
+    return jsonify({'axes': phono.DEFAULT_AXES, 'captions': PROJECT['captions'],
                     'languages': [{'code': l['code'], 'name': l['name'], 'abbr': l['abbr'], 'color': l['color']} for l in PROJECT['languages']]})
 
 @app.route('/api/phonotable/preview', methods=['POST'])
@@ -1572,7 +1608,13 @@ def phonotable_preview():
     spec, err = phono.clean((request.get_json(silent=True) or {}).get('spec'), {l['code'] for l in PROJECT['languages']})
     if spec is None:
         return jsonify({'ok': False, 'error': err}), 400
-    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages']), 'spec': spec})
+    data = request.get_json(silent=True) or {}
+    try:
+        position = max(0, int(data.get('position') or 0))
+    except (TypeError, ValueError):
+        position = 0
+    number = _caption_offsets(str(data.get('section') or ''))[0] + position + 1       # the number it will have in the grammar
+    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions']), 'spec': spec, 'number': number})
 
 @app.route('/api/grammar/<section_id>/source')
 def get_grammar_source(section_id):
@@ -1595,10 +1637,11 @@ def save_grammar(section_id):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(source)
     try:
-        html = render_grammar(source)
+        html = render_grammar(source, _caption_offsets(section_id))
     except Exception as e:
         html = f'<div class="shortcode-error">Render error: {e}</div>'
-    return jsonify({'ok': True, 'html': html})
+    tables, figures = _count_captions(source)
+    return jsonify({'ok': True, 'html': html, 'tables': tables, 'figures': figures})
 
 
 @app.route('/api/grammar/<section_id>', methods=['DELETE'])
@@ -3250,7 +3293,10 @@ def _md_to_latex_body(source, cited=None):
         out.append(f'\\begin{{tabular}}{{@{{}}{sep}@{{}}}}\n\\toprule\n{hcells}\n\\midrule\n{rows}\n\\bottomrule\n\\end{{tabular}}\n')
         in_table = False; table_rows.clear()
 
+    in_fence = False                                   # inside a code block (```): an image there is text, as on the page
     for line in lines:
+        if line.strip().startswith('```'):
+            in_fence = not in_fence
         # Table row
         if line.strip().startswith('|'):
             cells = [c.strip() for c in line.strip().strip('|').split('|')]
@@ -3277,6 +3323,11 @@ def _md_to_latex_body(source, cited=None):
         # Blank line
         if not line.strip():
             out.append(''); continue
+
+        # An image alone on a line: a figure, its caption below (LaTeX numbers it)
+        img = None if in_fence else captions_lib.image_line(line)
+        if img:
+            out.append(captions_lib.figure_latex(img[0], img[1], _le)); continue
 
         # Already a LaTeX block (shortcode output)
         if line.strip().startswith('\\begin{') or line.strip().startswith('\\end{'):
@@ -3313,6 +3364,8 @@ _LATEX_DOC = r"""\documentclass[12pt, a4paper]{{article}}
 \usepackage{{hyperref}}
 \usepackage{{xcolor}}
 \usepackage{{graphicx}}
+\usepackage[export]{{adjustbox}}
+{latex_captions}
 {latex_colors}
 \title{{{latex_title}\\
 \large {latex_subtitle}}}
@@ -3351,6 +3404,7 @@ def export_grammar_latex():
     lx   = PROJECT['latex']
     tex  = _LATEX_DOC.format(body=body, latex_title=lx.get('title', 'Comparative Grammar'),
                              latex_subtitle=lx.get('subtitle', ''), latex_author=lx.get('author', ''),
+                             latex_captions=captions_lib.latex_setup(PROJECT['captions']),
                              latex_colors='\n'.join(
                                  '\\definecolor{%sColor}{HTML}{%s}' % (re.sub('[^A-Za-z]', '', l['name']) or l['code'].upper(),
                                                                        _colors_current()[l['code']].lstrip('#'))
