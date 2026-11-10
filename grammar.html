@@ -474,7 +474,7 @@ async function loadSection(id) {
           <li><code>{{example: ID}}</code> — numbered example from "Examples from papers"</li>
           <li><code>{{entry: ID}}</code> — inline word chip from dictionary XML</li>
           <li><code>{{source: Author 2020}}</code> — cite a reference: (Author, 2020). Add <code>, p. 12</code> for a page, <code>, narrative</code> for Author (2020), or cite several with <code>;</code>. The reference's key works too</li>
-          <li><code>![caption](images/file.jpg)</code> — uploaded image</li>
+          <li><code>![the caption](images/file.jpg)</code> — uploaded image. On a line of its own it is a <b>figure</b>: the caption you write between the brackets goes below it as “Figure 3 – …”, the number being automatic through the whole grammar (an image in the middle of a line of text has no caption). Charts made in the Phonological table tab are numbered as tables, above.</li>
         </ul>
         <li><code>{{cite: file.xml#sentId}}</code> — numbered example from a transcribed narrative</li>
           <li><code>{{cite: fieldnotes#0#d01.Road:01}}</code> — numbered example from fieldnotes</li>
@@ -509,6 +509,21 @@ async function loadSection(id) {
   }
 }
 
+// The tables and the figures are numbered through the whole grammar, so when one section changes the others are shown again with their new numbers
+async function renumberOthers(exceptId) {
+  for (const el of document.querySelectorAll('#sections-container .grammar-section')) {
+    const sid = el.id;
+    if (!sid || sid === exceptId) continue;
+    const box = document.getElementById('content-' + sid);
+    if (!box || box.style.display === 'none') continue;               // a section that is being edited is left alone
+    try {
+      const d = await (await fetch('/api/grammar/' + sid)).json();
+      if (d.html && d.html !== box.innerHTML) { box.innerHTML = d.html; bindDictLinksInSection(box); }
+    } catch (e) { /* the next save will do it */ }
+  }
+  applyLangFilter();
+}
+
 // ── Edit mode ──────────────────────────────────────────────────
 async function enterEditMode(id) {
   if (!isLoggedIn) { showLoginModal(); return; }
@@ -536,6 +551,7 @@ async function saveSection(id) {
       applyLangFilter();
       cancelEdit(id);
       buildTOC(); // headings may have changed
+      renumberOthers(id); // a table or a figure more or less here changes the numbers of those that follow
     }
   } catch(e) { alert('Save failed: ' + e.message); }
 }
@@ -582,8 +598,11 @@ async function uploadAndInsertImage(id, input) {
     const d = await r.json();
     if (d.ok) {
       const ta  = document.getElementById('textarea-' + id);
-      const md  = `\n![${file.name}](${d.url})\n`;
+      const slot = 'Write the caption of the figure here';
+      const md  = `\n![${slot}](${d.url})\n`;
+      const at  = ta.selectionStart + 3;                // inside the brackets, after "\n!["
       insertAtCursor(ta, md);
+      ta.setSelectionRange(at, at + slot.length);       // the caption is typed over the placeholder
     } else {
       alert('Image upload failed: ' + (d.error || 'Unknown error'));
     }
@@ -604,6 +623,7 @@ async function deleteSection(id) {
     // Remove from DOM and rebuild TOC
     document.getElementById(id)?.remove();
     buildTOC();
+    renumberOthers(id);
   } catch(e) { alert('Delete failed: ' + e.message); }
 }
 
