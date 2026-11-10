@@ -965,6 +965,77 @@ def _source_latex(spec, cited):
     cited.update(r['id'] for r, _ in items)
     return _le(text)
 
+def _cited_positions(refs):
+    """{reference id: where the grammar first cites it} (the sections in their order, the citations in theirs)."""
+    pos, n = {}, 0
+    ctx, keys = refs_lib.Context(refs), {r['id'] for r in refs}
+    try:
+        names = sorted(os.listdir(GRAMMAR_FOLDER))
+    except OSError:
+        return pos
+    for fn in names:
+        if not fn.endswith('.md'):
+            continue
+        with open(os.path.join(GRAMMAR_FOLDER, fn), encoding='utf-8') as f:
+            text = f.read()
+        for m in _SOURCE_RE.finditer(text):
+            for what, _loc, _nar in refs_lib.parse_source_spec(_html.unescape(m.group(1)), keys):
+                ref, _why = refs_lib.find_reference(what, refs, ctx)
+                if ref and ref['id'] not in pos:
+                    pos[ref['id']] = n
+                n += 1
+    return pos
+
+def _describe_groups(groups, before):
+    """What the author's window needs to know about the references that share their authors and year."""
+    old_ids, cited_pos, cited_in = {r['id'] for r in before}, _cited_positions(before), _grammar_citations()
+    out = []
+    for key, members in groups:
+        suggested = refs_lib.suggest_letters(members, cited_pos)
+        base = refs_lib.split_year(members[0].get('year'))[0]
+        plain = lambda r: dict(r, year=base)
+        ctx0 = refs_lib.Context([plain(members[0])])
+        out.append({'who': refs_lib.author_text(plain(members[0]), ctx0), 'year': base, 'anyCited': any(m['id'] in cited_pos for m in members),
+                    'members': [{'id': m['id'], 'isNew': m['id'] not in old_ids, 'letter': refs_lib.split_year(m.get('year'))[1], 'suggested': suggested[m['id']],
+                                 'text': refs_lib.apa(plain(m), refs_lib.Context([plain(m)]))[1], 'html': refs_lib.apa(plain(m), refs_lib.Context([plain(m)]))[0],
+                                 'citedIn': cited_in.get(m['id'], []), 'cited': m['id'] in cited_pos} for m in members]})
+    return out
+
+def _letters_step(before, after, touched, letters):
+    """Where a save may put a reference in a group with the same authors and year: returns (references to keep, groups, error).
+    The references are None while the author has still to choose (groups says what); the error is why the choice was refused."""
+    groups = refs_lib.groups_needing_choice(before, after, touched)
+    if not groups:
+        return after, [], None
+    if letters is None:
+        return None, groups, None
+    final, err = refs_lib.apply_letters(after, groups, letters)
+    return final, groups, err
+
+def _needs_letters_response(groups, before):
+    return jsonify({'ok': False, 'error': 'These references share their authors and year: choose their letters.', 'needsLetters': _describe_groups(groups, before)}), 409
+
+def _rewrite_letters_in_grammar(old_refs, new_refs):
+    """The citations by author and year in the grammar follow the letters. Returns [(section, [(old, new) ...])]."""
+    changed = []
+    for fn in sorted(os.listdir(GRAMMAR_FOLDER)):
+        if not fn.endswith('.md'):
+            continue
+        path = os.path.join(GRAMMAR_FOLDER, fn)
+        with open(path, encoding='utf-8') as f:
+            text = f.read()
+        done = []
+        def fix(m):
+            spec, ch = refs_lib.rewrite_source_spec(m.group(1), old_refs, new_refs)
+            done.extend(ch)
+            return '{{source:' + (' ' if not m.group(1).startswith(' ') else '') + spec.lstrip(' ') + '}}' if ch else m.group(0)
+        new_text = _SOURCE_RE.sub(fix, text)
+        if new_text != text:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new_text)
+            changed.append((fn[:-3], done))
+    return changed
+
 def _ref_view(r, ctx, cited_in=None):
     html_, text_ = refs_lib.apa(r, ctx)
     return dict(r, html=html_, text=text_, yearDisplay=ctx.year(r),
@@ -994,6 +1065,10 @@ def references_preview():
     ctx = refs_lib.Context(others + [ref])
     view = _ref_view(ref, ctx)
     view['suggestedId'] = refs_lib.suggest_id(ref, taken)
+    before = _refs_load()
+    same_id = [dict(r, id=ref['id']) if r['id'] == (data.get('editing') or '') else r for r in before]
+    groups = refs_lib.groups_needing_choice(same_id, others + [ref], {ref['id']})
+    view['sharesYear'] = [{'id': m['id'], 'text': refs_lib.apa(dict(m, year=refs_lib.split_year(m.get('year'))[0]), refs_lib.Context([m]))[1]} for _k, ms in groups for m in ms if m['id'] != ref['id']]
     return jsonify({'ok': True, 'view': view})
 
 @app.route('/api/references', methods=['POST'])
@@ -1003,15 +1078,21 @@ def references_create():
     ref, err = refs_lib.clean(request.get_json(silent=True) or {})
     if err:
         return jsonify({'ok': False, 'error': err}), 400
+    letters = (request.get_json(silent=True) or {}).get('letters')
     with _REFS_LOCK:
         refs = _refs_load()
         taken = {r['id'] for r in refs}
         if ref['id'] and ref['id'] in taken:
             return jsonify({'ok': False, 'error': f'The key "{ref["id"]}" is already used by another reference.'}), 409
         ref['id'] = ref['id'] or refs_lib.suggest_id(ref, taken)
-        refs.append(ref)
-        _refs_save(refs)
-    return jsonify({'ok': True, 'id': ref['id']})
+        final, groups, err = _letters_step(refs, refs + [ref], {ref['id']}, letters)
+        if err:
+            return jsonify({'ok': False, 'error': err}), 400
+        if final is None:
+            return _needs_letters_response(groups, refs)
+        _refs_save(final)
+        updated = _rewrite_letters_in_grammar(refs, final) if groups else []
+    return jsonify({'ok': True, 'id': ref['id'], 'lettered': bool(groups), 'updatedCitations': [{'section': s, 'changes': c} for s, c in updated]})
 
 def _rename_in_grammar(old, new):
     """Rewrite {{source: old …}} as {{source: new …}} in every grammar section. Returns the sections changed."""
@@ -1053,10 +1134,17 @@ def references_update(ref_id):
         if new_id != ref_id and any(r['id'] == new_id for r in refs):
             return jsonify({'ok': False, 'error': f'The key "{new_id}" is already used by another reference.'}), 409
         ref['id'] = new_id
-        refs[idx] = ref
-        _refs_save(refs)
+        after = list(refs); after[idx] = ref
+        same_id = [dict(r, id=new_id) if r['id'] == ref_id else r for r in refs]          # to compare the groups as they were, under the new key
+        final, groups, err = _letters_step(same_id, after, {new_id}, (request.get_json(silent=True) or {}).get('letters'))
+        if err:
+            return jsonify({'ok': False, 'error': err}), 400
+        if final is None:
+            return _needs_letters_response(groups, same_id)
+        updated = _rewrite_letters_in_grammar(same_id, final) if groups else []
+        _refs_save(final)
         renamed_in = _rename_in_grammar(ref_id, new_id) if new_id != ref_id else []
-    return jsonify({'ok': True, 'id': new_id, 'updatedGrammarSections': renamed_in})
+    return jsonify({'ok': True, 'id': new_id, 'updatedGrammarSections': renamed_in, 'lettered': bool(groups), 'updatedCitations': [{'section': s, 'changes': c} for s, c in updated]})
 
 @app.route('/api/references/<ref_id>', methods=['DELETE'])
 def references_delete(ref_id):
@@ -1128,14 +1216,22 @@ def references_import():
     with _REFS_LOCK:
         existing = _refs_load()
         add, report = refs_lib.merge_import(existing, items)
+        final, groups, err = _letters_step(existing, existing + add, {r['id'] for r in add}, data.get('letters') if commit else None)
+        if commit and add and err:
+            return jsonify({'ok': False, 'error': err}), 400
+        if commit and add and final is None:
+            return _needs_letters_response(groups, existing)
+        updated = []
         if commit and add:
-            _refs_save(existing + add)
+            updated = _rewrite_letters_in_grammar(existing, final) if groups else []
+            _refs_save(final)
     ctx = refs_lib.Context(existing + add)
     byid = {r['id']: r for r in add}
     entries = [{'status': x['status'], 'id': x['id'], 'source': x['source'], 'what': x.get('what', ''), 'error': x.get('error'), 'warnings': x.get('warnings', []),
                 'html': refs_lib.apa(byid[x['id']], ctx)[0] if x['status'] in ('new', 'renamed') else ''} for x in report]
     counts = {k: sum(1 for e in entries if e['status'] == k) for k in ('new', 'renamed', 'duplicate', 'rejected')}
-    return jsonify({'ok': True, 'committed': bool(commit and add), 'counts': counts, 'formats': formats, 'unrecognised': unrecognised, 'entries': entries})
+    return jsonify({'ok': True, 'committed': bool(commit and add), 'counts': counts, 'formats': formats, 'unrecognised': unrecognised, 'entries': entries,
+                    'needsLetters': len(groups) if not commit else 0, 'updatedCitations': [{'section': s, 'changes': c} for s, c in updated]})
 
 # ══════════════════════════════════════════════════════════════
 #  GRAMMAR RENDERER
