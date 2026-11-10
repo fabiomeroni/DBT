@@ -331,5 +331,45 @@ check('merge: a taken key is replaced by a free one; a missing key is made from 
 check('merge: what exists is not touched', [r['id'] for r in have], ['smith2020', 'brown2015'])
 check('merge: all of them, in a second import, are duplicates', set(x['status'] for x in R.merge_import(have + add, R.parse_references(new_text)[1])[1]), {'duplicate', 'rejected'})
 
+
+# ═════════ same authors, same year: the author chooses the letters ═════════
+def sm(i, title, y='2026', who=('Smith', 'J.')): return ref(i, 'book', authors=[P(*who)], year=y, title=title, publisher='P')
+A, B, C = sm('a', 'Alpha'), sm('b', 'Beta'), sm('c', 'Gamma')
+def need(before, after, touched): return [[r['id'] for r in ms] for _k, ms in R.groups_needing_choice(before, after, set(touched))]
+check('a new reference with the same authors and year as another: the author has to choose', need([A], [A, B], ['b']), [['a', 'b']])
+check('…and with two others: the three are one group', need([A, B], [A, B, C], ['c']), [['a', 'b', 'c']])
+check('other authors, other year, or other initials: no choice (they are cited differently)', (need([A], [A, sm('x', 'X', who=('Jones', 'J.'))], ['x']), need([A], [A, sm('x', 'X', y='2027')], ['x']), need([A], [A, sm('x', 'X', who=('Smith', 'K.'))], ['x'])), ([], [], []))
+check('a group that the save did not touch is left alone (old data keeps its automatic letters)', need([A, B], [A, B, sm('x', 'X', who=('Jones', 'J.'))], ['x']), [])
+check('editing a reference without changing its authors or year does not ask again', need([A, B], [A, dict(B, title='Beta, revised')], ['b']), [])
+check('editing a reference so that it joins a group does', need([A, sm('d', 'Delta', who=('Jones', 'J.'))], [A, sm('d', 'Delta')], ['d']), [['a', 'd']])
+check('when every reference of the group has its own letter already, nothing is asked', (need([sm('a', 'Alpha', '2026a')], [sm('a', 'Alpha', '2026a'), sm('b', 'Beta', '2026b')], ['b']), need([sm('a', 'Alpha', '2026a')], [sm('a', 'Alpha', '2026a'), sm('b', 'Beta', '2026a')], ['b'])), ([], [['a', 'b']]))
+check('works with no year, or in press, are groups too', (need([sm('a', 'Alpha', 'n.d.')], [sm('a', 'Alpha', 'n.d.'), sm('b', 'Beta', 'n.d.')], ['b']), need([sm('a', 'Alpha', 'in press')], [sm('a', 'Alpha', 'in press'), sm('b', 'Beta', 'in press')], ['b'])), ([['a', 'b']], [['a', 'b']]))
+# the suggestion
+check('suggestion, nothing cited: the older ones first, the new one last', R.suggest_letters([A, B, C], {}), {'a': 'a', 'b': 'b', 'c': 'c'})
+check('suggestion: the one the grammar cites first is a, then the others cited, then the rest', R.suggest_letters([A, B, C], {'c': 0, 'a': 5}), {'c': 'a', 'a': 'b', 'b': 'c'})
+check('suggestion: only the new one cannot be cited yet, so it comes after', R.suggest_letters([A, B, C], {'b': 3}), {'b': 'a', 'a': 'b', 'c': 'c'})
+check('suggestion: a reference that has a letter keeps it, the others take the free ones', R.suggest_letters([sm('a', 'Alpha', '2026b'), B, C], {}), {'a': 'b', 'b': 'a', 'c': 'c'})
+# applying the choice
+grp = R.groups_needing_choice([A], [A, B], {'b'})
+done, err = R.apply_letters([A, B, C], grp, {'a': 'b', 'b': 'a'})
+check('the letters chosen are stored in the years (and the references outside the group are left as they are)', ([r['year'] for r in done], err), (['2026b', '2026a', '2026'], None))
+check('a missing letter, a repeated letter, a capital, a digit and a word are refused, each with its reason', [R.apply_letters([A, B], grp, l)[1] for l in ({'a': 'a'}, {'a': 'a', 'b': 'a'}, {'a': 'A', 'b': 'b'}, {'a': '1', 'b': 'b'}, {'a': 'ab', 'b': 'b'}, None)],
+      ['Choose a letter, from a to z, for each of the references.', 'The letter a is given to two references: each needs its own.'] + ['Choose a letter, from a to z, for each of the references.'] * 4)
+g2 = R.groups_needing_choice([sm('a', 'Alpha', 'n.d.')], [sm('a', 'Alpha', 'n.d.'), sm('b', 'Beta', 'n.d.')], {'b'})
+check('no year and in press: the letter is joined with a hyphen (n.d.-a), like the Context writes it', ([r['year'] for r in R.apply_letters([sm('a', 'Alpha', 'n.d.'), sm('b', 'Beta', 'n.d.')], g2, {'a': 'a', 'b': 'b'})[0]], R.with_letter('in press', 'b'), R.with_letter('2026', 'c'), R.with_letter('2026', '')), (['n.d.-a', 'n.d.-b'], 'in press-b', '2026c', '2026'))
+check('the chosen letters make the citations read as the Context writes them', [R.Context(done).year(r) for r in done[:2]], ['2026b', '2026a'])
+# the citations in the grammar follow the letters
+old = [A, sm('lee', 'Lee book', '2001', ('Lee', 'K.'))]
+new = [dict(A, year='2026a'), dict(B, year='2026b'), old[1]]
+rw = lambda spec, o=old, n=new: R.rewrite_source_spec(spec, o, n)[0]
+check('a citation by author and year gets the letter of its reference (with a page, in narrative form, with a comma before the year)', [rw(s_) for s_ in ('Smith 2026', 'Smith 2026, p. 12', 'Smith, 2026, narrative', 'A. Smith 2026'.replace('A. ', 'J. '))], ['Smith 2026a', 'Smith 2026a, p. 12', 'Smith, 2026a, narrative', 'J. Smith 2026a'])
+check('a four-digit page is not mistaken for the year, and the other citations of the same shortcode are left alone, spaces and all', (rw('Smith 2026, p. 1234'), rw(' Smith 2026; Lee 2001, p. 3 ')), ('Smith 2026a, p. 1234', ' Smith 2026a; Lee 2001, p. 3 '))
+check('a citation by key, one to a reference whose year did not change, and one that found nothing are left as they are', (rw('a'), rw('lee'), rw('Lee 2001'), rw('Nobody 2000')), ('a', 'lee', 'Lee 2001', 'Nobody 2000'))
+sw_old = [dict(A, year='2026a'), dict(B, year='2026b')]; sw_new = [dict(A, year='2026b'), dict(B, year='2026a')]
+check('when two letters are swapped, each citation follows its reference (they are read before they are rewritten)', R.rewrite_source_spec('Smith 2026a; Smith 2026b', sw_old, sw_new)[0], 'Smith 2026b; Smith 2026a')
+check('a citation that was ambiguous before (no letter, two works) is left for the author', R.rewrite_source_spec('Smith 2026', [A, B], [dict(A, year='2026a'), dict(B, year='2026b')])[0], 'Smith 2026')
+check('no year: n.d. becomes n.d.-a', R.rewrite_source_spec('Smith n.d.', [sm('a', 'Alpha', 'n.d.')], [sm('a', 'Alpha', 'n.d.-a'), sm('b', 'Beta', 'n.d.-b')])[0], 'Smith n.d.-a')
+check('what changed is reported, once for each citation', R.rewrite_source_spec('Smith 2026; Smith 2026, p. 4', [A], [dict(A, year='2026a'), B])[1], [('2026', '2026a'), ('2026', '2026a')])
+
 print(f"\n{ok} passed, {bad} failed")
 sys.exit(1 if bad else 0)
