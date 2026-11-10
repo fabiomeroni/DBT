@@ -203,7 +203,9 @@ def screenshot(page, path, max_height=SHOT_HEIGHT):
     page.add_style_tag(content=FREEZE)
     settle(page)
     # let fonts and the layout settle: two animation frames after the fonts are ready
-    page.evaluate("document.fonts.ready.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))")
+    # the four styles of Charis SIL are loaded before the picture is taken, so that it never depends on which of them a page happened to need first
+    page.evaluate("""Promise.all(['400 1em "Charis SIL"', 'italic 400 1em "Charis SIL"', '700 1em "Charis SIL"', 'italic 700 1em "Charis SIL"'].map(f => document.fonts.load(f, 'a'))).catch(() => 0)
+                      .then(() => document.fonts.ready).then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))""")
     page.wait_for_timeout(300)
     page.evaluate("document.activeElement && document.activeElement.blur && document.activeElement.blur()")
     h = min(page.evaluate("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)"), max_height)
@@ -218,8 +220,12 @@ def compare_png(cur, base, tolerance):
     diff = ImageChops.difference(a, b)
     if diff.getbbox() is None:
         return True, "identical", None
-    mask = diff.convert("L").point(lambda v: 255 if v else 0)
+    # a colour that differs by 1 or 2 levels of 255 is not a difference anyone can see: it is the rounding of the rasteriser on antialiased edges
+    r_, g_, b_ = diff.split()
+    mask = ImageChops.lighter(ImageChops.lighter(r_, g_), b_).point(lambda v: 255 if v > 2 else 0)
     n = mask.histogram()[255]
+    if n == 0:
+        return True, "identical (differences of 2 levels or less, below what can be seen, are ignored)", None
     frac = n / (a.size[0] * a.size[1])
     return frac <= tolerance, f"{n} pixels differ ({frac:.3%}), region {diff.getbbox()}", mask
 
@@ -2777,14 +2783,14 @@ def suite_phonotable(browser, args):
         d = va.get(site.url + "api/phonotable/defaults").json()
         check(S, "the suggested columns and rows are those of the IPA charts, in that order, for the consonants and for the vowels", d["axes"]["consonants"] == {"columns": CONS_COLS, "rows": CONS_ROWS} and d["axes"]["vowels"] == {"columns": V_COLS, "rows": V_ROWS}, str(d["axes"])[:200])
         check(S, "…and the languages come with their colours, in the project's order", [(l["code"], l["color"]) for l in d["languages"]] == [(c, COL[c]) for c in CODES])
-        spec = {"kind": "consonants", "title": "Consonants", "columns": ["Bilabial", "Alveolar"], "rows": ["Plosive", "Nasal"], "inventory": {"num": {"Plosive": {"Bilabial": "p b", "Alveolar": "t"}}, "drg": {"Plosive": {"Bilabial": "p b", "Alveolar": "t d"}}, "kro": {"Plosive": {"Bilabial": "p", "Alveolar": "t"}}}}
+        spec = {"kind": "consonants", "caption": "Consonants", "columns": ["Bilabial", "Alveolar"], "rows": ["Plosive", "Nasal"], "inventory": {"num": {"Plosive": {"Bilabial": "p b", "Alveolar": "t"}}, "drg": {"Plosive": {"Bilabial": "p b", "Alveolar": "t d"}}, "kro": {"Plosive": {"Bilabial": "p", "Alveolar": "t"}}}}
         check(S, "the preview is for the author only (401 for a visitor)", _jcall(va, "post", site.url + "api/phonotable/preview", {"spec": spec})[0] == 401)
         st, j = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": spec})
         check(S, "the author's preview is the chart as the page will show it, with the definition cleaned", st == 200 and j["ok"] and 'class="phonotable"' in j["html"] and j["spec"]["columns"] == ["Bilabial", "Alveolar"], str(j)[:160])
         check(S, "a definition that cannot be a chart is refused with a reason", [_jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": x})[0] for x in ({"kind": "tones", "columns": ["a"], "rows": ["b"]}, {"kind": "vowels", "columns": [], "rows": ["b"]}, None)] == [400, 400, 400])
 
         body = ("## Phonology\n\nBefore the chart, *with markdown*.\n\n```phonotable\n" + json.dumps(spec) + "\n```\n\nBetween the charts.\n\n```phonotable\n"
-                + json.dumps({"kind": "vowels", "title": "Vowels", "columns": ["Front", "Back"], "rows": ["Close"], "inventory": {"num": {"Close": {"Front": "i", "Back": "u"}}, "olr": {"Close": {"Front": "i", "Back": "ʉ"}}}}) + "\n```\n\nAfter, with {{source: Nobody 2000}} still working.\n")
+                + json.dumps({"kind": "vowels", "caption": "Vowels", "columns": ["Front", "Back"], "rows": ["Close"], "inventory": {"num": {"Close": {"Front": "i", "Back": "u"}}, "olr": {"Close": {"Front": "i", "Back": "ʉ"}}}}) + "\n```\n\nAfter, with {{source: Nobody 2000}} still working.\n")
         _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": body})
         h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
         plain = re.sub(r"<[^>]+>", "", h)
@@ -2801,7 +2807,7 @@ def suite_phonotable(browser, args):
         check(S, "the LaTeX export has both charts as tables, with the colours of the languages, and loads graphicx", r.count("\\begin{tabular}{l|c|c}") == 2 and f"\\textcolor[HTML]{{{COL['drg'][1:].upper()}}}{{d}}" in r and "\\usepackage{graphicx}" in r and "PHONOTABLE" not in r, "")
         _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "A\r\n\r\n```phonotable\r\n" + json.dumps(spec) + "\r\n```\r\n\r\nB\r\n"})
         check(S, "a section saved with Windows line ends shows its chart", va.get(site.url + f"api/grammar/{sid}").json()["html"].count('<figure class="phonotable"') == 1)
-        evil = dict(spec, title="<b>t</b>", inventory={"num": {"Plosive": {"Bilabial": "<img src=x onerror=alert(1)> p"}}, "zzz": {"Plosive": {"Bilabial": "q"}}})
+        evil = dict(spec, caption="<b>t</b>", inventory={"num": {"Plosive": {"Bilabial": "<img src=x onerror=alert(1)> p"}}, "zzz": {"Plosive": {"Bilabial": "q"}}})
         _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(evil) + "\n```\n\n```phonotable\n{broken\n```\n\nstill here\n"})
         h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
         check(S, "what is typed in a chart is shown as text (no element), a language that is not in the project is ignored, and a block that is broken is a message beside the rest of the section, not an error", "<img" not in h and "&lt;img" in h and "<b>t</b>" not in h and ">q<" not in h and "shortcode-error\">Phonological table:" in h and "still here" in h, re.sub(r"<[^>]+>", "", h)[:200])
@@ -2817,7 +2823,7 @@ def suite_phonotable(browser, args):
         check(S, "the Phonological table tab replaces the textarea with a list of the charts of the section (none yet) and two buttons to make one", page.locator(root).is_visible() and not page.locator(ta).is_visible() and "None yet" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 2)
         page.click(f'{root} [data-act="new"][data-kind="consonants"]'); page.wait_for_selector(".pt-grid input")
         vals = lambda axis: [i.input_value() for i in page.locator(f'.pt-axis[data-axis="{axis}"] li input').all()]
-        check(S, "a new consonant chart starts from the suggested columns and rows (Bilabial … Glottal; Plosive … Lateral approximant), and a title", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS and page.input_value(f"#pt-title-{sid}") == "Consonant phonemes")
+        check(S, "a new consonant chart starts from the suggested columns and rows (Bilabial … Glottal; Plosive … Lateral approximant), and an empty caption (no title is suggested)", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS and page.input_value(f"#pt-caption-{sid}") == "")
         ui = page.locator(root).inner_text() + " " + " ".join((i.get_attribute("placeholder") or "") for i in page.locator(root + " input").all())
         check(S, "the editor suggests no names of its own beyond the standard lists: the boxes for adding a column and a row say only “Add a column” and “Add a row”, and no example (labial-velar, linguo-labial, click) is written anywhere in it", [i.get_attribute("placeholder") for i in page.locator(root + " input[data-add]").all()] == ["Add a column", "Add a row"] and not re.search(r"labial-velar|linguo|click", ui, re.I) and not re.search(r"Labial|Linguo|\bClick\b|labial-velar|linguo-labial", va.get(site.url + "phonotable.js").text()), ui[:200])
         check(S, "…with one grid of cells for typing the inventory, and one tab per language of the project, in colour", page.locator(".pt-cell").count() == len(CONS_COLS) * len(CONS_ROWS) and [b.inner_text().strip() for b in page.locator(".pt-lang").all()] == [NAMES[c] for c in CODES] and page.locator(".pt-lang i").first.evaluate("e => getComputedStyle(e).backgroundColor") == _rgb(COL[CODES[0]]))
@@ -2859,7 +2865,8 @@ def suite_phonotable(browser, args):
         pvf.locator('.phono-legend input[data-lang="num"]').uncheck(); pvf.locator('.phono-legend input[data-lang="kro"]').uncheck()
         check(S, "the legend works in the preview of the editor too: with only Dorig ticked, its sounds are all black", pvf.locator(".ph", has_text=re.compile("^d$")).first.evaluate("e => getComputedStyle(e).color") == "rgb(0, 0, 0)" and pvf.locator(".ph", has_text=re.compile("^l$")).first.evaluate("e => getComputedStyle(e).color") == "rgb(0, 0, 0)")
         pvf.locator('.phono-legend input[data-lang="num"]').check(); pvf.locator('.phono-legend input[data-lang="kro"]').check()
-        # insert
+        # insert (with a caption typed by the author)
+        page.fill(f"#pt-caption-{sid}", "Consonant phonemes")
         page.click(f"#pt-write-{sid}")
         txt = page.input_value(ta)
         blocks = re.findall(r"```phonotable\n(.*?)\n```", txt, re.S); sp = json.loads(blocks[0]) if blocks else {}
@@ -2867,7 +2874,7 @@ def suite_phonotable(browser, args):
         check(S, "…and says what to do next, and the button now reads Update", "Save & render" in page.inner_text(f"#pt-msg-{sid}") and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
         # a second chart: vowels, in the same section
         page.click(f'{root} [data-act="back"]'); page.click(f'{root} [data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input")
-        check(S, "a vowel chart is made separately, from the suggested vowel rows and columns", vals("columns") == V_COLS and vals("rows") == V_ROWS and page.input_value(f"#pt-title-{sid}") == "Vowel phonemes")
+        check(S, "a vowel chart is made separately, from the suggested vowel rows and columns", vals("columns") == V_COLS and vals("rows") == V_ROWS and page.input_value(f"#pt-caption-{sid}") == "")
         type_in("num", {(0, 0): "i", (0, 2): "u"}); type_in("olr", {(0, 0): "i", (0, 2): "u", (0, 1): "ʉ"})
         page.click(f"#pt-write-{sid}")
         blocks = re.findall(r"```phonotable\n(.*?)\n```", page.input_value(ta), re.S)
@@ -2914,12 +2921,12 @@ def suite_phonotable(browser, args):
         page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
         check(S, "when the editor is opened again it is on the Text tab", page.locator(ta).is_visible())
         page.click('.ed-tab[data-tab="phono"]'); page.locator(f'{root} [data-act="edit"]').nth(0).click(); page.wait_for_selector(".pt-grid input")
-        check(S, "a chart that is in the text is loaded into the builder: its title, its axes and the inventory of each language", page.input_value(f"#pt-title-{sid}") == "Consonant phonemes" and vals("columns") == CONS_COLS and page.input_value('.pt-cell[data-r="0"][data-c="0"]') == "p b" and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
+        check(S, "a chart that is in the text is loaded into the builder: its caption, its axes and the inventory of each language", page.input_value(f"#pt-caption-{sid}") == "Consonant phonemes" and vals("columns") == CONS_COLS and page.input_value('.pt-cell[data-r="0"][data-c="0"]') == "p b" and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
         page.click('.pt-lang[data-lang="kro"]')
         check(S, "…also the other languages", page.input_value('.pt-cell[data-r="1"][data-c="3"]') == "n")
-        page.fill('.pt-cell[data-r="0"][data-c="0"]', "p b ɓ"); page.fill(f"#pt-title-{sid}", "Consonants of the three languages"); page.click(f"#pt-write-{sid}")
+        page.fill('.pt-cell[data-r="0"][data-c="0"]', "p b ɓ"); page.fill(f"#pt-caption-{sid}", "Consonants of the three languages"); page.click(f"#pt-write-{sid}")
         blocks = re.findall(r"```phonotable\n(.*?)\n```", page.input_value(ta), re.S)
-        check(S, "Update in the text changes that block, and no other: still two blocks, the first changed, the vowels as they were", len(blocks) == 2 and json.loads(blocks[0])["title"] == "Consonants of the three languages" and json.loads(blocks[0])["inventory"]["kro"]["Plosive"]["Bilabial"] == "p b ɓ" and json.loads(blocks[1])["kind"] == "vowels")
+        check(S, "Update in the text changes that block, and no other: still two blocks, the first changed, the vowels as they were", len(blocks) == 2 and json.loads(blocks[0])["caption"] == "Consonants of the three languages" and json.loads(blocks[0])["inventory"]["kro"]["Plosive"]["Bilabial"] == "p b ɓ" and json.loads(blocks[1])["kind"] == "vowels")
         page.click(f'{root} [data-act="back"]'); page.locator(f'{root} [data-act="edit"]').nth(1).click(); page.wait_for_selector(".pt-grid input"); page.click(f"#pt-remove-{sid}")
         check(S, "Remove this chart from the text takes out that block only, and returns to the list", len(re.findall(r"```phonotable", page.input_value(ta))) == 1 and page.locator(f'{root} [data-act="edit"]').count() == 1)
         page.click(f"#editor-{sid} .modal-btn.primary"); page.wait_for_selector(f"#content-{sid} figure.phonotable")
@@ -3064,12 +3071,264 @@ def suite_ipafont(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 16. captions: Table N above a chart, Figure N below an image, numbered through the whole grammar ─────────────────────────
+_CAP_S0A = ("## A section with a figure and a chart\n\n![First map](images/gaua_map.png)\n\n```phonotable\n"
+            '{"kind":"consonants","caption":"Consonants of A","columns":["Bilabial"],"rows":["Plosive"],"inventory":{"num":{"Plosive":{"Bilabial":"p"}}}}\n```\n\n'
+            "An inline ![icon](images/gaua_map.png) image is not a figure.\n\n```\n![inside code](images/gaua_map.png)\n```\n")
+_CAP_S5B = ("## Another section\n\n![](images/gaua_map.png)\n\n```phonotable\n{broken\n```\n\n![Last picture](images/gaua_map.png)\n\n```phonotable\n"
+            '{"kind":"vowels","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n')
+_CAP_ZZC = ("## Seen from Windows\n\n![Windows picture](images/gaua_map.png)\n\n```phonotable\n"
+            '{"kind":"vowels","caption":"Seen from Windows","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n').replace("\n", "\r\n")
+
+def _captions_prepare(d):
+    g = d / "project" / "grammar"
+    (g / "s0_a.md").write_text(_CAP_S0A, encoding="utf-8"); (g / "s5_b.md").write_text(_CAP_S5B, encoding="utf-8"); (g / "zz_c.md").write_bytes(_CAP_ZZC.encode("utf-8"))
+
+def _expected_captions(site, drop=()):
+    """What the numbers should be, counted here by a simple rule of its own: tables = the charts whose block is a valid chart definition,
+    figures = the images alone on a line outside a code block; the sections in the order of their file names."""
+    g = site.dir / "project" / "grammar"; tn = fn = 0; out = {}
+    for name in sorted(p.name for p in g.glob("*.md")):
+        sid = name[:-3]
+        if sid in drop: continue
+        src = (g / name).read_bytes().decode("utf-8").replace("\r\n", "\n"); tabs, figs = [], []
+        for body in re.findall(r"^```phonotable\n(.*?)\n```", src, re.S | re.M):
+            try: s_ = json.loads(body)
+            except ValueError: continue
+            if isinstance(s_, dict) and s_.get("kind") in ("consonants", "vowels") and s_.get("columns") and s_.get("rows"): tn += 1; tabs.append((tn, s_.get("caption") or s_.get("title") or ""))
+        plain = re.sub(r"^```.*?^```[ \t]*$", "", src, flags=re.S | re.M)
+        for alt in re.findall(r"^!\[([^\]]*)\]\([^)\s]+\)[ \t]*$", plain, re.M): fn += 1; figs.append((fn, alt))
+        out[sid] = {"table": tabs, "figure": figs}
+    return out
+
+def _shown_captions(html):
+    out = {"table": [], "figure": []}
+    for kind, label, text in re.findall(r'<figcaption class="caption caption-(table|figure)"><span class="cap-label">([^<]*)</span>(?:<span class="cap-text">([^<]*)</span>)?', html):
+        out[kind].append((int(label.rsplit(" ", 1)[1]), re.sub(r"^ – ", "", text.replace("&amp;", "&"))))
+    return out
+
+def suite_captions(browser, args):
+    S = "captions"
+    section("captions: Table N above a chart, Figure N below an image, numbered through the grammar")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_captions.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the caption module passes its own direct tests (words, HTML of a caption, figures of a section, LaTeX)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site(prepare=_captions_prepare)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        ids = [s_["id"] for s_ in va.get(site.url + "api/grammar").json()["sections"]]
+        check(S, "the sections are in the order of their file names: s0_a, s1, s1_phonology, s5_b, zz_c", ids == ["s0_a", "s1", "s1_phonology", "s5_b", "zz_c"], str(ids))
+        shown = lambda sid: _shown_captions(va.get(site.url + f"api/grammar/{sid}").json()["html"])
+        def numbers_ok(drop=()):
+            want = _expected_captions(site, drop); bad = {}
+            for sid in want:
+                if shown(sid) != want[sid]: bad[sid] = (shown(sid), want[sid])
+            return bad
+        bad = numbers_ok()
+        want = _expected_captions(site)
+        check(S, "the tables and the figures are numbered through the whole grammar, each kind by itself, in the order of the sections and of the text, as an independent count says", not bad and want["s1_phonology"]["table"][0][0] == 2 and want["zz_c"]["figure"][0][0] == 4, str(bad)[:300])
+        check(S, "…a figure whose alt text is empty has only its number; a block that cannot be read takes no number; an image in a line of text or in a code block is not a figure; a section saved with Windows line ends is numbered like the others", want["s5_b"]["figure"] == [(2, ""), (3, "Last picture")] and want["s5_b"]["table"] == [(4, "")] and shown("s5_b") == want["s5_b"] and shown("s0_a")["figure"] == [(1, "First map")] and shown("zz_c")["table"] == [(5, "Seen from Windows")])
+        # ── on the page: where the captions are ──
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1500); page.evaluate("document.fonts.ready"); page.wait_for_timeout(500)
+        fig = page.locator("#content-s0_a figure.grammar-figure").first; cht = page.locator("#content-s0_a figure.phonotable").first
+        fb, ib = fig.locator("figcaption").bounding_box(), fig.locator("img").bounding_box(); cb, tb = cht.locator("figcaption").bounding_box(), cht.locator("table").bounding_box()
+        check(S, "a figure has its caption below the image, a chart has its caption above the table", fb["y"] >= ib["y"] + ib["height"] - 1 and cb["y"] + cb["height"] <= tb["y"] + 1, f"{fb} {ib} {cb} {tb}")
+        check(S, "the caption reads “Figure 1 – First map” and “Table 1 – Consonants of A”, the label in bold", fig.locator("figcaption").inner_text() == "Figure 1 – First map" and cht.locator("figcaption").inner_text() == "Table 1 – Consonants of A" and fig.locator(".cap-label").evaluate("e => getComputedStyle(e).fontWeight") in ("700", "bold"))
+        check(S, "a chart has no title: nothing but the caption stands above it", cht.locator("figcaption").count() == 1 and not cht.locator("h1, h2, h3, h4, h5, h6, .chart-title").count())
+        check(S, "the page shows the numbers the server gave: s1_phonology has Table 2 and Table 3", [c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()] == ["Table 2 – Consonant phonemes", "Table 3 – Vowel phonemes"], str([c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()]))
+        check(S, "the page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        # ── the preview of a chart knows its number ──
+        def prev(section, position):
+            st, j = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": {"kind": "vowels", "caption": "P", "columns": ["a"], "rows": ["b"]}, "section": section, "position": position}); return j.get("number"), j.get("html", "")
+        check(S, "the preview of a chart in the editor shows the number it will have: tables before its section + charts before it in the text + 1", [prev("s1_phonology", 0)[0], prev("s1_phonology", 1)[0], prev("s0_a", 0)[0], prev("s5_b", 0)[0], prev("zz_c", 1)[0], prev("nosuch", 0)[0]] == [2, 3, 1, 4, 6, 1], str([prev("s1_phonology", 0)[0], prev("s1_phonology", 1)[0], prev("s0_a", 0)[0], prev("s5_b", 0)[0], prev("zz_c", 1)[0]]))
+        check(S, "…and it is in the caption of the preview; a missing or silly position counts as the start", "Table 2</span>" in prev("s1_phonology", 0)[1] and prev("s1_phonology", -4)[0] == 2 and _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": {"kind": "vowels", "columns": ["a"], "rows": ["b"]}, "section": "s1_phonology", "position": "x"})[1]["number"] == 2)
+        # ── a change in one section shifts the numbers of those after it ──
+        st, j = _jcall(aa, "post", site.url + "api/grammar/s0_a", {"source": "![Added first](images/gaua_map.png)\n\n" + _CAP_S0A})
+        check(S, "when a section gains a figure, the numbers of all the figures after it go up by one (checked against the independent count), and the answer says how many tables and figures the section has", st == 200 and not numbers_ok() and (j["tables"], j["figures"]) == (1, 2), str(numbers_ok())[:200])
+        aa.delete(site.url + "api/grammar/s5_b")
+        check(S, "when a section is deleted, those after it are numbered again", not numbers_ok(drop=()) and "s5_b" not in _expected_captions(site) and shown("zz_c")["figure"][0][0] == 3, str(shown("zz_c")))
+        (site.dir / "project" / "grammar" / "s5_b.md").write_text(_CAP_S5B, encoding="utf-8")
+        # ── LaTeX: the same tables and figures, numbered by LaTeX ──
+        tex = aa.get(site.url + "api/grammar/export/latex").text(); want = _expected_captions(site)
+        nt, nf = sum(len(v["table"]) for v in want.values()), sum(len(v["figure"]) for v in want.values())
+        caps = re.findall(r"\\caption\{([^}]*)\}", tex)
+        check(S, "the LaTeX export has the same number of tables and of figures as the page (images in code blocks left out)", tex.count("\\begin{table}") == nt and tex.count("\\begin{figure}") == nf, f"{tex.count(chr(92) + 'begin{table}')}/{nt} {tex.count(chr(92) + 'begin{figure}')}/{nf}")
+        check(S, "…with the captions, in the order of the grammar, figures having the image from the images folder; and the words and the separator are given to LaTeX", "First map" in caps and "Last picture" in caps and "inside code" not in " ".join(caps) and "\\includegraphics[max width=\\linewidth]{images/gaua_map.png}" in tex and "\\usepackage[labelsep=endash]{caption}" in tex and "\\renewcommand{\\tablename}{Table}" in tex and "\\usepackage[export]{adjustbox}" in tex, str(caps)[:200])
+        vis.close()
+
+        # ── the editor: the number of a new chart, renumbering without a reload, a figure uploaded ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1500)
+        before = {sid: [c.inner_text() for c in page.locator(f"#content-{sid} figcaption").all()] for sid in ("s1_phonology", "zz_c")}
+        page.locator("#s0_a .section-edit").click(); page.wait_for_selector("#editor-s0_a.visible, #editor-s0_a")
+        page.evaluate("(() => { const t = document.getElementById('textarea-s0_a'); t.focus(); t.setSelectionRange(0, 0); })()")
+        page.locator('#editor-s0_a .ed-tab[data-tab="phono"]').click(); page.locator('#pt-s0_a [data-act="new"][data-kind="consonants"]').click(); page.wait_for_selector("#pt-s0_a .pt-grid input")
+        check(S, "the caption box of a new chart is empty and says what it is for (the word and the separator of the project, an automatic number)", page.input_value("#pt-caption-s0_a") == "" and "Table 3 –" in page.inner_text("#pt-s0_a .pt-help") or "Table 3" in page.inner_text("#pt-s0_a"), page.inner_text("#pt-s0_a")[:160])
+        page.fill("#pt-caption-s0_a", "Typed in the editor"); page.fill('#pt-s0_a .pt-cell[data-r="0"][data-c="0"]', "p"); page.wait_for_function("document.querySelector('#pt-preview-s0_a figcaption') !== null", timeout=6000); page.wait_for_timeout(500)
+        check(S, "the preview shows the caption with the number the chart will have (it will stand at the cursor: the very start of the section, so Table 1)", page.inner_text("#pt-preview-s0_a figcaption") == "Table 1 – Typed in the editor", page.inner_text("#pt-preview-s0_a figcaption"))
+        page.click("#pt-write-s0_a"); page.click("#editor-s0_a .modal-btn.primary"); page.wait_for_selector("#content-s0_a figure.phonotable")
+        page.wait_for_function("document.querySelector('#content-zz_c figcaption.caption-table .cap-label').textContent === 'Table 6'", timeout=8000)
+        now = {sid: [c.inner_text() for c in page.locator(f"#content-{sid} figcaption").all()] for sid in ("s1_phonology", "zz_c")}
+        check(S, "after the save the chart is Table 1, the one that was Table 1 is Table 2, and the other sections on the page are numbered again without a reload (Tables 2 and 3 became 3 and 4)", [c.inner_text() for c in page.locator("#content-s0_a figcaption.caption-table").all()] == ["Table 1 – Typed in the editor", "Table 2 – Consonants of A"] and now["s1_phonology"] == ["Table 3 – Consonant phonemes", "Table 4 – Vowel phonemes"] and before["s1_phonology"] == ["Table 2 – Consonant phonemes", "Table 3 – Vowel phonemes"], str(now))
+        want = _expected_captions(site)
+        check(S, "…and what the page shows is what the server (and the independent count) says", all(_shown_captions(page.locator(f"#content-{sid}").inner_html()) == want[sid] for sid in want), "")
+        # a figure uploaded from the editor
+        from PIL import Image
+        import io as _io
+        buf = _io.BytesIO(); Image.new("RGB", (60, 40), "#c07820").save(buf, "PNG")
+        page.locator("#s5_b .section-edit").click(); page.wait_for_selector("#editor-s5_b.visible")
+        page.set_input_files("#editor-s5_b input[type=file]", {"name": "sample photo.png", "mimeType": "image/png", "buffer": buf.getvalue()})
+        page.wait_for_function("document.getElementById('textarea-s5_b').value.includes('Write the caption of the figure here')", timeout=8000)
+        sel = page.evaluate("(() => { const t = document.getElementById('textarea-s5_b'); return t.value.slice(t.selectionStart, t.selectionEnd); })()")
+        check(S, "an image inserted from the editor is a figure of its own line, with the caption slot selected so that the author just types the caption (the file name is not the caption)", sel == "Write the caption of the figure here" and "sample photo" not in page.input_value("#textarea-s5_b"), sel)
+        page.keyboard.type("A photo from the editor")
+        page.click("#editor-s5_b .modal-btn.primary"); page.wait_for_function("[...document.querySelectorAll('#content-s5_b figcaption')].some(c => c.textContent.includes('A photo from the editor'))", timeout=8000)
+        page.wait_for_function("document.querySelector('#content-zz_c figcaption.caption-figure .cap-label').textContent === 'Figure 6'", timeout=8000)
+        figs = [c.inner_text() for c in page.locator("#content-s5_b figcaption.caption-figure").all()]
+        check(S, "…typed over, it is the caption: the figure is numbered on from the earlier ones (Figure 5 here) with its caption below it, and the figure of the next section is numbered again (Figure 6) at once", figs[-1] == "Figure 5 – A photo from the editor" and page.locator("#content-zz_c figcaption.caption-figure").inner_text().startswith("Figure 6"), str(figs))
+        check(S, "no JavaScript or loading error in the editor", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the words of the captions are the project's ──
+    base = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    for cap_cfg, want_t, want_f, sep, labelsep in (({"table": "Tableau", "figure": "Illustration", "separator": " : "}, "Tableau", "Illustration", " : ", "colon"),
+                                                   ({"table": "", "figure": "x" * 50, "separator": 5}, "Table", "Figure", " – ", "endash")):
+        site = Site(project_override=variant(base["languages"], captions=cap_cfg), prepare=_captions_prepare)
+        try:
+            c = new_context(browser, site, 1280); api = c.request
+            h = api.get(site.url + "api/grammar/s0_a").json()["html"]; tex = api.get(site.url + "api/grammar/export/latex").text()
+            check(S, f"the project can set the words of the captions ({want_t} / {want_f}, separator “{sep}”), and an empty, too long or silly value falls back to the default: they are used in the page and in the LaTeX export", f">{want_f} 1</span><span class=\"cap-text\">{sep}First map" in h and f">{want_t} 1</span><span class=\"cap-text\">{sep}Consonants of A" in h and f"\\renewcommand{{\\tablename}}{{{want_t}}}" in tex and f"labelsep={labelsep}" in tex, re.findall(r"cap-label\">([^<]*)", h)[:2] and h[h.index("caption-figure"):h.index("caption-figure") + 120])
+            c.close()
+        finally:
+            site.stop()
+
+
+
+# ───────────────────────── 17. references to tables and figures: {{ref: label}} in the grammar and in the dictionary ─────────────────────────
+_XR_S0A = ("## Intro about {{ref: map}}\n\nSee {{ref: cons}}, {{ref: map, vow}} and {{ref:photo}}; unknown: {{ref: nope}}.\n\n| a | b |\n|---|---|\n| {{ref: cons}} | x |\n\n"
+           "Inline code `{{ref: cons}}` and a block:\n\n```\n{{ref: cons}}\n```\n\n![The map, which is {{ref: vow}}](images/gaua_map.png){#map}\n\n```phonotable\n"
+           '{"kind":"consonants","label":"cons","caption":"Consonants, compare {{ref: vow}}","columns":["Bilabial"],"rows":["Plosive"],"inventory":{"num":{"Plosive":{"Bilabial":"p"}}}}\n```\n')
+_XR_S5B = ("## Later\n\n![A photo](images/gaua_map.png){#photo}\n\n![No label](images/gaua_map.png)\n\n```phonotable\n"
+           '{"kind":"vowels","label":"vow","caption":"The vowels","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n\n```phonotable\n'
+           '{"kind":"vowels","label":"cons","caption":"Duplicate label","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n')
+
+def _xref_prepare(d):
+    g = d / "project" / "grammar"
+    (g / "s0_a.md").write_text(_XR_S0A, encoding="utf-8"); (g / "s5_b.md").write_text(_XR_S5B, encoding="utf-8")
+
+def _expected_labels(site):
+    """What each label should be, counted by a rule of the test's own: the first to use a label keeps it; tables = valid chart blocks, figures = images alone on a line."""
+    g = site.dir / "project" / "grammar"; n = {"table": 0, "figure": 0}; items = []; by = {}
+    for name in sorted(p.name for p in g.glob("*.md")):
+        src = (g / name).read_bytes().decode("utf-8").replace("\r\n", "\n")
+        for body in re.findall(r"^```phonotable\n(.*?)\n```", src, re.S | re.M):
+            try: s_ = json.loads(body)
+            except ValueError: continue
+            if isinstance(s_, dict) and s_.get("kind") in ("consonants", "vowels") and s_.get("columns") and s_.get("rows"):
+                n["table"] += 1; items.append(("table", n["table"], s_.get("label", ""), s_.get("caption") if "caption" in s_ else s_.get("title", ""), name[:-3]))     # an old block's title is its caption
+        plain = re.sub(r"^```.*?^```[ \t]*$", "", src, flags=re.S | re.M)
+        for alt, lab in re.findall(r"^!\[([^\]]*)\]\([^)\s]+\)(?:\{#([^}]+)\})?[ \t]*$", plain, re.M):
+            n["figure"] += 1; items.append(("figure", n["figure"], lab or "", alt, name[:-3]))
+    for it in items:
+        if it[2] and it[2].lower() not in by: by[it[2].lower()] = it
+    return items, by
+
+def suite_xref(browser, args):
+    S = "xref"
+    section("references to tables and figures: {{ref: label}}")
+    site = Site(prepare=_xref_prepare)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        items, by = _expected_labels(site)
+        html = lambda sid: va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        link = lambda kind, label: f'<a class="xref" href="#{"tab" if kind == "table" else "fig"}-{label}"'
+        h = html("s0_a"); para = re.sub(r"<(?!/?a\b|/?span\b)[^>]+>", "", h.split("</h2>")[1].split("</p>")[0])
+        txt = lambda s_: re.sub(r"<[^>]+>", "", s_)
+        w = lambda lab: f"{by[lab][0].capitalize()} {by[lab][1]}"
+        check(S, "{{ref: label}} in the grammar is a link that reads Table N / Figure N with the number from an independent count: forward to a later section and back, several labels in one shortcode, spaces optional, an unknown label a visible error", txt(para).strip() == f"See {w('cons')}, {w('map')} and {w('vow')} and {w('photo')}; unknown: Reference not found: nope.", txt(para).strip())
+        check(S, "…the links go to the item (tab-label, fig-label) and carry its caption as their title", all(link(*(by[l][:1]), l) in h for l in ("cons", "map")) and 'title="Consonants, compare {{ref: vow}}"' in h.replace("&quot;", '"') or 'title="Consonants, compare' in h, "")
+        check(S, "…the same in a heading and in a table cell", "Intro about <a class=\"xref\"" in h and "<td><a class=\"xref\" href=\"#tab-cons\"" in h)
+        check(S, "…and in the caption of a figure and of a chart, but not inside the alt text of the image (the markup stays whole)", 'alt="The map, which is {{ref: vow}}"' in h and re.search(r'caption-figure.*?Figure 1</span><span class="cap-text"> – The map, which is <a class="xref"', h) and re.search(r'caption-table.*?Consonants, compare <a class="xref"', h) is not None)
+        check(S, "a shortcode in inline code or in a code block is shown as written, not turned into a link", "<code>{{ref: cons}}</code>" in h and "<pre><code>{{ref: cons}}" in h.replace("\n", ""), "")
+        want = {(kind, num, lab, cap, sec) for kind, num, lab, cap, sec in items}
+        api = va.get(site.url + "api/captions").json()
+        got = {(i["kind"], i["number"], i["label"], i["text"], i["section"]) for i in api["items"]}
+        check(S, "/api/captions lists every table and figure with its number, label, caption and section, as the independent count says, and a label used twice is reported (the first keeps it)", got == want and api["duplicates"] == ["cons"] and all((i["url"] == f"grammar.html#{'tab' if i['kind'] == 'table' else 'fig'}-{i['label']}") == bool(i["label"]) for i in api["items"]), f"{got ^ want} {api['duplicates']}")
+        check(S, "…the words of the project come with it (for the dictionary)", api["captions"]["table"] == "Table" and api["captions"]["figure"] == "Figure")
+        # ── the numbers follow the text ──
+        st, j = _jcall(aa, "post", site.url + "api/grammar/s0_a", {"source": _XR_S0A.replace("## Intro about {{ref: map}}", '## Intro about {{ref: map}}\n\n```phonotable\n{"kind":"vowels","columns":["a"],"rows":["b"],"inventory":{}}\n```')})
+        items2, by2 = _expected_labels(site)
+        para2 = txt(re.sub(r"<(?!/?a\b|/?span\b)[^>]+>", "", html("s0_a").split("</h2>")[1].split("<p>", 1)[1].split("</p>")[0]))
+        check(S, "when a table is added before them, the references show the new numbers at once (the vowels, Table 4, are now Table 5)", by2["vow"][1] == by["vow"][1] + 1 and f"{by2['vow'][0].capitalize()} {by2['vow'][1]}" in para2 and "Table 5" in para2, para2)
+        _jcall(aa, "post", site.url + "api/grammar/s0_a", {"source": _XR_S0A})
+        # ── LaTeX ──
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "in LaTeX the same shortcode is the word of the project and LaTeX's own number, with the labels in the tables and the figures; an unknown label is ??; a shortcode in code is shown as written", "See \\tablename~\\ref{tab:cons}, \\figurename~\\ref{fig:map} and \\tablename~\\ref{tab:vow}" in tex and "\\figurename~\\ref{fig:photo}" in tex and "\\textbf{??}" in tex and "\\label{tab:cons}" in tex and "\\label{fig:map}" in tex and "\\label{fig:photo}" in tex and "\\label{tab:vow}" in tex, tex[tex.index("See "):][:200] if "See " in tex else "")
+        check(S, "…also in the caption of a figure and of a chart (not escaped into text)", "\\caption{The map, which is \\tablename~\\ref{tab:vow}}" in tex and "\\caption{Consonants, compare \\tablename~\\ref{tab:vow}}" in tex, "")
+        # ── the dictionary ──
+        aa.post(site.url + "api/dictionary/entry", headers={"Content-Type": "application/json"}, data=json.dumps({"forms": {"drg": "refword"}, "pos": "n.", "domain": "", "senses": [{"ref": None, "definition": "see {{ref: map, nope}}", "shortGloss": "", "langs": [], "notes": "compare {{ref: cons, photo}}"}]}))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1200)
+        ent = page.locator(".entry", has_text="refword").first
+        check(S, "in the dictionary a definition and a note show the references as links with the numbers of the grammar (and an unknown label as an error)", ent.locator(".entry-gloss").inner_text().replace("\n", " ").strip() == f"see {w('map')} and Reference not found: nope" and ent.locator(".entry-notes").inner_text().strip() == f"compare {w('cons')} and {w('photo')}" and ent.locator(".entry-notes a.xref").first.get_attribute("href") == "grammar.html#tab-cons", ent.locator(".entry-notes").inner_text())
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 1000)
+        check(S, "…and in the list of senses as well", page.locator(".sg-item", has_text="refword").first.locator("a.xref").count() == 3, "")
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1000)
+        ent = page.locator(".entry", has_text="refword").first
+        ent.locator(".entry-notes a.xref").first.click(); page.wait_for_url("**/grammar.html#tab-cons", timeout=8000); page.wait_for_selector("#tab-cons", timeout=8000); page.wait_for_timeout(1200)
+        top = page.evaluate("document.getElementById('tab-cons').getBoundingClientRect().top")
+        check(S, "a click on a reference in the dictionary opens the Grammar page at that table: it is scrolled to, near the top of the window", -5 <= top <= 400, f"top = {top}")
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        vis.close()
+
+        # ── the editor ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1500)
+        page.locator("#s0_a .section-edit").click(); page.wait_for_selector("#editor-s0_a")
+        page.locator('#editor-s0_a .ed-tab[data-tab="phono"]').click(); page.locator('#pt-s0_a [data-act="new"][data-kind="vowels"]').click(); page.wait_for_selector("#pt-s0_a .pt-grid input")
+        page.fill("#pt-label-s0_a", "My Table!"); lab_in = page.input_value("#pt-label-s0_a")
+        check(S, "the Label box of a chart keeps only letters, digits, - and _ (anything else becomes -)", lab_in == "My-Table-", lab_in)
+        page.fill("#pt-label-s0_a", "vow"); page.fill('#pt-s0_a .pt-cell[data-r="0"][data-c="0"]', "i"); page.wait_for_function("document.querySelector('#pt-s0_a .pt-msg').classList.contains('error')", timeout=6000)
+        check(S, "a label that another table or figure already has is refused: the message says which one (Table 4), and Insert is off", "already used by Table 4" in page.inner_text("#pt-s0_a .pt-msg") and page.locator("#pt-write-s0_a").is_disabled(), page.inner_text("#pt-s0_a .pt-msg"))
+        page.fill("#pt-label-s0_a", "newvow"); page.wait_for_function("!document.getElementById('pt-write-s0_a').disabled", timeout=6000)
+        page.fill("#pt-caption-s0_a", "Typed vowels"); page.click("#pt-write-s0_a")
+        blk = json.loads(re.findall(r"```phonotable\n(.*?)\n```", page.input_value("#textarea-s0_a"), re.S)[-1])
+        check(S, "with a free label Insert writes it into the block, and the preview is fine again", blk["label"] == "newvow" and blk["caption"] == "Typed vowels", str(blk)[:120])
+        page.locator('#editor-s0_a .ed-tab[data-tab="text"]').click()
+        ta = page.locator("#textarea-s0_a"); ta.evaluate("t => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }")
+        page.locator("#editor-s0_a .editor-toolbar-btn", has_text="Reference").click(); page.wait_for_selector("#xref-menu-s0_a")
+        menu = page.inner_text("#xref-menu-s0_a")
+        check(S, "the 🔗 Reference button lists what can be referred to: each labelled table and figure with its number, its label and its caption; an item without a label says how to give it one; a label used twice is marked", all(x in menu for x in ("Table 1", "Figure 1", "Figure 2", "Table 4", "has no label", "used twice", "newvow") if x != "newvow") and menu.count("has no label") >= 2, menu[:300])
+        page.locator('#xref-menu-s0_a button[data-label="photo"]').click()
+        check(S, "a click on an item inserts {{ref: label}} at the cursor and closes the menu", page.input_value("#textarea-s0_a").rstrip().endswith("{{ref: photo}}") and not page.locator("#xref-menu-s0_a").count(), page.input_value("#textarea-s0_a")[-40:])
+        # an uploaded image gets a label from its file name
+        from PIL import Image
+        import io as _io
+        buf = _io.BytesIO(); Image.new("RGB", (40, 30), "#2e5c8a").save(buf, "PNG")
+        page.set_input_files("#editor-s0_a input[type=file]", {"name": "Harbour View.png", "mimeType": "image/png", "buffer": buf.getvalue()})
+        page.wait_for_function("document.getElementById('textarea-s0_a').value.includes('Write the caption of the figure here')", timeout=8000)
+        m = re.search(r"!\[Write the caption of the figure here\]\(images/[^)]+\)\{#([^}]+)\}", page.input_value("#textarea-s0_a"))
+        check(S, "an image uploaded from the editor is inserted with a label made from its file name, ready to be referred to", bool(m) and re.fullmatch(r"[a-z0-9_-]+", m.group(1)) and "harbour" in m.group(1), m.group(1) if m else page.input_value("#textarea-s0_a")[-120:])
+        page.keyboard.type("A harbour"); page.click("#editor-s0_a .modal-btn.primary"); page.wait_for_selector("#content-s0_a")
+        page.wait_for_function("document.querySelector('#content-s0_a figure[data-label^=\"harbour\"]') !== null", timeout=8000)
+        check(S, "after the save the new chart and the new figure have their anchors, and the reference inserted in the text shows the number of the photo", page.locator("#tab-newvow").count() == 1 and page.locator("#content-s0_a a.xref", has_text=re.compile(r"Figure \d+")).count() >= 2, f"newvow anchors: {page.locator('#tab-newvow').count()} | figure refs: {page.locator('#content-s0_a a.xref', has_text=re.compile(r'Figure')).count()} | ids: {page.evaluate('[...document.querySelectorAll(\"#content-s0_a [id]\")].map(e => e.id)')}")
+        check(S, "the editor raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -3095,6 +3354,8 @@ def main():
             if args.only in (None, "refletters"): suite_refletters(browser, args)
             if args.only in (None, "phonotable"): suite_phonotable(browser, args)
             if args.only in (None, "ipafont"): suite_ipafont(browser, args)
+            if args.only in (None, "captions"): suite_captions(browser, args)
+            if args.only in (None, "xref"): suite_xref(browser, args)
             browser.close()
     finally:
         site.stop()
