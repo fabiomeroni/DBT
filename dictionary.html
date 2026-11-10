@@ -149,7 +149,7 @@ body { overflow: hidden; }
 }
 .etym-tag:hover { background: #4a2a6a; color: white; border-color: #4a2a6a; }
 .etym-tag .etym-pre  { font-size: 0.67rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; }
-.etym-tag .etym-form { font-family: 'EB Garamond', serif; font-size: 0.98rem; font-style: italic; }
+.etym-tag .etym-form { font-family: var(--font-ipa); font-size: 0.98rem; font-style: italic; }
 .etymograph-link {
   display: inline-flex; align-items: center; justify-content: center;
   width: 21px; height: 21px; border-radius: 3px;
@@ -298,7 +298,7 @@ body { overflow: hidden; }
 
 
 /* ── Phonetic form [IPA] next to the headword ── */
-.entry-ipa { font-family: 'EB Garamond', serif; font-size: 1.2rem; color: var(--ink-light); margin-left: 0.15rem; }
+.entry-ipa { font-family: var(--font-ipa); font-size: 1.2rem; color: var(--ink-light); margin-left: 0.15rem; }
 .ipa-badge {
   display: inline-flex; align-items: center; justify-content: center;
   width: 15px; height: 15px; min-width: 15px; border-radius: 50%;
@@ -319,7 +319,8 @@ body { overflow: hidden; }
 .em-lang-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 0.35rem 0.8rem; margin-bottom: 0.9rem; align-items: center; }
 .em-lang-grid .em-colhead { font-family: 'Crimson Pro', serif; font-size: 0.68rem; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--ink-light); }
-.em-ipa { font-family: 'EB Garamond', serif; }
+.em-ipa { font-family: var(--font-ipa); }
+.em-input[data-f="ipa"], #st-try-ipa-in, #st-try-ipa, .ipa-from { font-family: var(--font-ipa); }
 .em-ipa.auto { color: #8a6a3a; font-style: italic; }
 
 /* ── Settings dialog ── */
@@ -1842,7 +1843,7 @@ async function openOrthoPreview() {
         return `<tr style="border-bottom:1px solid var(--border-lt);">
           <td style="padding:2px 8px 2px 0;font-family:'Source Code Pro',monospace;font-size:0.72rem;color:var(--ink-light);">${escHTML(c.id)}</td>
           <td style="padding:2px 8px 2px 0;color:${col};font-weight:600;font-variant:small-caps;">${ABBRS[lang]}</td>
-          <td style="padding:2px 6px 2px 0;color:var(--ink-light);">${escHTML(c.from)}</td>
+          <td class="ipa-from" style="padding:2px 6px 2px 0;color:var(--ink-light);">${escHTML(c.from)}</td>
           <td style="padding:2px 6px;color:var(--ink-light);">→</td>
           <td style="padding:2px 0;font-family:'EB Garamond',serif;font-size:1.05rem;color:${col};">${escHTML(c.to)}</td></tr>`;
       }).join('') + '</table>';
