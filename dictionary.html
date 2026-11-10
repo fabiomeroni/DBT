@@ -607,7 +607,7 @@ async function parseLexicaXML(url) {
     // ── Homonym number (entries with the same lemma are told apart by <NuméroDHomonyme>) ──
     const homonym = el.querySelector(':scope > NuméroDHomonyme')?.textContent.trim() ?? '';
 
-    // ── Senses: each <Sens> has its own definition, short gloss, notes … ──
+// ── Senses: each <Sens> has its own definition, short gloss, notes … ──
     // Definition: Définition/ReprésentationDeTexte[eng] if there is one, else Glose[eng]. The text
     // can hold inline HTML such as <em> (DOMParser unescapes &lt;em&gt;), so it is shown as innerHTML.
     const senses = [...el.querySelectorAll(':scope > Sens')].map((sn, ref) => {
@@ -914,8 +914,8 @@ function senseHTML(entry, sn, multi, vis, number, cognate) {
     : '';
   return `<div class="${multi ? 'sense' : ''}">
     ${head}
-    <div class="entry-gloss">${sn.definition}</div>
-    <div class="entry-notes">${sn.notes}</div>
+    <div class="entry-gloss">${xref(sn.definition)}</div>
+    <div class="entry-notes">${xref(sn.notes)}</div>
     ${hiddenFormsHTML(entry, cognate, sn)}
     ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
     ${missingExamplesHTML(entry, sn)}
@@ -1013,9 +1013,9 @@ function senseItemHTML(entry, sn) {
       <span class="entry-pos">${entry.pos}</span>
       <span class="entry-domain">${entry.domain}</span>
     </div>
-    <div class="entry-gloss">${sn.definition}</div>
+    <div class="entry-gloss">${xref(sn.definition)}</div>
     ${eb.html}
-    <div class="entry-notes">${sn.notes}</div>
+    <div class="entry-notes">${xref(sn.notes)}</div>
     ${hiddenFormsHTML(entry, eb.cognate, sn)}
     ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
     ${missingExamplesHTML(entry, sn)}
@@ -1319,6 +1319,29 @@ function bindBadgeClicks() {
 // ── Proposed dictionary entries ──────────────────────────────
 let proposedEntries = {}; // colKey → {gloss, forms, examples}
 
+// ── The tables and figures of the grammar that a definition or a note can refer to: {{ref: label}} ──
+let CAP = { by: {}, words: { table: 'Table', figure: 'Figure' } };
+async function loadCaptionIndex() {
+  try {
+    const d = await (await fetch('/api/captions')).json();
+    CAP.words = d.captions || CAP.words; CAP.by = {};
+    (d.items || []).forEach(it => { if (it.label && !CAP.by[it.label.toLowerCase()]) CAP.by[it.label.toLowerCase()] = it; });
+  } catch (e) { /* the shortcodes then show as errors */ }
+}
+// {{ref: label}} (or several, {{ref: a, b}}) becomes a link to the table or the figure in the grammar, with the number it has now. The same as in the grammar.
+function xref(text) {
+  return String(text ?? '').replace(/\{\{\s*ref\s*:\s*([^}]*)\}\}/g, (_m, spec) => {
+    const labels = spec.split(/[,;]/).map(s => s.trim().replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 40)).filter(Boolean);
+    if (!labels.length) return '<span class="shortcode-error">Reference needs a label</span>';
+    const parts = labels.map(l => {
+      const it = CAP.by[l.toLowerCase()];
+      return it ? `<a class="xref" href="grammar.html#${escHTML(it.anchor)}" title="${escHTML(it.text)}">${escHTML(CAP.words[it.kind])} ${it.number}</a>`
+                : `<span class="shortcode-error">Reference not found: ${escHTML(l)}</span>`;
+    });
+    return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+  });
+}
+
 // The proposals are the author's worklist: only a logged-in author asks for them, and the server gives them to nobody else
 async function loadProposedEntries() {
   proposedEntries = {};
@@ -1451,13 +1474,13 @@ function renderSenseCards() {
           <button type="button" data-act="del" class="del" title="Remove this sense">✕</button>
         </span>
       </div>
-      <label>Definition (English)</label>
+      <label>Definition (English) <span class="em-sub">— <code>{{ref: label}}</code> refers to a table or a figure of the grammar</span></label>
       <textarea class="em-input" data-f="definition" style="width:100%;box-sizing:border-box;height:3rem;resize:vertical;"
                 placeholder="e.g. speech, language, word">${escHTML(s.definition)}</textarea>
       <label>Short gloss for interlinear</label>
       <input class="em-input" data-f="shortGloss" style="width:100%;box-sizing:border-box;"
              value="${escHTML(s.shortGloss)}" placeholder="e.g. speech">
-      <label>Notes</label>
+      <label>Notes <span class="em-sub">— <code>{{ref: label}}</code> refers to a table or a figure of the grammar</span></label>
       <textarea class="em-input" data-f="notes" style="width:100%;box-sizing:border-box;height:3rem;resize:vertical;"
                 placeholder="Usage notes, cognate information…">${escHTML(s.notes)}</textarea>
       <label>Examples <span class="em-sub">— the ones shown for this sense: one {{cite: …}} per line, as in the grammar</span></label>
@@ -2075,7 +2098,7 @@ async function init() {
     DICTIONARY = await loadActiveDictionary();
     DICTIONARY.forEach(e => { DICT_MAP[e.id] = e; });
     buildFormIndex();
-    await Promise.all([loadProposedEntries(), loadDictExamples()]);
+    await Promise.all([loadProposedEntries(), loadDictExamples(), loadCaptionIndex()]);
     buildPills();
     bindSearch();
     document.getElementById('mode-switch').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
