@@ -3732,6 +3732,7 @@ def project_js():
 
 # ── Static files: only the site's own pages and images, never code or data ────
 _PUBLIC_EXT = {'.html', '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf'}
+_FONT_FILE = re.compile(r'fonts/(?:[A-Za-z0-9][A-Za-z0-9._-]*\.woff2|OFL\.txt)')   # no sub-folder, no other type
 
 @app.route('/')
 def index():
@@ -3747,6 +3748,10 @@ def static_files(filename):
         abort(404)
     if filename == 'setup.html':                        # reached only through /setup, and only before the setup
         abort(404)
+    if filename.startswith('fonts/'):                    # the one folder that is served: the web fonts, and their license
+        if not _FONT_FILE.fullmatch(filename):
+            abort(404)
+        return send_from_directory('fonts', filename[len('fonts/'):])
     # Files directly in the site folder, with a public extension. Not source code (.py), not data (.xml, .json,
     # .md), not the data folders (uploads, project, ...), not hidden files.
     if '/' in filename or filename.startswith('.') or os.path.splitext(filename)[1].lower() not in _PUBLIC_EXT:
