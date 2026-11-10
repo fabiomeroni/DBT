@@ -17,6 +17,7 @@ you change this folder and your data, not the code.
 | `headwordLanguage` | the language whose forms the dictionary opens on, and that names new entries |
 | `recordings` | `author` and `year` shown for recordings whose XML does not say |
 | `latex` | `title`, `subtitle` and `author` of the LaTeX export (LaTeX source: write `\&` for &) |
+| `captions` | optional: the words of the captions, `table` (default `Table`), `figure` (default `Figure`) and `separator` (default ` – `, with its spaces): for a grammar in another language, e.g. `{"table": "Tableau", "separator": " : "}` |
 | `footer` | the line at the bottom of the home and about pages (inline HTML). Leave empty for no footer |
 | `redirects` | old page names that now live elsewhere, e.g. `{"gaua.html": "about.html"}` |
 | `files` | (optional) where the data lives, if it is not in the standard places below: `dictionary`, `fieldnotes`, `grammarDir`, `recordingsDir`, `imagesDir`, `pagesDir`, `orthography`, `seedPhonetic` |
@@ -125,6 +126,32 @@ chosen: only the entries that have a form in that language are listed, with that
   author sees a line "Not cognates, so not shown here" **under each sense**, with a link to set the cognates: it lists the forms
   of the languages *that sense applies to*, since the words that merely mean the same belong to a sense, not to the entry as a whole).
   For a project with one language there is nothing to tick.
+
+## Captions: tables and figures, numbered through the grammar
+
+A **phonological chart** is a table and has its **caption above** it, an **image** is a figure and has its **caption below** it. The author writes
+only the text; the number is automatic and goes on through the **whole grammar**: the sections in the order of their file names, the tables and
+the figures in the order of the text, each kind counted by itself (*Table 1 – …*, *Table 2 – …*, *Figure 1 – …*). When a section gains or loses a
+table or a figure, the numbers of the sections after it change, and the page shows them again at once.
+
+- **A chart** has no title. Its **Caption** box (in the *Phonological table* tab) is the text after “Table 3 –”; the preview shows the number the
+  chart will have. Left empty, the chart has its number alone. (A chart written before captions existed keeps its old title, as its caption.)
+- **A figure** is an image alone on a line: `![the caption](images/map.png)`. The caption is what is between the brackets. The **📷 Image** button of the
+  editor uploads the picture and writes the line for you, with the caption ready to be typed over. An image in the middle of a line of text is only an
+  image: no caption, no number. (Ordinary Markdown tables are not numbered.)
+- **Referring to them: `{{ref: label}}`.** Give a table or a figure a **label**, a short name made of letters, digits, `-` and `_`: a chart has a
+  *Label* box in the *Phonological table* tab, a figure takes it after the image, `![the caption](images/map.png){#map}` (an image uploaded from the
+  editor gets one made from its file name). Then `{{ref: map}}` in the grammar **or in the dictionary** (a definition or a note) becomes a link that
+  reads *Figure 3* or *Table 2*, always with the number the item has now, and goes to it (from the dictionary it opens the Grammar page at that
+  table or figure). Several at once: `{{ref: a, b}}` gives "Table 1 and Figure 2". The **🔗 Reference** button of the grammar editor lists everything
+  that can be referred to and inserts the shortcode. An unknown label is shown as a visible error; a shortcode inside a code block or in `inline code`
+  is shown as written. A label belongs to one item (tables and figures share their names): the chart editor refuses a label that is taken, and the
+  first item to use a label keeps it. In the LaTeX export the shortcode becomes the project's word and LaTeX's own number (`\tablename~\ref{…}`,
+  with `\label`s in the tables and the figures), so the PDF follows the same numbers.
+- **The words** ("Table", "Figure", the separator) are in `project.json` (`captions`, above); the defaults are English.
+- **LaTeX:** the charts are `table` environments with the caption above and the images are `figure` environments with the caption below, so LaTeX numbers
+  them in the same order; the words and the separator are given to LaTeX (the `caption` package). The images are taken from an `images` folder next to
+  the `.tex` file (copy the project's `images` folder there).
 
 ## Fonts: the IPA is in Charis SIL
 
