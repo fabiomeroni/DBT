@@ -126,6 +126,24 @@ chosen: only the entries that have a form in that language are listed, with that
   of the languages *that sense applies to*, since the words that merely mean the same belong to a sense, not to the entry as a whole).
   For a project with one language there is nothing to tick.
 
+## Fonts: the IPA is in Charis SIL
+
+All the IPA of the site is shown in **Charis SIL** (SIL Global, SIL Open Font License; the license is in `fonts/OFL.txt`). The font files are in
+the `fonts/` folder and are served by the site itself: visitors need nothing installed, and nothing is asked of Google for it (the other fonts
+of the site still come from Google Fonts, as before). Charis SIL has all the IPA, including the tie bars (k͡pʷ, ŋ͡mʷ, ɛ͡a), the superscripts (ᵐb, ⁿd, kʷ)
+and the length mark.
+
+- **Where it is used by design:** the IPA beside a headword, the IPA field of the entry editor, the orthography ↔ IPA settings (and their "try it"
+  boxes), the list of forms of the IPA → orthography converter, the proto-forms of the etymologies, the phonological charts and the cells where
+  their sounds are typed.
+- **Everywhere else, automatically:** wherever an IPA letter appears in the site's text, even in a paragraph of the grammar, a concordance line
+  or a note, it is drawn in Charis SIL, with no markup: the IPA letters (ɣ ʧ ɪ ʊ ɛ ɔ ʔ ʃ ...), the modifier letters (ʷ ʰ ː), ᵐ ⁿ, and æ ð ø œ ŋ β θ χ.
+  Ordinary letters and the combining marks (the macron of ō and n̄) are deliberately **not** in this list, so that the orthography is never split
+  between two fonts. (A sound written only with ordinary letters, such as /pata/, stays in the text font: use the IPA parts of the site, or the
+  `ipa` class in HTML, for those.)
+- **A newer Charis SIL:** replace the four `.woff2` files in `fonts/` by those of the new release (`fonts/README.txt`). The LaTeX export is not
+  concerned (its font is chosen in LaTeX).
+
 ## Phonological charts (grammar)
 
 In the editor of a grammar section there are two tabs: **Text** and **Phonological table**. The second makes a chart of the **consonants** or of
