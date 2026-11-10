@@ -459,6 +459,18 @@ def suite_functional(browser, site, args):
     ghost = page.locator(".entry.proposed", has_text="testgloss")
     check(S, "dictionary: the proposed entry is shown", ghost.count() >= 1)
 
+    # glosses saved at the same moment (the author tabbing quickly from box to box) all take effect, and none fails
+    import concurrent.futures as _cf
+    cookie = "; ".join(f"{c['name']}={c['value']}" for c in ctx.cookies())
+    def _save(n):
+        req = urllib.request.Request(site.url + "api/fieldnotes/tx/0/glosses", data=json.dumps({"sentence_id": f"zz.conc:{n}", "gloss": {"tokens": [f"w{n}"], "glosses": [f"g{n}"]}}).encode(), headers={"Content-Type": "application/json", "Cookie": cookie})
+        try: return urllib.request.urlopen(req, timeout=20).status
+        except urllib.error.HTTPError as e: return e.code
+    with _cf.ThreadPoolExecutor(max_workers=30) as ex:
+        codes = list(ex.map(_save, range(30)))
+    kept = api.get(site.url + "api/fieldnotes/tx/0/glosses").json()
+    check(S, "30 gloss saves sent at the same moment all succeed, and every one of them is kept (none lost, none a server error)", codes == [200] * 30 and all(f"zz.conc:{n}" in kept for n in range(30)), f"{sorted(set(codes))} kept {sum(1 for n in range(30) if f'zz.conc:{n}' in kept)}")
+
     # the proposals are the author's worklist: a visitor neither sees them nor can fetch them
     vctx = new_context(browser, site, 1280); vpage = vctx.new_page(); verrs = []; watch(vpage, verrs); asked = []
     vpage.on("request", lambda r: asked.append(r.url))
@@ -511,9 +523,9 @@ def suite_functional(browser, site, args):
 
 
 # ───────────────────────── 4. generality suite: the code knows no language ─────────────────────────
-CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "ttr.js", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
+CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "ttr.js", "phonotable.py", "phonotable.js", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
 PROJECT_WORDS = re.compile(r"\b(Nume|Dorig|Koro|Olrat|Lakon|Gaua|Vanuatu|Banks Islands|Meroni|Fran[cç]ois)\b")
-NOT_SERVED = ["app.py", "references.py", "concordance.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
+NOT_SERVED = ["app.py", "references.py", "concordance.py", "phonotable.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
               "project/orthography.json", "project/dictionary.xml", "project/fieldnotes.xml", "project/grammar/s1.md",
               "project/texts/crdo-WWO_FARFADETS.xml", "uploads/dictionary_settings.json", "tests/run_tests.py", "grammar_content/s1.md",
               ".gitignore", "requirements.txt", "transcribed_narratives/crdo-WWO_FARFADETS.xml", "%2e%2e/app.py", "../app.py"]
@@ -528,7 +540,7 @@ def suite_generality(browser, site, args):
     bad = [p for p in NOT_SERVED if api.get(site.url + p).status != 404]
     check(S, "source code and data files are not served (app.py, XML, JSON, uploads, project, tests ...)", not bad, str(bad))
     pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html", "concordance.html"]
-    assets = ["style.css", "auth.js", "ttr.js", "images/gaua_map.png", "etymograph_icon.png"]
+    assets = ["style.css", "auth.js", "ttr.js", "phonotable.js", "images/gaua_map.png", "etymograph_icon.png"]
     check(S, "the site's pages and images are served", all(api.get(site.url + p).status == 200 for p in pages + assets))
     left = [p for p in pages if "{{project." in api.get(site.url + p).text()]
     check(S, "no project marker is left unexpanded in any page", not left, str(left))
@@ -2740,12 +2752,220 @@ def suite_refletters(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 14. grammar: phonological charts (a tab in the editor, merged inventories, black and colours) ─────────────────────────
+def _rgb(hex_):
+    h = hex_.lstrip("#"); return f"rgb({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)})"
+
+def suite_phonotable(browser, args):
+    S = "phonotable"
+    section("grammar: phonological charts")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_phonotable.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the chart engine passes its own direct tests (definition, merging, black and colours, escaping, HTML, LaTeX, blocks in a section)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1] + ("" if unit.returncode == 0 else "\n" + unit.stdout[-400:]))
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    COL = {l["code"]: l["color"] for l in proj["languages"]}; NAMES = {l["code"]: l["name"] for l in proj["languages"]}; CODES = [l["code"] for l in proj["languages"]]
+    CONS_COLS = ["Bilabial", "Labiodental", "Dental", "Alveolar", "Postalveolar", "Retroflex", "Palatal", "Velar", "Uvular", "Pharyngeal", "Glottal"]
+    CONS_ROWS = ["Plosive", "Nasal", "Trill", "Tap or flap", "Fricative", "Lateral fricative", "Approximant", "Lateral approximant"]
+    V_COLS, V_ROWS = ["Front", "Central", "Back"], ["Close", "Near-close", "Close-mid", "Mid", "Open-mid", "Near-open", "Open"]
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+
+        # ── the server ──
+        d = va.get(site.url + "api/phonotable/defaults").json()
+        check(S, "the suggested columns and rows are those of the IPA charts, in that order, for the consonants and for the vowels", d["axes"]["consonants"] == {"columns": CONS_COLS, "rows": CONS_ROWS} and d["axes"]["vowels"] == {"columns": V_COLS, "rows": V_ROWS}, str(d["axes"])[:200])
+        check(S, "…and the languages come with their colours, in the project's order", [(l["code"], l["color"]) for l in d["languages"]] == [(c, COL[c]) for c in CODES])
+        spec = {"kind": "consonants", "title": "Consonants", "columns": ["Bilabial", "Alveolar"], "rows": ["Plosive", "Nasal"], "inventory": {"num": {"Plosive": {"Bilabial": "p b", "Alveolar": "t"}}, "drg": {"Plosive": {"Bilabial": "p b", "Alveolar": "t d"}}, "kro": {"Plosive": {"Bilabial": "p", "Alveolar": "t"}}}}
+        check(S, "the preview is for the author only (401 for a visitor)", _jcall(va, "post", site.url + "api/phonotable/preview", {"spec": spec})[0] == 401)
+        st, j = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": spec})
+        check(S, "the author's preview is the chart as the page will show it, with the definition cleaned", st == 200 and j["ok"] and 'class="phonotable"' in j["html"] and j["spec"]["columns"] == ["Bilabial", "Alveolar"], str(j)[:160])
+        check(S, "a definition that cannot be a chart is refused with a reason", [_jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": x})[0] for x in ({"kind": "tones", "columns": ["a"], "rows": ["b"]}, {"kind": "vowels", "columns": [], "rows": ["b"]}, None)] == [400, 400, 400])
+
+        body = ("## Phonology\n\nBefore the chart, *with markdown*.\n\n```phonotable\n" + json.dumps(spec) + "\n```\n\nBetween the charts.\n\n```phonotable\n"
+                + json.dumps({"kind": "vowels", "title": "Vowels", "columns": ["Front", "Back"], "rows": ["Close"], "inventory": {"num": {"Close": {"Front": "i", "Back": "u"}}, "olr": {"Close": {"Front": "i", "Back": "ʉ"}}}}) + "\n```\n\nAfter, with {{source: Nobody 2000}} still working.\n")
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": body})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        plain = re.sub(r"<[^>]+>", "", h)
+        check(S, "a visitor sees both charts, each in its place between the paragraphs, and the markdown around them still works", h.count('<figure class="phonotable"') == 2 and h.index("Before the chart") < h.index('data-kind="consonants"') < h.index("Between the charts") < h.index('data-kind="vowels"') < h.index("After, with") and "<em>with markdown</em>" in h and "PHONOTABLE" not in h and "```" not in h, plain[:200])
+        cons = h[h.index('data-kind="consonants"'):h.index("Between the charts")]
+        want = {"p": "ph-all", "t": "ph-all", "b": "ph-mix", "d": "ph-one"}
+        got = {m.group(2): m.group(1).replace("ph ", "") for m in re.finditer(r'<span class="(ph [a-z-]+)"[^>]*>(.)</span>', cons)}
+        check(S, "the sounds all three languages share are black, the sound of one language only is in its colour (Dorig), the sound of two (Nume and Dorig) has both", got == want, str(got))
+        check(S, "…the colour is the language's, and a sound of two languages carries both colours, in the project's order", f'color:{COL["drg"]}' in cons and f'--ph-c1:{COL["num"]}' in cons and f'{COL["num"]} 0% 50%' in cons and f'{COL["drg"]} 50% 100%' in cons, cons[cons.index("ph-mix") - 20:cons.index("ph-mix") + 260])
+        check(S, "…and a legend says what the colours mean, naming the three languages", "phono-legend" in cons and all(NAMES[c] in cons.split("phono-legend")[1] for c in ("num", "drg", "kro")))
+        vow = h[h.index('data-kind="vowels"'):]
+        check(S, "the vowel chart is a chart of its own: i is shared (black), u only Nume, ʉ only Olrat", '<span class="ph ph-all" data-langs="num olr">i</span>' in vow and f'color:{COL["num"]}' in vow and f'color:{COL["olr"]}' in vow, vow[:300])
+        r = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "the LaTeX export has both charts as tables, with the colours of the languages, and loads graphicx", r.count("\\begin{tabular}{l|c|c}") == 2 and f"\\textcolor[HTML]{{{COL['drg'][1:].upper()}}}{{d}}" in r and "\\usepackage{graphicx}" in r and "PHONOTABLE" not in r, "")
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "A\r\n\r\n```phonotable\r\n" + json.dumps(spec) + "\r\n```\r\n\r\nB\r\n"})
+        check(S, "a section saved with Windows line ends shows its chart", va.get(site.url + f"api/grammar/{sid}").json()["html"].count('<figure class="phonotable"') == 1)
+        evil = dict(spec, title="<b>t</b>", inventory={"num": {"Plosive": {"Bilabial": "<img src=x onerror=alert(1)> p"}}, "zzz": {"Plosive": {"Bilabial": "q"}}})
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(evil) + "\n```\n\n```phonotable\n{broken\n```\n\nstill here\n"})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "what is typed in a chart is shown as text (no element), a language that is not in the project is ignored, and a block that is broken is a message beside the rest of the section, not an error", "<img" not in h and "&lt;img" in h and "<b>t</b>" not in h and ">q<" not in h and "shortcode-error\">Phonological table:" in h and "still here" in h, re.sub(r"<[^>]+>", "", h)[:200])
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Phonology\n\nPlain text first.\n\nMiddle.\n\nEnd.\n"})
+
+        # ── the editor, as the author ──
+        page = au.new_page(); errs = []; watch(page, errs); page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        open_page(page, site, "grammar.html", ".section-edit.visible", 900)
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
+        ta = f"#textarea-{sid}"; root = f"#pt-{sid}"
+        check(S, "the editor has two tabs, Text and Phonological table; the Text tab is the one that is open, with the textarea", [b.inner_text() for b in page.locator(f"#editor-{sid} .ed-tab").all()] == ["Text", "Phonological table"] and page.locator(ta).is_visible() and not page.locator(root).is_visible())
+        page.click('.ed-tab[data-tab="phono"]')
+        check(S, "the Phonological table tab replaces the textarea with a list of the charts of the section (none yet) and two buttons to make one", page.locator(root).is_visible() and not page.locator(ta).is_visible() and "None yet" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 2)
+        page.click(f'{root} [data-act="new"][data-kind="consonants"]'); page.wait_for_selector(".pt-grid input")
+        vals = lambda axis: [i.input_value() for i in page.locator(f'.pt-axis[data-axis="{axis}"] li input').all()]
+        check(S, "a new consonant chart starts from the suggested columns and rows (Bilabial … Glottal; Plosive … Lateral approximant), and a title", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS and page.input_value(f"#pt-title-{sid}") == "Consonant phonemes")
+        ui = page.locator(root).inner_text() + " " + " ".join((i.get_attribute("placeholder") or "") for i in page.locator(root + " input").all())
+        check(S, "the editor suggests no names of its own beyond the standard lists: the boxes for adding a column and a row say only “Add a column” and “Add a row”, and no example (labial-velar, linguo-labial, click) is written anywhere in it", [i.get_attribute("placeholder") for i in page.locator(root + " input[data-add]").all()] == ["Add a column", "Add a row"] and not re.search(r"labial-velar|linguo|click", ui, re.I) and not re.search(r"Labial|Linguo|\bClick\b|labial-velar|linguo-labial", va.get(site.url + "phonotable.js").text()), ui[:200])
+        check(S, "…with one grid of cells for typing the inventory, and one tab per language of the project, in colour", page.locator(".pt-cell").count() == len(CONS_COLS) * len(CONS_ROWS) and [b.inner_text().strip() for b in page.locator(".pt-lang").all()] == [NAMES[c] for c in CODES] and page.locator(".pt-lang i").first.evaluate("e => getComputedStyle(e).backgroundColor") == _rgb(COL[CODES[0]]))
+        # the axes: add, remove, move, reset
+        page.fill('input[data-add="columns"]', "Labial-velar"); page.press('input[data-add="columns"]', "Enter")
+        page.locator('.pt-axis[data-axis="columns"] li').nth(1).locator('[data-act="del"]').click()
+        page.locator('.pt-axis[data-axis="columns"] li').nth(6).locator('[data-act="up"]').click()
+        want_cols = [c for c in CONS_COLS if c != "Labiodental"]; want_cols[5], want_cols[6] = want_cols[6], want_cols[5]; want_cols.append("Labial-velar")
+        check(S, "the author can add a column of his own (a labial-velar one), remove one, and move one: the grid follows", vals("columns") == want_cols and [th.inner_text().strip().lower() for th in page.locator(".pt-grid thead th").all()[1:]] == [c.lower() for c in want_cols], str(vals("columns")))
+        page.fill('input[data-add="rows"]', "Click"); page.click(f'{root} [data-act="add"][data-axis="rows"]')
+        page.locator('.pt-axis[data-axis="rows"] li').nth(2).locator('[data-act="del"]').click()
+        check(S, "…and a row (Click), removing another (Trill)", vals("rows") == [r for r in CONS_ROWS if r != "Trill"] + ["Click"])
+        page.fill('input[data-add="columns"]', "bilabial"); page.press('input[data-add="columns"]', "Enter")
+        check(S, "a column that already exists (the case does not count) is not added twice, and the box is marked", vals("columns") == want_cols and "dup" in (page.locator('input[data-add="columns"]').get_attribute("class") or ""))
+        page.locator('.pt-axis[data-axis="columns"] li input').nth(0).fill("Linguo-labial"); page.locator('.pt-axis[data-axis="columns"] li input').nth(0).fill("Alveolar")
+        check(S, "renaming a column to the name of another is refused (marked, and it goes back to the last good name when the box is left)", "dup" in (page.locator('.pt-axis[data-axis="columns"] li input').nth(0).get_attribute("class") or ""))
+        page.locator('.pt-axis[data-axis="columns"] li input').nth(1).focus()
+        check(S, "…", vals("columns")[0] == "Linguo-labial" or vals("columns")[0] == "Bilabial")
+        page.click(f'{root} [data-act="reset"]')
+        check(S, "“Suggested columns and rows” puts the suggested lists back", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS)
+        # the inventories
+        def type_in(lang, cells):
+            page.click(f'.pt-lang[data-lang="{lang}"]')
+            for (r, c), v in cells.items(): page.fill(f'.pt-cell[data-r="{r}"][data-c="{c}"]', v)
+        type_in("num", {(0, 0): "p b", (0, 3): "t", (0, 7): "k", (1, 0): "m", (1, 3): "n"})
+        type_in("drg", {(0, 0): "p b", (0, 3): "t d", (0, 7): "k", (1, 0): "m", (1, 3): "n", (6, 3): "l"})
+        type_in("kro", {(0, 0): "p", (0, 3): "t", (0, 7): "k", (1, 0): "m", (1, 3): "n"})
+        page.click('.pt-lang[data-lang="num"]')
+        check(S, "each language keeps its own inventory when the author goes from one to another", page.input_value('.pt-cell[data-r="0"][data-c="0"]') == "p b" and page.input_value('.pt-cell[data-r="6"][data-c="3"]') == "" and page.input_value('.pt-cell[data-r="0"][data-c="3"]') == "t")
+        page.wait_for_function("document.querySelectorAll('#pt-preview-%s .ph').length >= 8" % sid, timeout=6000)
+        pv = f"#pt-preview-{sid} "
+        sty = lambda txt: page.locator(pv + ".ph", has_text=re.compile("^" + re.escape(txt) + "$")).first.evaluate("e => { const c = getComputedStyle(e); return {color: c.color, image: c.backgroundImage, fill: c.webkitTextFillColor}; }")
+        check(S, "the preview merges the languages: a sound all three have is black", sty("p")["color"] == "rgb(0, 0, 0)" and sty("k")["color"] == "rgb(0, 0, 0)" and sty("n")["color"] == "rgb(0, 0, 0)", str(sty("p")))
+        check(S, "…a sound that only Dorig has is in Dorig's colour", sty("d")["color"] == _rgb(COL["drg"]) and sty("l")["color"] == _rgb(COL["drg"]), str(sty("d")))
+        sb = sty("b")
+        check(S, "…and a sound that Nume and Dorig have, but not Koro, is one character in both colours (a gradient of the two, clipped to the letter)", "linear-gradient" in sb["image"] and _rgb(COL["num"]) in sb["image"] and _rgb(COL["drg"]) in sb["image"] and sb["fill"] in ("rgba(0, 0, 0, 0)", "transparent"), str(sb))
+        check(S, "…with a legend naming the languages that were described (not the two that were left empty)", all(NAMES[c] in page.inner_text(pv + ".phono-legend") for c in ("num", "drg", "kro")) and NAMES["olr"] not in page.inner_text(pv + ".phono-legend"))
+        pvf = page.locator(pv + "figure.phonotable")
+        pvf.locator('.phono-legend input[data-lang="num"]').uncheck(); pvf.locator('.phono-legend input[data-lang="kro"]').uncheck()
+        check(S, "the legend works in the preview of the editor too: with only Dorig ticked, its sounds are all black", pvf.locator(".ph", has_text=re.compile("^d$")).first.evaluate("e => getComputedStyle(e).color") == "rgb(0, 0, 0)" and pvf.locator(".ph", has_text=re.compile("^l$")).first.evaluate("e => getComputedStyle(e).color") == "rgb(0, 0, 0)")
+        pvf.locator('.phono-legend input[data-lang="num"]').check(); pvf.locator('.phono-legend input[data-lang="kro"]').check()
+        # insert
+        page.click(f"#pt-write-{sid}")
+        txt = page.input_value(ta)
+        blocks = re.findall(r"```phonotable\n(.*?)\n```", txt, re.S); sp = json.loads(blocks[0]) if blocks else {}
+        check(S, "Insert into the text writes the chart into the section as a block, that the author never has to read: the definition has the axes and the three inventories", len(blocks) == 1 and sp.get("kind") == "consonants" and sp["columns"] == CONS_COLS and sp["rows"] == CONS_ROWS and sp["inventory"]["drg"]["Plosive"]["Alveolar"] == "t d" and sp["inventory"]["kro"]["Nasal"]["Alveolar"] == "n" and "olr" not in sp["inventory"], str(sp)[:200])
+        check(S, "…and says what to do next, and the button now reads Update", "Save & render" in page.inner_text(f"#pt-msg-{sid}") and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
+        # a second chart: vowels, in the same section
+        page.click(f'{root} [data-act="back"]'); page.click(f'{root} [data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input")
+        check(S, "a vowel chart is made separately, from the suggested vowel rows and columns", vals("columns") == V_COLS and vals("rows") == V_ROWS and page.input_value(f"#pt-title-{sid}") == "Vowel phonemes")
+        type_in("num", {(0, 0): "i", (0, 2): "u"}); type_in("olr", {(0, 0): "i", (0, 2): "u", (0, 1): "ʉ"})
+        page.click(f"#pt-write-{sid}")
+        blocks = re.findall(r"```phonotable\n(.*?)\n```", page.input_value(ta), re.S)
+        check(S, "…and written as a second block, after the first", len(blocks) == 2 and json.loads(blocks[1])["kind"] == "vowels" and json.loads(blocks[0])["kind"] == "consonants")
+        page.click(f'{root} [data-act="back"]')
+        check(S, "the list of the section now shows the two charts", page.locator(f'{root} [data-act="edit"]').count() == 2 and "consonant" in page.locator(f'{root} [data-act="edit"]').nth(0).inner_text() and "vowel" in page.locator(f'{root} [data-act="edit"]').nth(1).inner_text())
+        # save, and see it on the page
+        page.click(f"#editor-{sid} .modal-btn.primary"); page.wait_for_selector(f"#content-{sid} figure.phonotable")
+        check(S, "Save & render shows both charts on the page, as the preview showed them", page.locator(f"#content-{sid} figure.phonotable").count() == 2 and page.locator(f"#content-{sid} .ph-mix").count() == 1 and page.locator(f"#content-{sid} .ph-one").count() >= 3, "")
+        check(S, "…the text of the section around them is intact", "Plain text first." in page.inner_text(f"#content-{sid}") and "Middle." in page.inner_text(f"#content-{sid}") and "End." in page.inner_text(f"#content-{sid}"))
+        c2 = new_context(browser, site, 1280); p2 = c2.new_page(); open_page(p2, site, "grammar.html", "figure.phonotable", 900)
+        lg = p2.locator("figure.phonotable").first.locator(".ph", has_text=re.compile("^d$")).first.evaluate("e => getComputedStyle(e).color")
+        check(S, "a visitor sees them, with the same colours, and no editor", p2.locator("figure.phonotable").count() == 2 and lg == _rgb(COL["drg"]) and p2.locator(".ed-tab").count() == 0 or not p2.locator(".ed-tab").first.is_visible(), lg)
+        # the legend under a chart is a set of check boxes: the reader chooses the languages to show
+        fig = p2.locator("figure.phonotable").first
+        SNAP = """f => [...f.querySelectorAll('.ph')].map(e => { const c = getComputedStyle(e); return [e.textContent, c.display !== 'none', c.color, c.backgroundImage.includes('linear-gradient')]; })"""
+        snap = lambda: {s_[0]: s_ for s_ in fig.evaluate(SNAP)}
+        tick = lambda code, on: (fig.locator(f'.phono-legend input[data-lang="{code}"]').check() if on else fig.locator(f'.phono-legend input[data-lang="{code}"]').uncheck())
+        BLACK = "rgb(0, 0, 0)"
+        boxes = fig.locator(".phono-legend input[data-lang]")
+        check(S, "under the chart the legend is one check box for each language that was described (not the two left empty), all ticked, with the language's colour", [b.get_attribute("data-lang") for b in boxes.all()] == ["num", "drg", "kro"] and all(b.is_checked() for b in boxes.all()) and boxes.first.get_attribute("data-color") == COL["num"] and "Untick a language" in fig.locator(".pl-note").inner_text())
+        s0 = snap()
+        check(S, "all ticked: the chart as it was (p t k m n black; b has two colours; d is Dorig's)", all(s0[x][2] == BLACK for x in "ptkmn") and s0["b"][3] and s0["d"][2] == _rgb(COL["drg"]) and all(v[1] for v in s0.values()))
+        tick("num", False); tick("kro", False); s1 = snap()
+        check(S, "only Dorig ticked: its whole inventory is shown, in black (it is the only language shown, so everything is shared)", all(v[1] for v in s1.values()) and set(s1) == set("pbtdkmnl") and all(v[2] == BLACK and not v[3] for v in s1.values()), str({k: (v[1], v[2]) for k, v in s1.items()}))
+        tick("drg", False); tick("kro", True); s2 = snap()
+        check(S, "only Koro ticked: only Koro's sounds are shown (the b, d and l it does not have are left out), in black", {k for k, v in s2.items() if v[1]} == set("ptkmn") and all(v[2] == BLACK for k, v in s2.items() if v[1]) and not any(s2[x][1] for x in "bdl"), str({k: v[1] for k, v in s2.items()}))
+        tick("num", True); s3 = snap()
+        check(S, "Nume and Koro ticked: what they share is black, and b, which only Nume has, is in Nume's colour (not in two colours)", {k for k, v in s3.items() if v[1]} == set("pbtkmn") and s3["p"][2] == BLACK and s3["b"][2] == _rgb(COL["num"]) and not s3["b"][3] and not s3["d"][1], str({k: (v[1], v[2]) for k, v in s3.items()}))
+        tick("num", False); tick("drg", True); s4 = snap()
+        check(S, "Dorig and Koro ticked: p t k m n black; b, d and l, which only Dorig has, in Dorig's colour", {k for k, v in s4.items() if v[1]} == set("pbtdkmnl") and all(s4[x][2] == BLACK for x in "ptkmn") and all(s4[x][2] == _rgb(COL["drg"]) for x in "bdl"), str({k: (v[1], v[2]) for k, v in s4.items()}))
+        tick("num", True); s5 = snap()
+        check(S, "all ticked again: exactly as at the start (b in two colours again)", s5 == s0, str(s5["b"]))
+        for c_ in ("num", "drg", "kro"): tick(c_, False)
+        check(S, "nothing ticked: no sound is shown (and the table is still there)", not any(v[1] for v in snap().values()) and fig.locator("table.phono").is_visible())
+        fig.locator(".phono-legend label.lg", has_text=NAMES["kro"]).click()
+        check(S, "a click on the name of a language ticks it", fig.locator('.phono-legend input[data-lang="kro"]').is_checked() and snap()["p"][1])
+        v_leg = p2.locator("figure.phonotable").nth(1)
+        v_leg.locator('.phono-legend input[data-lang="olr"]').uncheck()
+        check(S, "each chart has its own legend: unticking a language in the vowel chart changes that chart only", not v_leg.locator(".ph", has_text=re.compile("^ʉ$")).first.is_visible() and snap()["p"][1])
+        check(S, "the labels of the legend are the project's language names, in their colours", fig.locator(".phono-legend label.lg span").first.evaluate("e => getComputedStyle(e).color") == _rgb(COL["num"]))
+        c2.close()
+        # editing a chart that is in the text
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
+        check(S, "when the editor is opened again it is on the Text tab", page.locator(ta).is_visible())
+        page.click('.ed-tab[data-tab="phono"]'); page.locator(f'{root} [data-act="edit"]').nth(0).click(); page.wait_for_selector(".pt-grid input")
+        check(S, "a chart that is in the text is loaded into the builder: its title, its axes and the inventory of each language", page.input_value(f"#pt-title-{sid}") == "Consonant phonemes" and vals("columns") == CONS_COLS and page.input_value('.pt-cell[data-r="0"][data-c="0"]') == "p b" and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
+        page.click('.pt-lang[data-lang="kro"]')
+        check(S, "…also the other languages", page.input_value('.pt-cell[data-r="1"][data-c="3"]') == "n")
+        page.fill('.pt-cell[data-r="0"][data-c="0"]', "p b ɓ"); page.fill(f"#pt-title-{sid}", "Consonants of the three languages"); page.click(f"#pt-write-{sid}")
+        blocks = re.findall(r"```phonotable\n(.*?)\n```", page.input_value(ta), re.S)
+        check(S, "Update in the text changes that block, and no other: still two blocks, the first changed, the vowels as they were", len(blocks) == 2 and json.loads(blocks[0])["title"] == "Consonants of the three languages" and json.loads(blocks[0])["inventory"]["kro"]["Plosive"]["Bilabial"] == "p b ɓ" and json.loads(blocks[1])["kind"] == "vowels")
+        page.click(f'{root} [data-act="back"]'); page.locator(f'{root} [data-act="edit"]').nth(1).click(); page.wait_for_selector(".pt-grid input"); page.click(f"#pt-remove-{sid}")
+        check(S, "Remove this chart from the text takes out that block only, and returns to the list", len(re.findall(r"```phonotable", page.input_value(ta))) == 1 and page.locator(f'{root} [data-act="edit"]').count() == 1)
+        page.click(f"#editor-{sid} .modal-btn.primary"); page.wait_for_selector(f"#content-{sid} figure.phonotable")
+        check(S, "saved: one chart, with the new title and the new sound", page.locator(f"#content-{sid} figure.phonotable").count() == 1 and "Consonants of the three languages" in page.inner_text(f"#content-{sid}"))
+        # insertion at the cursor; a block that cannot be read
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
+        page.fill(ta, "Alpha paragraph.\n\nOmega paragraph.\n"); page.evaluate(f"(() => {{ const t = document.querySelector('{ta}'); t.focus(); t.selectionStart = t.selectionEnd = 'Alpha paragraph.'.length + 2; }})()")
+        page.click('.ed-tab[data-tab="phono"]'); page.click(f'{root} [data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input"); page.fill('.pt-cell[data-r="0"][data-c="0"]', "i"); page.click(f"#pt-write-{sid}")
+        txt = page.input_value(ta)
+        check(S, "a chart is inserted where the cursor is, with a blank line before and after, and the paragraphs around it untouched", re.fullmatch(r"Alpha paragraph\.\n\n```phonotable\n\{.*\}\n```\n\nOmega paragraph\.\n", txt, re.S) is not None, txt[:120])
+        page.click('.ed-tab[data-tab="text"]'); page.fill(ta, "Before.\n\n```phonotable\n{not json\n```\n\nAfter.\n"); page.click('.ed-tab[data-tab="phono"]'); page.click(f'{root} [data-act="back"]')
+        check(S, "a block that is not valid is listed as unreadable (to be mended in the Text tab), and does not break the tab", "unreadable" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 2)
+        page.click(f"#editor-{sid} .modal-btn:not(.primary)")
+        check(S, "the editor raised no JavaScript error and no dialog", not errs, "; ".join(errs[:2]))
+        # phones
+        cn = new_context(browser, site, 390, author=True); p = cn.new_page(); open_page(p, site, "grammar.html", ".section-edit.visible", 900)
+        p.click(".section-edit"); p.wait_for_selector(".md-editor-wrap.visible"); p.click('.ed-tab[data-tab="phono"]'); p.click(f'{root} [data-act="new"][data-kind="consonants"]'); p.wait_for_selector(".pt-grid input")
+        check(S, "on a phone the grid of cells scrolls inside its own box, and the lists of columns and of rows are one under the other", p.locator(".pt-grid-wrap").evaluate("e => e.scrollWidth > e.clientWidth && getComputedStyle(e).overflowX === 'auto'") and len(p.locator(".pt-axes").evaluate("e => getComputedStyle(e).gridTemplateColumns.split(' ')")) == 1, "")
+        cn.close(); vis.close(); au.close()
+    finally:
+        site.stop()
+
+    # ── one language: no tabs of languages, and everything in black ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        c = new_context(browser, site, 1280, author=False); page = c.new_page(); errs = []; watch(page, errs)
+        api2 = c.request; api2.post(site.url + "api/auth/login", data=json.dumps({"password": "a-good-password-1"}), headers={"Content-Type": "application/json"})
+        open_page(page, site, "grammar.html", ".section-edit.visible", 900)
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible"); page.click('.ed-tab[data-tab="phono"]'); page.click('[data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input")
+        page.fill('.pt-cell[data-r="0"][data-c="0"]', "i y"); page.wait_for_function("document.querySelectorAll('.pt-preview .ph').length >= 2", timeout=6000)
+        check(S, "with one language there are no tabs of languages, and every sound is black, with no legend", page.locator(".pt-lang").count() == 0 and page.locator(".pt-preview .ph-all").count() == 2 and page.locator(".pt-preview .ph-one, .pt-preview .ph-mix, .pt-preview .phono-legend").count() == 0)
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); c.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -2769,6 +2989,7 @@ def main():
             if args.only in (None, "textstats"): suite_ngrams_and_stats(browser, args)
             if args.only in (None, "refimport"): suite_refimport(browser, args)
             if args.only in (None, "refletters"): suite_refletters(browser, args)
+            if args.only in (None, "phonotable"): suite_phonotable(browser, args)
             browser.close()
     finally:
         site.stop()
