@@ -431,7 +431,7 @@ html.one-language .filter-row-lang { display: none; }   /* texts: language filte
 .phonotable { margin: 1.3rem 0; }
 .phonotable figcaption { font-family: 'Crimson Pro', serif; font-size: 0.95rem; font-variant: small-caps; letter-spacing: 0.05em; color: var(--ink-light); margin-bottom: 0.35rem; }
 .phono-scroll { overflow-x: auto; max-width: 100%; }
-.grammar-section table.phono { border-collapse: collapse; margin: 0; font-family: 'EB Garamond', 'Charis SIL', 'Gentium Plus', 'Doulos SIL', serif; }
+.grammar-section table.phono { border-collapse: collapse; margin: 0; font-family: var(--font-ipa); }
 .grammar-section table.phono th, .grammar-section table.phono td { border: 1px solid var(--border); padding: 4px 10px 5px; text-align: center; white-space: nowrap; min-width: 3.4rem; }
 .grammar-section table.phono thead th, .grammar-section table.phono tbody th { background: #f0e8d8; font-family: 'Crimson Pro', serif; font-size: 0.86rem; font-variant: small-caps; letter-spacing: 0.04em; font-weight: 600; }
 .grammar-section table.phono tbody th { text-align: left; }
@@ -486,9 +486,37 @@ html.one-language .filter-row-lang { display: none; }   /* texts: language filte
 .pt-grid th { font-size: 0.78rem; font-variant: small-caps; letter-spacing: 0.04em; background: #f0e8d8; border: 1px solid var(--border-lt); padding: 2px 8px; white-space: nowrap; font-weight: 600; }
 .pt-grid th.r { text-align: left; }
 .pt-grid td { border: 1px solid var(--border-lt); padding: 0; }
-.pt-grid input { width: 4.6rem; border: none; padding: 0.3rem 0.35rem; font-family: 'EB Garamond', 'Charis SIL', 'Gentium Plus', 'Doulos SIL', serif; font-size: 1.1rem; text-align: center; background: transparent; }
+.pt-grid input { width: 4.6rem; border: none; padding: 0.3rem 0.35rem; font-family: var(--font-ipa); font-size: 1.1rem; text-align: center; background: transparent; }
 .pt-grid input:focus { outline: 2px solid var(--gold); background: #fffdf2; }
 .pt-preview { margin-top: 0.3rem; background: #fff; border: 1px solid var(--border-lt); border-radius: 3px; padding: 0.5rem 0.8rem; overflow-x: auto; }
 .pt-msg { font-size: 0.88rem; margin-top: 0.4rem; min-height: 1.1rem; color: #2f5a1f; }
 .pt-msg.error { color: #922810; }
 @media (max-width: 720px) { .pt-axes { grid-template-columns: 1fr; } .ed-tab { padding: 0.35rem 0.7rem; } }
+
+
+/* ══ IPA: Charis SIL ══
+   The IPA of the site is shown in Charis SIL (SIL Global, Open Font License: see fonts/OFL.txt), whose files come with the site.
+   1. var(--font-ipa) is used wherever the text is IPA: the IPA beside a headword and in the editor, the settings, the proto-forms, the charts.
+   2. Wherever an IPA-specific letter (the IPA Extensions, the modifier letters ʰ ʷ ː, the phonetic extensions ᵐ, ⁿ, and the few IPA letters that
+      live elsewhere in Unicode: æ ð ø œ ŋ β θ χ) appears in the site's text,
+      even in running text, it is shown in Charis SIL too: the site's fonts are declared again for those characters only. Combining marks (the
+      macron of ō and n̄ ...) are left out on purpose: a letter and its mark must come from the same font. */
+@font-face { font-family: 'Charis SIL'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Charis SIL'; src: url('fonts/Charis-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Charis SIL'; src: url('fonts/Charis-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Charis SIL'; src: url('fonts/Charis-BoldItalic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
+:root { --font-ipa: 'Charis SIL', 'Gentium Plus', 'Doulos SIL', 'Lucida Sans Unicode', serif; }
+.ipa { font-family: var(--font-ipa); }
+@font-face { font-family: 'EB Garamond'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'EB Garamond'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'EB Garamond'; src: url('fonts/Charis-Bold.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'EB Garamond'; src: url('fonts/Charis-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'EB Garamond'; src: url('fonts/Charis-BoldItalic.woff2') format('woff2'); font-weight: 600; font-style: italic; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Crimson Pro'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Crimson Pro'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Crimson Pro'; src: url('fonts/Charis-Bold.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Crimson Pro'; src: url('fonts/Charis-Italic.woff2') format('woff2'); font-weight: 300; font-style: italic; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Crimson Pro'; src: url('fonts/Charis-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Source Code Pro'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Source Code Pro'; src: url('fonts/Charis-Regular.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
+@font-face { font-family: 'Source Code Pro'; src: url('fonts/Charis-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0250-02FF, U+1D00-1DBF, U+207F, U+00E6, U+00F0, U+00F8, U+0153, U+014B, U+03B2, U+03B8, U+03C7; }
