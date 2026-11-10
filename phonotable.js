@@ -54,7 +54,7 @@ const PhonoEditor = (() => {
       const blocks = blocksOf(ta.value);
       root.innerHTML = `<p class="pt-help">Make a chart of the consonants or of the vowels without writing any markup: choose the rows and the columns, type the sounds of ${several ? 'each language' : 'the language'}, and insert it into the text.</p>
         <h4>Charts in this section</h4>
-        <div class="pt-bar" id="pt-list-${id}">${blocks.length ? blocks.map((b, i) => `<button type="button" class="pt-chip" data-act="edit" data-i="${i}">${b.spec && KIND_NAME[b.spec.kind] ? esc(b.spec.caption ?? b.spec.title ?? '') + ' <small>(' + KIND_NAME[b.spec.kind] + (b.spec.caption || b.spec.title ? '' : ', no caption') + ')</small>' : 'unreadable chart (see the Text tab)'}</button>`).join('') : '<span class="pt-help" style="margin:0;">None yet.</span>'}</div>
+        <div class="pt-bar" id="pt-list-${id}">${blocks.length ? blocks.map((b, i) => `<button type="button" class="pt-chip" data-act="edit" data-i="${i}">${b.spec && KIND_NAME[b.spec.kind] ? esc(b.spec.caption ?? b.spec.title ?? '') + ' <small>(' + KIND_NAME[b.spec.kind] + (b.spec.caption || b.spec.title ? '' : ', no caption') + (b.spec.label ? ' · ' + esc(b.spec.label) : '') + ')</small>' : 'unreadable chart (see the Text tab)'}</button>`).join('') : '<span class="pt-help" style="margin:0;">None yet.</span>'}</div>
         <h4>Make a new one</h4>
         <div class="pt-bar"><button type="button" class="pt-btn primary" data-act="new" data-kind="consonants">＋ Consonant chart</button><button type="button" class="pt-btn primary" data-act="new" data-kind="vowels">＋ Vowel chart</button></div>
         <div class="pt-msg" id="pt-msg-${id}">${message ? esc(message) : ''}</div>`;
@@ -68,6 +68,9 @@ const PhonoEditor = (() => {
         <h4>Caption</h4>
         <p class="pt-help">Shown above the chart as “${esc(D.captions.table)} 3${esc(D.captions.separator)}…”: you write only the text, the number is automatic and goes on through the whole grammar. Leave it empty for the number alone.</p>
         <div class="pt-field"><input type="text" id="pt-caption-${id}" value="${esc(spec.caption)}" maxlength="400" aria-label="Caption of the chart"></div>
+        <h4>Label</h4>
+        <p class="pt-help">Optional. A short name (letters, digits, - and _) that lets the text refer to this table: <code>{{ref: name}}</code> becomes a link reading “${esc(D.captions.table)} 3”, always with the right number, in the grammar and in the dictionary.</p>
+        <div class="pt-field"><input type="text" id="pt-label-${id}" value="${esc(spec.label || '')}" maxlength="40" aria-label="Label of the chart" autocomplete="off" spellcheck="false"></div>
         <h4>Columns and rows</h4>
         <p class="pt-help">Start from the suggested order and change what you need: rename, move (↑ ↓), remove (✕), or add rows and columns of your own, with any names.</p>
         <div class="pt-axes"><div class="pt-axis" data-axis="columns"></div><div class="pt-axis" data-axis="rows"></div></div>
@@ -129,7 +132,7 @@ const PhonoEditor = (() => {
       const s = st.spec, inv = {};
       for (const [code, byRow] of Object.entries(s.inventory)) for (const [r, byCol] of Object.entries(byRow)) for (const [c, t] of Object.entries(byCol))
         if (t.trim() && s.rows.includes(r) && s.columns.includes(c)) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t.trim();
-      return { kind: s.kind, caption: s.caption.trim(), columns: s.columns, rows: s.rows, inventory: inv };
+      return { kind: s.kind, caption: s.caption.trim(), label: (s.label || '').trim(), columns: s.columns, rows: s.rows, inventory: inv };
     }
     function position() {                                // how many charts come before this one in the section (its number follows from that)
       if (st.index !== null) return st.index;
@@ -138,11 +141,15 @@ const PhonoEditor = (() => {
     async function preview() {
       const my = ++st.run, box = $('#pt-preview-' + id), msg = $('#pt-msg-' + id);
       try {
-        const r = await fetch('/api/phonotable/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: cleanSpec(), section: id, position: position() }) });
+        const r = await fetch('/api/phonotable/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: cleanSpec(), section: id, position: position(), editing: st.index !== null }) });
         let j = null; try { j = await r.json(); } catch (e) { /* not JSON: an old server answers with a page */ }
         if (my !== st.run) return;
         if (!j || !r.ok || !j.ok) { box.innerHTML = ''; msg.className = 'pt-msg error'; msg.textContent = (j && j.error) || `The server could not make the preview (HTTP ${r.status}). ${OLD_SERVER}`; return; }
-        box.innerHTML = j.html; if (msg.className.includes('error')) { msg.className = 'pt-msg'; msg.textContent = ''; }
+        box.innerHTML = j.html;
+        const write = $('#pt-write-' + id);
+        if (j.labelTaken) {                                  // a label belongs to one table or figure: the reference would be ambiguous
+          msg.className = 'pt-msg error'; msg.textContent = `The label “${st.spec.label}” is already used by ${j.labelTaken.name}: choose another one.`; write.disabled = true;
+        } else { write.disabled = false; if (msg.className.includes('error')) { msg.className = 'pt-msg'; msg.textContent = ''; } }
       } catch (e) { /* offline: keep what is there */ }
     }
     const schedule = () => { clearTimeout(st.timer); st.timer = setTimeout(preview, 250); };
@@ -176,7 +183,7 @@ const PhonoEditor = (() => {
       const inv = {};
       for (const [code, byRow] of Object.entries(b.spec.inventory || {})) if (langs.some(l => l.code === code) && byRow && typeof byRow === 'object')
         for (const [r, byCol] of Object.entries(byRow)) if (byCol && typeof byCol === 'object') for (const [c, t] of Object.entries(byCol)) if (typeof t === 'string' && t.trim()) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t;
-      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv };
+      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), label: String(b.spec.label || ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv };
     }
 
     // ── what the author does ──
@@ -184,7 +191,7 @@ const PhonoEditor = (() => {
       const t = ev.target.closest('[data-act], [data-lang]'); if (!t) return;
       if (t.dataset.lang) { st.lang = t.dataset.lang; root.querySelectorAll('.pt-lang').forEach(b => b.classList.toggle('active', b.dataset.lang === st.lang)); renderGrid(); return; }
       const act = t.dataset.act, axis = t.dataset.axis, i = +t.dataset.i;
-      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {} }, null); }
+      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', label: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {} }, null); }
       else if (act === 'edit') { const s = fromBlock(i); if (s) openBuilder(s, i); }
       else if (act === 'back') showList();
       else if (act === 'write') write();
@@ -204,6 +211,10 @@ const PhonoEditor = (() => {
     root.addEventListener('input', ev => {
       const t = ev.target;
       if (t.id === 'pt-caption-' + id) { st.spec.caption = t.value; schedule(); }
+      else if (t.id === 'pt-label-' + id) {                 // letters, digits, - and _ only: anything else becomes -
+        const v = t.value.replace(/[^A-Za-z0-9_-]+/g, '-'); if (v !== t.value) t.value = v;
+        st.spec.label = v.replace(/^[-_]+|[-_]+$/g, ''); schedule();
+      }
       else if (t.classList.contains('pt-cell')) { setCell(st.lang, st.spec.rows[+t.dataset.r], st.spec.columns[+t.dataset.c], t.value); schedule(); }
       else if (t.dataset.axis && t.dataset.i !== undefined && t.tagName === 'INPUT') {
         const axis = t.dataset.axis, i = +t.dataset.i, v = t.value.trim(), others = st.spec[axis].filter((_, j) => j !== i);
