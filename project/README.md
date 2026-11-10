@@ -164,8 +164,13 @@ can never go out of step. The grammar cites a reference by author and year, as o
 `{{source: Smith 2020}}` gives (Smith, 2020), `{{source: Smith 2020, p. 12}}` adds the page, `{{source: Smith 2020, narrative}}`
 gives Smith (2020), and `{{source: Smith 2020; Jones 2019}}` cites two works. Two authors are written `Smith & Jones 2016`, three or
 more `Smith et al. 2016`, and a first-author initial separates two authors of the same surname (`A. Smith 2020`). Works by the same
-authors in the same year have the letters a, b ... (or the author types 2020b); without the letter the citation is refused as
-ambiguous, in a message that names the choices. Each reference also has a **key** (`smith2020`) that can be used in place of the
+authors in the same year are told apart by letters (2020a, 2020b ...), and **the author chooses which is which**: when a reference is
+saved (added, changed or imported) that would share its authors and year with another, the save waits and a window asks for the letters.
+It suggests that **a** goes to the reference the grammar cites first (the sections in their order, the citations in theirs), then the others
+that it cites, then those not cited yet, the older ones first and the new one last; if none of them is cited yet, give **a** to the one you
+will cite first. Nothing is saved until the letters are chosen (Cancel saves nothing), and the citations in the grammar written by author and
+year (`{{source: Smith 2020}}`) are changed to the letter of their reference (`Smith 2020a`); citations by key stay as they are. Without the
+letter a citation of such a work is refused as ambiguous, in a message that names the choices. Each reference also has a **key** (`smith2020`) that can be used in place of the
 author and year: it is the safe choice if a name is spelled in several ways. Changing a key on the page updates the citations
 in the grammar.
 
