@@ -429,7 +429,13 @@ html.one-language .filter-row-lang { display: none; }   /* texts: language filte
 
 /* ── Phonological charts (see phonotable.py) ── */
 .phonotable { margin: 1.3rem 0; }
-.phonotable figcaption { font-family: 'Crimson Pro', serif; font-size: 0.95rem; font-variant: small-caps; letter-spacing: 0.05em; color: var(--ink-light); margin-bottom: 0.35rem; }
+/* captions numbered through the grammar (captions.py): Table N above a chart, Figure N below an image */
+.caption { font-family: 'Crimson Pro', serif; font-size: 1rem; line-height: 1.5; color: var(--ink-mid); }
+.caption .cap-label { font-weight: 700; color: var(--ink); }
+.phonotable figcaption.caption { margin-bottom: 0.45rem; }
+figure.grammar-figure { margin: 1.5rem 0; max-width: 100%; }
+.grammar-section figure.grammar-figure img { margin: 0 0 0.55rem; }
+figure.grammar-figure figcaption.caption { max-width: 46rem; }
 .phono-scroll { overflow-x: auto; max-width: 100%; }
 .grammar-section table.phono { border-collapse: collapse; margin: 0; font-family: var(--font-ipa); }
 .grammar-section table.phono th, .grammar-section table.phono td { border: 1px solid var(--border); padding: 4px 10px 5px; text-align: center; white-space: nowrap; min-width: 3.4rem; }
