@@ -17,7 +17,8 @@ you change this folder and your data, not the code.
 | `headwordLanguage` | the language whose forms the dictionary opens on, and that names new entries |
 | `recordings` | `author` and `year` shown for recordings whose XML does not say |
 | `latex` | `title`, `subtitle` and `author` of the LaTeX export (LaTeX source: write `\&` for &) |
-| `captions` | optional: the words of the captions, `table` (default `Table`), `figure` (default `Figure`) and `separator` (default ` – `, with its spaces): for a grammar in another language, e.g. `{"table": "Tableau", "separator": " : "}` |
+| `captions` | optional: the words of the captions, `table` (default `Table`), `figure` (default `Figure`), `separator` (default ` – `, with its spaces), the plurals `tables` and `figures` (the singular and an s if you do not give them: write `Tableaux` yourself) and `and` (the word between the last two items of a list, default `and`): for a grammar in another language, e.g. `{"table": "Tableau", "tables": "Tableaux", "and": "et", "separator": " : "}` |
+| `latex` → `fonts` | optional: the fonts of the LaTeX export by role, `{"body": "…", "headings": "…", "captions": "…", "ipa": "…"}` (plain font names; see *The LaTeX export*) |
 | `footer` | the line at the bottom of the home and about pages (inline HTML). Leave empty for no footer |
 | `redirects` | old page names that now live elsewhere, e.g. `{"gaua.html": "about.html"}` |
 | `files` | (optional) where the data lives, if it is not in the standard places below: `dictionary`, `fieldnotes`, `grammarDir`, `recordingsDir`, `imagesDir`, `pagesDir`, `orthography`, `seedPhonetic` |
@@ -152,6 +153,29 @@ table or a figure, the numbers of the sections after it change, and the page sho
 - **LaTeX:** the charts are `table` environments with the caption above and the images are `figure` environments with the caption below, so LaTeX numbers
   them in the same order; the words and the separator are given to LaTeX (the `caption` package). The images are taken from an `images` folder next to
   the `.tex` file (copy the project's `images` folder there).
+
+## The LaTeX export (and the Word and PDF exports to come)
+
+**Tables by language.** On the website a phonological chart is one table with all the languages (the colours tell them apart). In the exports each
+language has its own table, in black, in the order of the project's languages, with the rows and columns that are empty for that language left out.
+The tables of a chart share its number and are lettered: *Table 1a*, *1b*, *1c*… (a chart with the sounds of a single language is not split and is
+*Table 1*). The numbers of the website and of the exports always agree.
+
+- **`{language}` in a caption.** Write it where the name of the language belongs: *Consonant phonemes of {language}*. The website shows the names of the
+  languages that have sounds in the chart (*Consonant phonemes of Nume, Dorig, Koro, Olrat and Lakon*); each table of the exports has its own name
+  (*Table 1a – Consonant phonemes of Nume*). A caption without `{language}` gets the name in parentheses in the exports (*Table 1a – Consonants (Nume)*).
+- **References.** `{{ref: cons}}` is *Table 1* on the website and *Tables 1a–e* in the exports (*1a–b* for two languages); `{{ref: cons#drg}}`, with the
+  code of a language, is *Table 1b* in the exports (on the website, where there is one chart, it is *Table 1*).
+- **XeLaTeX.** The `.tex` file must be compiled with **XeLaTeX** or LuaLaTeX (twice, for the references): the IPA and the fonts need it. It begins with
+  `% !TEX program = xelatex`, which most editors understand (Overleaf: *Menu → Compiler → XeLaTeX*; command line: `xelatex grammar.tex`). With
+  pdfLaTeX it stops with a message saying so. The packages it uses (`fontspec`, `gb4e`, `booktabs`, `caption`, `adjustbox`, `newunicodechar`, `titlesec`,
+  `hyperref`, `xcolor`, `iftex`) come with TeX Live and MiKTeX (on Debian and Ubuntu, `gb4e` is in `texlive-humanities`). Copy the project's `images`
+  folder next to the `.tex` file. If a journal insists on pdfLaTeX, the IPA would have to be converted for it (`tipa`): that is not done.
+- **Fonts by role.** In `project.json`, `"latex": {"fonts": {"body": "…", "headings": "…", "captions": "…", "ipa": "…"}}` (plain font names; anything
+  else is ignored). Default: Latin Modern for the text, no change for the headings and captions, and for the IPA **Charis SIL**, then Gentium Plus, Doulos SIL
+  and DejaVu Serif, whichever is installed on the machine that compiles (if none is, the compilation warns that the IPA letters will be missing). Each IPA
+  letter of the document is set in the IPA font wherever it appears, as on the website, the combining marks and the ordinary letters excepted. A font
+  that is not installed falls back to Latin Modern, so that the document always compiles.
 
 ## Fonts: the IPA is in Charis SIL
 
