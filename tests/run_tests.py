@@ -2804,7 +2804,8 @@ def suite_phonotable(browser, args):
         vow = h[h.index('data-kind="vowels"'):]
         check(S, "the vowel chart is a chart of its own: i is shared (black), u only Nume, ʉ only Olrat", '<span class="ph ph-all" data-langs="num olr">i</span>' in vow and f'color:{COL["num"]}' in vow and f'color:{COL["olr"]}' in vow, vow[:300])
         r = aa.get(site.url + "api/grammar/export/latex").text()
-        check(S, "the LaTeX export has both charts as tables, with the colours of the languages, and loads graphicx", r.count("\\begin{tabular}{l|c|c}") == 2 and f"\\textcolor[HTML]{{{COL['drg'][1:].upper()}}}{{d}}" in r and "\\usepackage{graphicx}" in r and "PHONOTABLE" not in r, "")
+        body_ = r.split("\\begin{document}")[1]; tabs_ = re.findall(r"\\begin\{table\}.*?\\end\{table\}", body_, re.S)
+        check(S, "the LaTeX export has the charts as tables, one for each language of a chart, in black, in groups, and loads graphicx: the test’s own two charts (three languages and two: 5 tables, 2 groups) and the Phonology section of the project (two charts of five languages: 10 tables, 2 groups)", len(tabs_) == 15 and body_.count("\\tabgroupstart") == 4 and not any("\\textcolor" in x_ for x_ in tabs_) and "\\usepackage{graphicx}" in r and "PHONOTABLE" not in r, f"{len(tabs_)} tables, {body_.count(chr(92) + 'tabgroupstart')} groups")
         _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "A\r\n\r\n```phonotable\r\n" + json.dumps(spec) + "\r\n```\r\n\r\nB\r\n"})
         check(S, "a section saved with Windows line ends shows its chart", va.get(site.url + f"api/grammar/{sid}").json()["html"].count('<figure class="phonotable"') == 1)
         evil = dict(spec, caption="<b>t</b>", inventory={"num": {"Plosive": {"Bilabial": "<img src=x onerror=alert(1)> p"}}, "zzz": {"Plosive": {"Bilabial": "q"}}})
@@ -3081,6 +3082,14 @@ _CAP_S5B = ("## Another section\n\n![](images/gaua_map.png)\n\n```phonotable\n{b
 _CAP_ZZC = ("## Seen from Windows\n\n![Windows picture](images/gaua_map.png)\n\n```phonotable\n"
             '{"kind":"vowels","caption":"Seen from Windows","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n').replace("\n", "\r\n")
 
+def _phono_captions(site):
+    """The captions of the charts of the project's own Phonology section, read from the file: the author is free to change them ({language} is the names of the languages)."""
+    names = " and ".join([", ".join(l_["name"] for l_ in json.loads((site.dir / "project" / "project.json").read_text(encoding="utf-8"))["languages"][:-1]), json.loads((site.dir / "project" / "project.json").read_text(encoding="utf-8"))["languages"][-1]["name"]])
+    out = []
+    for b_ in re.findall(r"^```phonotable\n(.*?)\n```", (site.dir / "project" / "grammar" / "s1_phonology.md").read_text(encoding="utf-8"), re.S | re.M):
+        s_ = json.loads(b_); out.append((s_.get("caption") if "caption" in s_ else s_.get("title", "")).replace("{language}", names))
+    return out
+
 def _captions_prepare(d):
     g = d / "project" / "grammar"
     (g / "s0_a.md").write_text(_CAP_S0A, encoding="utf-8"); (g / "s5_b.md").write_text(_CAP_S5B, encoding="utf-8"); (g / "zz_c.md").write_bytes(_CAP_ZZC.encode("utf-8"))
@@ -3137,7 +3146,7 @@ def suite_captions(browser, args):
         check(S, "a figure has its caption below the image, a chart has its caption above the table", fb["y"] >= ib["y"] + ib["height"] - 1 and cb["y"] + cb["height"] <= tb["y"] + 1, f"{fb} {ib} {cb} {tb}")
         check(S, "the caption reads “Figure 1 – First map” and “Table 1 – Consonants of A”, the label in bold", fig.locator("figcaption").inner_text() == "Figure 1 – First map" and cht.locator("figcaption").inner_text() == "Table 1 – Consonants of A" and fig.locator(".cap-label").evaluate("e => getComputedStyle(e).fontWeight") in ("700", "bold"))
         check(S, "a chart has no title: nothing but the caption stands above it", cht.locator("figcaption").count() == 1 and not cht.locator("h1, h2, h3, h4, h5, h6, .chart-title").count())
-        check(S, "the page shows the numbers the server gave: s1_phonology has Table 2 and Table 3", [c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()] == ["Table 2 – Consonant phonemes", "Table 3 – Vowel phonemes"], str([c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()]))
+        check(S, "the page shows the numbers the server gave: s1_phonology has Table 2 and Table 3", [c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()] == [f"Table 2 – {_phono_captions(site)[0]}", f"Table 3 – {_phono_captions(site)[1]}"], str([c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()]))
         check(S, "the page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
         # ── the preview of a chart knows its number ──
         def prev(section, position):
@@ -3154,7 +3163,16 @@ def suite_captions(browser, args):
         tex = aa.get(site.url + "api/grammar/export/latex").text(); want = _expected_captions(site)
         nt, nf = sum(len(v["table"]) for v in want.values()), sum(len(v["figure"]) for v in want.values())
         caps = re.findall(r"\\caption\{([^}]*)\}", tex)
-        check(S, "the LaTeX export has the same number of tables and of figures as the page (images in code blocks left out)", tex.count("\\begin{table}") == nt and tex.count("\\begin{figure}") == nf, f"{tex.count(chr(92) + 'begin{table}')}/{nt} {tex.count(chr(92) + 'begin{figure}')}/{nf}")
+        # a chart with the sounds of several languages is one table for each of them in the export (Table 1a, 1b ...): count as the export does
+        parts = []
+        for name in sorted(p_.name for p_ in (site.dir / "project" / "grammar").glob("*.md")):
+            for body in re.findall(r"^```phonotable\n(.*?)\n```", (site.dir / "project" / "grammar" / name).read_bytes().decode("utf-8").replace("\r\n", "\n"), re.S | re.M):
+                try: s_ = json.loads(body)
+                except ValueError: continue
+                if isinstance(s_, dict) and s_.get("kind") in ("consonants", "vowels") and s_.get("columns") and s_.get("rows"):
+                    parts.append(sum(1 for inv_ in (s_.get("inventory") or {}).values() if any(c_ for row_ in inv_.values() for c_ in row_.values())))
+        lx_tables, lx_groups = sum(max(1, n_) for n_ in parts), sum(1 for n_ in parts if n_ >= 2)
+        check(S, "the LaTeX export has the figures of the page, and a table for each chart, or for each language of a chart that has the sounds of several (a group, Table 1a, 1b …); images in code blocks are left out", tex.count("\\begin{table}") == lx_tables and tex.split("\\begin{document}")[1].count("\\tabgroupstart") == lx_groups and tex.count("\\begin{figure}") == nf, f"{tex.count(chr(92) + 'begin{table}')}/{lx_tables} {tex.split(chr(92) + 'begin{document}')[1].count(chr(92) + 'tabgroupstart')}/{lx_groups} {tex.count(chr(92) + 'begin{figure}')}/{nf}")
         check(S, "…with the captions, in the order of the grammar, figures having the image from the images folder; and the words and the separator are given to LaTeX", "First map" in caps and "Last picture" in caps and "inside code" not in " ".join(caps) and "\\includegraphics[max width=\\linewidth]{images/gaua_map.png}" in tex and "\\usepackage[labelsep=endash]{caption}" in tex and "\\renewcommand{\\tablename}{Table}" in tex and "\\usepackage[export]{adjustbox}" in tex, str(caps)[:200])
         vis.close()
 
@@ -3171,7 +3189,7 @@ def suite_captions(browser, args):
         page.click("#pt-write-s0_a"); page.click("#editor-s0_a .modal-btn.primary"); page.wait_for_selector("#content-s0_a figure.phonotable")
         page.wait_for_function("document.querySelector('#content-zz_c figcaption.caption-table .cap-label').textContent === 'Table 6'", timeout=8000)
         now = {sid: [c.inner_text() for c in page.locator(f"#content-{sid} figcaption").all()] for sid in ("s1_phonology", "zz_c")}
-        check(S, "after the save the chart is Table 1, the one that was Table 1 is Table 2, and the other sections on the page are numbered again without a reload (Tables 2 and 3 became 3 and 4)", [c.inner_text() for c in page.locator("#content-s0_a figcaption.caption-table").all()] == ["Table 1 – Typed in the editor", "Table 2 – Consonants of A"] and now["s1_phonology"] == ["Table 3 – Consonant phonemes", "Table 4 – Vowel phonemes"] and before["s1_phonology"] == ["Table 2 – Consonant phonemes", "Table 3 – Vowel phonemes"], str(now))
+        check(S, "after the save the chart is Table 1, the one that was Table 1 is Table 2, and the other sections on the page are numbered again without a reload (Tables 2 and 3 became 3 and 4)", [c.inner_text() for c in page.locator("#content-s0_a figcaption.caption-table").all()] == ["Table 1 – Typed in the editor", "Table 2 – Consonants of A"] and now["s1_phonology"] == [f"Table 3 – {_phono_captions(site)[0]}", f"Table 4 – {_phono_captions(site)[1]}"] and before["s1_phonology"] == [f"Table 2 – {_phono_captions(site)[0]}", f"Table 3 – {_phono_captions(site)[1]}"], str(now))
         want = _expected_captions(site)
         check(S, "…and what the page shows is what the server (and the independent count) says", all(_shown_captions(page.locator(f"#content-{sid}").inner_html()) == want[sid] for sid in want), "")
         # a figure uploaded from the editor
@@ -3323,12 +3341,119 @@ def suite_xref(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 18. the exports: one table for each language (Table 1a, 1b …), {language}, group references, XeLaTeX ─────────────────────────
+_LX_S0 = ("## Exports\n\nRefs: {{ref: cons}}; {{ref: cons#drg}}; {{ref: vow2}}; {{ref: one}}; {{ref: cons#zzz}}; the map {{ref: map}}. IPA: /ɣ/ /ʧ/ β.\n\n```phonotable\n"
+          '{"kind":"consonants","label":"cons","caption":"Consonants of {language}","columns":["Bilabial","Alveolar"],"rows":["Plosive","Nasal"],"inventory":{"num":{"Plosive":{"Bilabial":"p","Alveolar":"t"}},"drg":{"Plosive":{"Bilabial":"b"},"Nasal":{"Alveolar":"n"}},"kro":{"Plosive":{"Alveolar":"ɣ"}}}}\n```\n\n```phonotable\n'
+          '{"kind":"vowels","label":"vow2","caption":"Vowels","columns":["Front","Back"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}},"olr":{"Close":{"Back":"u"}}}}\n```\n\n```phonotable\n'
+          '{"kind":"vowels","label":"one","caption":"One language: {language}","columns":["Front"],"rows":["Close"],"inventory":{"lkn":{"Close":{"Front":"ɪ"}}}}\n```\n\n![The map](images/gaua_map.png){#map}\n')
+
+def _lx_prepare(d):
+    g = d / "project" / "grammar"
+    for f in list(g.glob("*.md")): f.unlink()
+    (g / "s0_exports.md").write_text(_LX_S0, encoding="utf-8")
+
+def suite_latex(browser, args):
+    import shutil
+    S = "latex"
+    section("the exports: tables by language, {language}, group references, XeLaTeX")
+    base = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    site = Site(prepare=_lx_prepare)
+    try:
+        c = new_context(browser, site, 1280); api = c.request
+        tex = api.get(site.url + "api/grammar/export/latex").text()
+        head = tex.split("\\begin{document}")[0]
+        check(S, "the .tex asks for XeLaTeX (first line for the editors, a clear message if it is compiled with pdfLaTeX), loads fontspec, and no longer uses inputenc and fontenc", tex.startswith("% !TEX program = xelatex\n") and "\\ifPDFTeX\\PackageError{grammar}{This file must be compiled with XeLaTeX or LuaLaTeX" in head and "\\usepackage{fontspec}" in head and "inputenc" not in head and "fontenc" not in head, head[:300])
+        used = sorted(set(re.findall("[\u0250-\u02FF\u1D00-\u1DBF\u207F\u00E6\u00F0\u00F8\u0153\u014B\u03B2\u03B8\u03C7]", tex.split("\\begin{document}")[1])))
+        mapped = re.findall(r"\\newunicodechar\{(.)\}\{\{\\ipafont\\char\"([0-9A-F]{4}) \}\}", head)
+        check(S, "each IPA letter that occurs in the document is set in the IPA font by a line of the preamble (by its code, so that it cannot loop), and only those", sorted(ch for ch, _ in mapped) == used and all(int(code, 16) == ord(ch) for ch, code in mapped) and "ɣ" in used and "ʧ" in used and "ɸ" not in used, f"{used} {mapped}")
+        check(S, "the IPA font is Charis SIL, then the others that have the IPA; and the compilation warns if none is installed; the main font falls back to Latin Modern", "\\IfFontExistsTF{Charis SIL}{\\newfontfamily\\ipafont{Charis SIL}}" in head and "{Gentium Plus}" in head and "{DejaVu Serif}" in head and "No font with the IPA was found" in head and "\\setmainfont{Latin Modern Roman}" in head, "")
+        bodytex = tex.split("\\begin{document}")[1]
+        tabs = bodytex.count("\\begin{table}")
+        check(S, "a chart with three languages is three tables, one with two is two, one with a single language is one: six, in two groups", tabs == 6 and bodytex.count("\\tabgroupstart") == 2 and bodytex.count("\\tabgroupnext") == 3 and bodytex.count("\\tabgroupend") == 2, f"{tabs} {bodytex.count(chr(92) + 'tabgroupstart')}")
+        caps = re.findall(r"\\caption\{([^}]*)\}", tex)
+        check(S, "the captions: {language} replaced by the name of each language; a caption without it gets the name in parentheses; a chart that is not split keeps its caption, with {language} filled", caps == ["Consonants of Nume", "Consonants of Dorig", "Consonants of Koro", "Vowels (Nume)", "Vowels (Olrat)", "One language: Lakon", "The map"], str(caps))
+        check(S, "each table has only the rows and columns its language has: Koro’s has one row and one column", "\\caption{Consonants of Koro}" in tex and re.search(r"Consonants of Koro\}.*?\\begin\{tabular\}\{l\|c\}.*?Plosive & ɣ", tex, re.S) is not None, "")
+        check(S, "the references in the text: the whole chart is Tables 1a–c (first part, letter of the last), one part is Table 1b, a chart that is not split is Table 3, an unknown part is ??", "\\tablesname~\\ref{tab:cons:first}--\\ref{tab:cons:last}" in tex and "\\tablename~\\ref{tab:cons:drg}" in tex and "\\tablesname~\\ref{tab:vow2:first}--\\ref{tab:vow2:last}" in tex and "\\tablename~\\ref{tab:one}" in tex and "\\textbf{??}" in tex and "\\figurename~\\ref{fig:map}" in tex, "")
+        check(S, "…with the labels they need: each part, the number of the group, the first part and the letter of the last", all(x in tex for x in ("\\label{tab:cons:num}", "\\label{tab:cons:kro}", "\\labelas{tab:cons}{\\arabic{table}}", "\\label{tab:cons:first}", "\\labelas{tab:cons:last}{\\alph{tabpart}}", "\\label{tab:one}")), "")
+        # ── the website keeps one chart ──
+        h = api.get(site.url + "api/grammar/s0_exports").json()["html"]
+        capt = re.findall(r'caption-table"><span class="cap-label">([^<]*)</span><span class="cap-text"> – ([^<]*)<', h)
+        check(S, "on the website each chart is still one: {language} is the names of its languages, in the project’s order, with and before the last", capt == [("Table 1", "Consonants of Nume, Dorig and Koro"), ("Table 2", "Vowels"), ("Table 3", "One language: Lakon")], str(capt))
+        refs = re.sub(r"<[^>]+>", "", h.split("<p>")[1].split("</p>")[0])
+        check(S, "…and a reference to a part is only a link to the chart (Table 1), the group is Table 1 too", "Refs: Table 1; Table 1; Table 2; Table 3; Reference not found" in refs.replace("\n", " ") or "Refs: Table 1; Table 1; Table 2; Table 3;" in refs, refs[:120])
+        cp = api.get(site.url + "api/captions").json()
+        item = {i["label"]: i for i in cp["items"] if i["label"]}
+        check(S, "/api/captions gives the caption as the site shows it, and the languages that get a table in the exports", item["cons"]["text"] == "Consonants of Nume, Dorig and Koro" and item["cons"]["parts"] == ["num", "drg", "kro"] and item["vow2"]["parts"] == ["num", "olr"] and item["one"]["parts"] == [], str(item["cons"]))
+        # ── the fonts of the roles ──
+        c.close()
+    finally:
+        site.stop()
+    custom = dict(base["latex"], fonts={"body": "DejaVu Serif", "headings": "DejaVu Sans", "captions": "DejaVu Sans", "ipa": "DejaVu Serif"})
+    site = Site(prepare=_lx_prepare, project_override=variant(base["languages"], latex=custom, captions={"table": "Tableau", "tables": "Tableaux", "figure": "Figure", "and": "et"}))
+    try:
+        c = new_context(browser, site, 1280); api = c.request
+        tex2 = api.get(site.url + "api/grammar/export/latex").text(); head2 = tex2.split("\\begin{document}")[0]
+        check(S, "the fonts of the roles come from the project: body, headings (titles), captions, IPA, each with a fallback so that the document always compiles", all(x in head2 for x in ("\\IfFontExistsTF{DejaVu Serif}{\\setmainfont{DejaVu Serif}}{\\setmainfont{Latin Modern Roman}}", "\\newfontfamily\\headingfont{DejaVu Sans}", "\\titleformat{\\section}{\\headingfont", "\\newfontfamily\\dbtcaptionfont{DejaVu Sans}", "\\DeclareCaptionFont{dbtcap}{\\dbtcaptionfont}")), head2[:400])
+        check(S, "the words of the project are used in the exports: its table, its plural for the groups, its word for and in a list", "\\renewcommand{\\tablename}{Tableau}" in head2 and "\\newcommand{\\tablesname}{Tableaux}" in head2, "")
+        c.close()
+    finally:
+        site.stop()
+    bad = dict(base["latex"], fonts={"body": "Evil}\\input{x", "ipa": "A\\B", "headings": "{x}", "captions": "ok font"})
+    site = Site(prepare=_lx_prepare, project_override=variant(base["languages"], latex=bad))
+    try:
+        c = new_context(browser, site, 1280); tex3 = c.request.get(site.url + "api/grammar/export/latex").text(); head3 = tex3.split("\\begin{document}")[0]
+        check(S, "a font name that is not a plain name (braces, backslashes) is ignored: the default is used, nothing reaches the LaTeX", "\\input{x" not in head3 and "Evil" not in head3 and "A\\B" not in head3 and "headingfont" not in head3 and "{ok font}" in head3 and "\\setmainfont{Latin Modern Roman}" in head3, head3[:300])
+        c.close()
+    finally:
+        site.stop()
+
+    # ── the real thing: compile it ──
+    have = shutil.which("xelatex") and subprocess.run(["kpsewhich", "gb4e.sty"], capture_output=True, text=True).stdout.strip()
+    if not have:
+        print("  (XeLaTeX or its gb4e package is not installed here: the compilation checks are skipped)")
+        return
+    site = Site(prepare=_lx_prepare, project_override=variant(base["languages"], latex=custom, captions={"table": "Tableau", "tables": "Tableaux", "figure": "Figure", "and": "et"}))
+    plain = Site(prepare=_lx_prepare)
+    try:
+        for label_, s_ in (("with the project's words", site), ("with the defaults", plain)):
+            work = Path(tempfile.mkdtemp(prefix="dbt-tex-")); c = new_context(browser, s_, 1280)
+            (work / "grammar.tex").write_text(c.request.get(s_.url + "api/grammar/export/latex").text(), encoding="utf-8"); shutil.copytree(s_.dir / "project" / "images", work / "images")
+            logs = []
+            for _ in range(2):
+                r = subprocess.run(["xelatex", "-interaction=nonstopmode", "grammar.tex"], cwd=work, capture_output=True, text=True, timeout=180); logs.append(r)
+            log = (work / "grammar.log").read_text(encoding="utf-8", errors="replace")
+            check(S, f"the export compiles with XeLaTeX ({label_}): twice, no error, no undefined reference, a PDF", all(x.returncode == 0 for x in logs) and (work / "grammar.pdf").exists() and "undefined" not in log.lower().replace("\\@undefined", "") and "\n!" not in log, "; ".join(l_ for l_ in log.split("\n") if l_.startswith("!"))[:200])
+            if shutil.which("pdftotext"):
+                txt = subprocess.run(["pdftotext", "-layout", str(work / "grammar.pdf"), "-"], capture_output=True, text=True).stdout.replace("\n", " ")
+                txt = re.sub(r"\s+", " ", txt)
+                if s_ is site:
+                    check(S, "in the PDF the tables are numbered Tableau 1a, 1b, 1c, 2a, 2b, 3 (the group keeps its number, the parts have letters) with their captions, and the references read Tableaux 1a–c, Tableau 1b, Tableaux 2a–b, Tableau 3, Figure 1", re.findall(r"Tableau (\d[a-c]?) – ", txt) == ["1a", "1b", "1c", "2a", "2b", "3"] and "Tableaux 1a–c" in txt and "Tableau 1b" in txt and "Tableaux 2a–b" in txt and "Tableau 3" in txt and "Figure 1" in txt and "Consonants of Nume, Dorig et Koro" not in txt, txt[txt.find("Refs"):][:160])
+                else:
+                    check(S, "in the PDF: Table 1a – Consonants of Nume … Table 2a – Vowels (Nume) … Table 3 – One language: Lakon; and the text says Tables 1a–c, Table 1b, Tables 2a–b, Table 3, ??, Figure 1", re.findall(r"Table (\d[a-c]?) – ", txt) == ["1a", "1b", "1c", "2a", "2b", "3"] and "Table 1a – Consonants of Nume" in txt and "Table 2a – Vowels (Nume)" in txt and "Table 3 – One language: Lakon" in txt and "Tables 1a–c" in txt and "Table 1b" in txt and "Tables 2a–b" in txt and "Figure 1" in txt and "??" in txt, txt[txt.find("Refs"):][:200])
+                check(S, "…the IPA letters are in the PDF as letters (not as missing-glyph boxes)", all(ch in txt for ch in ("ɣ", "ʧ", "β")) and "\ufffd" not in txt, txt[txt.find("IPA"):][:60])
+            if shutil.which("pdffonts") and s_ is site:
+                fonts = subprocess.run(["pdffonts", str(work / "grammar.pdf")], capture_output=True, text=True).stdout
+                check(S, "…the fonts chosen for the roles are in the PDF, embedded (DejaVu Sans for the headings and captions, DejaVu Serif for the text and the IPA)", all(any(n in l_ and re.search(r"\byes\s+(yes|no)\s+(yes|no)\s+\d+", l_) for l_ in fonts.split("\n")) for n in ("DejaVuSans", "DejaVuSerif")), fonts[:400])
+            c.close(); shutil.rmtree(work, ignore_errors=True)
+        # pdfLaTeX says what is wrong instead of a wall of errors
+        if shutil.which("pdflatex"):
+            work = Path(tempfile.mkdtemp(prefix="dbt-tex-")); c = new_context(browser, plain, 1280)
+            (work / "grammar.tex").write_text(c.request.get(plain.url + "api/grammar/export/latex").text(), encoding="utf-8")
+            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "grammar.tex"], cwd=work, capture_output=True, text=True, timeout=120)
+            first = next((l_ for l_ in (r.stdout + (work / "grammar.log").read_text(encoding="utf-8", errors="replace") if (work / "grammar.log").exists() else r.stdout).split("\n") if l_.startswith("!") or "must be compiled with XeLaTeX" in l_), "")
+            check(S, "compiled with pdfLaTeX the export stops with a clear message: it must be compiled with XeLaTeX or LuaLaTeX", "XeLaTeX" in (r.stdout + ((work / "grammar.log").read_text(encoding="utf-8", errors="replace") if (work / "grammar.log").exists() else "")), first[:160])
+            c.close(); shutil.rmtree(work, ignore_errors=True)
+    finally:
+        site.stop(); plain.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -3356,6 +3481,7 @@ def main():
             if args.only in (None, "ipafont"): suite_ipafont(browser, args)
             if args.only in (None, "captions"): suite_captions(browser, args)
             if args.only in (None, "xref"): suite_xref(browser, args)
+            if args.only in (None, "latex"): suite_latex(browser, args)
             browser.close()
     finally:
         site.stop()
