@@ -2,6 +2,7 @@
 Direct tests of phonotable.py (no server): the definition of a chart, the merging of the languages' inventories, and its HTML and LaTeX.
 Run alone with:  python tests/test_phonotable.py
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -96,16 +97,37 @@ check('a chart may have a label (letters, digits, - and _: the rest becomes -), 
 hl = PT.render_html(spec({}, caption='x') | {'label': 'cons'}, LANGS, number=2)
 check('a chart with a label has the anchor that links go to (tab-label); one without has none', ('id="tab-cons" data-label="cons"' in hl, 'id="tab-' in PT.render_html(spec({}, caption='x'), LANGS, number=2)), (True, False))
 check('a preview has no anchor (the page would have the id twice)', 'id="tab-' in PT.render_html(spec({}, caption='x') | {'label': 'cons'}, LANGS, number=2, anchors=False), False)
-check('in LaTeX the label comes after the caption', '\\caption{x}\n\\label{tab:cons}\n' in PT.render_latex(spec({}, caption='x') | {'label': 'cons'}, LANGS), True)
+check('in LaTeX the label comes after the caption (a chart that has no language yet is one table)', '\\caption{x}\n\\label{tab:cons}\n' in PT.render_latex(spec({}, caption='x') | {'label': 'cons'}, LANGS), True)
 LBL = lambda lab, cap: '{"kind":"vowels","label":"%s","caption":"%s","columns":["Front"],"rows":["Close"],"inventory":{}}' % (lab, cap)
-check('the charts of a section that can be referred to, in order: label and caption (a block that cannot be read is not one)', PT.list_charts([LBL('a', 'One'), '{broken', LBL('', 'Two'), LBL('c', 'Three')], LANGS), [('a', 'One'), ('', 'Two'), ('c', 'Three')])
+check('the charts of a section that can be referred to, in order: label and caption (a block that cannot be read is not one)', [(a, b) for a, b, _p in PT.list_charts([LBL('a', 'One'), '{broken', LBL('', 'Two'), LBL('c', 'Three')], LANGS)], [('a', 'One'), ('', 'Two'), ('c', 'Three')])
 
-# ── LaTeX ──
-tex = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p b'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}, 'Nasal': {'Alveolar': 'n_#'}}}, caption='A & B'), LANGS)
-check('LaTeX: a table with the caption, the columns and the rows, in booktabs style, scaled to the line', ('\\caption{A \\& B}' in tex, '\\resizebox{\\linewidth}' in tex, '\\toprule' in tex, ' & Bilabial & Alveolar \\\\' in tex, 'Plosive & ' in tex), (True,) * 5)
-check('LaTeX: a shared sound is plain, a sound of one language is in its colour, special characters are escaped', ('p' in tex, '\\textcolor[HTML]{2E5C8A}{b}' in tex, '\\textcolor[HTML]{C07820}{n\\_\\#}' in tex), (True, True, True))
-tex3 = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 't'}}, 'bbb': {'Plosive': {'Bilabial': 't'}}, 'ccc': {'Plosive': {'Bilabial': 'k'}}}), LANGS)
-check('LaTeX: a sound of two of three languages is printed once for each, in each colour', '\\textcolor[HTML]{2E5C8A}{t}\\,\\textcolor[HTML]{C07820}{t}' in tex3, True)
+# ── LaTeX: one table for each language ──
+two = spec({'bbb': {'Plosive': {'Bilabial': 'p'}, 'Nasal': {'Alveolar': 'n_#'}}, 'aaa': {'Plosive': {'Bilabial': 'p b'}}}, caption='A & B')
+tex = PT.render_latex(two, LANGS)
+tabs = tex.split('\\begin{table}')[1:]
+check('a chart with the sounds of two languages is two tables, one for each language in the order of the project (not of the typing), as a group: started, next, ended', (len(tabs), tex.startswith('\\tabgroupstart\n'), tex.count('\\tabgroupnext'), tex.rstrip().endswith('\\tabgroupend'), tex.index('Alpha') < tex.index('Beta')), (2, True, 1, True, True))
+check('the caption of each has the name of its language added when the caption has no {language}, and the caption is escaped', ('\\caption{A \\& B (Alpha)}' in tex, '\\caption{A \\& B (Beta)}' in tex), (True, True))
+check('each table has only the rows and columns of its language (the empty ones are dropped), booktabs style, scaled to the line, the sounds in the IPA font', ('Alveolar' not in tabs[0] and 'Nasal' not in tabs[0] and 'Bilabial' in tabs[0], 'Alveolar' in tabs[1] and 'Nasal' in tabs[1], '\\toprule' in tabs[0], '\\resizebox{\\linewidth}' in tabs[0], '{\\ipafont\\resizebox' in tabs[0]), (True,) * 5)
+check('the sounds are plain: no colour, shared or not; special characters are escaped; a sound of one language is only in its table', ('\\textcolor' in tex, 'n\\_\\#' in tabs[1], 'n\\_\\#' in tabs[0], ' & p b ' in tabs[0] or ' & p b' in tabs[0]), (False, True, False, True))
+check('the rows of a table end with \\\\ (two backslashes), the header too', (' & Bilabial \\\\' in tabs[0] and '\\\\\\\\' not in tabs[0], ' & Bilabial & Alveolar \\\\' in tabs[1]), (True, True))
+ph = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}, caption='Consonants of {language}'), LANGS)
+check('{language} in a caption is replaced, in each table, by the name of its language (nothing is added then); an empty caption is the name alone', ('\\caption{Consonants of Alpha}' in ph, '\\caption{Consonants of Beta}' in ph, '(Alpha)' in ph, '\\caption{Alpha}' in PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}, caption=''), LANGS)), (True, True, False, True))
+one = PT.render_latex(spec({'bbb': {'Plosive': {'Bilabial': 'p'}}}, caption='Sounds of {language}'), LANGS)
+check('a chart with one language is not split: one table, no group, the caption as it is (with {language} filled)', (one.count('\\begin{table}'), '\\tabgroup' in one, '\\caption{Sounds of Beta}' in one, '(Beta)' in one), (1, False, True, False))
+plain1 = PT.render_latex(spec({'bbb': {'Plosive': {'Bilabial': 'p'}}}, caption='Sounds'), LANGS)
+check('…and without the placeholder nothing is added to its caption', '\\caption{Sounds}' in plain1, True)
+three = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 't'}}, 'bbb': {'Plosive': {'Bilabial': 't'}}, 'ccc': {'Plosive': {'Bilabial': 'k'}}}), LANGS)
+check('three languages: three tables; a sound that two share is in each of their tables', (three.count('\\begin{table}'), three.count(' & t '), three.count(' & k ')), (3, 2, 1))
+lab = PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}, 'ccc': {'Plosive': {'Bilabial': 'p'}}}) | {'label': 'cons'}, LANGS)
+check('with a label: each table has its own (tab:label:code), the first also the number of the group and tab:label:first, the last the letter of the group (tab:label:last)', ('\\label{tab:cons:aaa}' in lab and '\\label{tab:cons:bbb}' in lab and '\\label{tab:cons:ccc}' in lab, lab.count('\\labelas{tab:cons}{\\arabic{table}}'), lab.count('\\label{tab:cons:first}'), lab.count('\\labelas{tab:cons:last}{\\alph{tabpart}}'), lab.index('tab:cons:first') < lab.index('tab:cons:ccc') < lab.index('tab:cons:last')), (True, 1, 1, 1, True))
+check('without a label there are no labels', '\\label' in PT.render_latex(two, LANGS), False)
+check('a language that has no sound in the chart gets no table', PT.render_latex(spec({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {}, 'ccc': {'Plosive': {'Bilabial': 'k'}}}), LANGS).count('\\begin{table}'), 2)
+
+# ── {language} on the website ──
+check('on the website one chart is shown for all: {language} is the names of the languages that have sounds in it, in the order of the project, with “and” before the last', (PT.caption_names(two, LANGS), re.search(r'cap-text"> – ([^<]*)<', PT.render_html(spec({'bbb': {'Plosive': {'Bilabial': 'p'}}, 'aaa': {'Plosive': {'Bilabial': 'p'}}, 'ccc': {'Plosive': {'Bilabial': 'k'}}}, caption='Sounds of {language}'), LANGS, number=1)).group(1)), (['Alpha', 'Beta'], 'Sounds of Alpha, Beta and Gamma'))
+check('a chart with no sound yet says all the languages of the project; a caption without the placeholder is as written', (PT.caption_names(spec({}), LANGS), 'Alpha, Beta and Gamma' in PT.render_html(spec({}, caption='All: {language}'), LANGS, number=1), 'Sounds</span>' in PT.render_html(spec({}, caption='Sounds'), LANGS, number=1)), (['Alpha', 'Beta', 'Gamma'], True, True))
+lst = PT.list_charts([LBL('a', 'Sounds of {language}'), json.dumps({'kind': 'vowels', 'label': 'b', 'caption': 'Two', 'columns': ['F'], 'rows': ['C'], 'inventory': {'aaa': {'C': {'F': 'i'}}, 'bbb': {'C': {'F': 'u'}}}})], LANGS)
+check('what the grammar can refer to: the caption as the site shows it, and the languages that get a table in the exports (none for a chart that is not split)', lst, [('a', 'Sounds of Alpha, Beta and Gamma', []), ('b', 'Two', ['aaa', 'bbb'])])
 
 # ── in a section ──
 src = 'Intro.\n\n```phonotable\n{"kind":"vowels","columns":["Front"],"rows":["Close"],"inventory":{"aaa":{"Close":{"Front":"i"}}}}\n```\n\nBetween.\n\n```phonotable\n{"kind":"consonants","columns":["Bilabial"],"rows":["Plosive"],"inventory":{}}\n```\n\nEnd with *markdown*.\n'
