@@ -131,6 +131,17 @@ def merge(spec, languages):
     return {'languages': present, 'cells': cells}
 
 
+def present_languages(spec, languages):
+    """The languages (as the project lists them, in its order) that have at least one sound in the chart."""
+    inv = spec.get('inventory', {})
+    return [l for l in languages if any(phonemes(cell) for row in inv.get(l['code'], {}).values() for cell in row.values())]
+
+
+def caption_names(spec, languages):
+    """The names that {language} stands for on the website: the languages of the chart (all the project's if the chart has no sound yet)."""
+    return [l['name'] for l in (present_languages(spec, languages) or languages)]
+
+
 def _hex(color):
     c = str(color or '').strip()
     if re.fullmatch(r'#[0-9a-fA-F]{6}', c):
@@ -174,7 +185,7 @@ def render_html(spec, languages, number=None, lab=None, anchors=True):
                   '<div class="pl-note">In black: sounds found in all the languages shown. In colour: sounds found only in some of them, in the colour of the language; '
                   'a sound found in several of them, but not in all, shows their colours together. Untick a language to leave its sounds out.</div></div>')
     ident = f' id="{e(_cap.anchor("table", spec["label"]))}" data-label="{e(spec["label"])}"' if spec.get('label') and anchors else ''   # a preview has no anchor: the page must not have the id twice
-    return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}"{ident}>{_cap.caption_html("table", number, spec["caption"], lab)}'
+    return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}"{ident}>{_cap.caption_html("table", number, _cap.fill_language(spec["caption"], caption_names(spec, languages), lab), lab)}'
             f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner"></th>{head}</tr></thead><tbody>{body}</tbody></table></div>{legend}</figure>')
 
 
@@ -185,24 +196,52 @@ def _tex(s):
     return ''.join(_LATEX_SPECIAL.get(ch, ch) for ch in str(s))
 
 
-def render_latex(spec, languages, render_text=None):
-    """The chart as a LaTeX table (needs xcolor and graphicx). A sound found in some of the languages is printed once for each of them,
-    in its colour. `render_text` makes the caption safe for LaTeX (default: escaping), so that a caption can hold references."""
+def _latex_table(caption, columns, rows, cells, extra=''):
+    """One LaTeX table: the caption above, then `extra` (labels), then the sounds in the IPA font (\\ipafont is in the preamble of the export)."""
+    cols = 'l|' + '|'.join('c' for _ in columns)
+    body = [f'{_tex(r)} & ' + ' & '.join(cells.get((r, c), '') for c in columns) + r' \\' for r in rows]
+    head = ' & ' + ' & '.join(_tex(c) for c in columns) + r' \\'
+    return ('\\begin{table}[ht]\n\\centering\n\\caption{%s}\n%s{\\ipafont\\resizebox{\\linewidth}{!}{%%\n\\begin{tabular}{%s}\n\\toprule\n%s\n\\midrule\n%s\n\\bottomrule\n\\end{tabular}}}\n\\end{table}\n'
+            % (caption, extra, cols, head, '\n'.join(body)))
+
+
+def render_latex(spec, languages, render_text=None, lab=None):
+    """The chart for LaTeX. A chart with the sounds of several languages is split into one table for each language (black, the rows and columns
+    that are empty for it left out): they share the number of the chart and are lettered, Table 1a, 1b ... The caption of each has its language:
+    {language} is replaced by its name, or, if the caption has no {language}, " (name)" is added. A chart with one language is one table, numbered
+    as usual. `render_text` makes a caption safe for LaTeX (default: escaping), so that a caption can hold references."""
     render_text = render_text or _tex
-    m = merge(spec, languages)
-    present, by_code = m['languages'], {l['code']: l for l in languages}
-    def sound(item):
-        if len(item['langs']) == len(present):
-            return _tex(item['p'])
-        return r'\,'.join('\\textcolor[HTML]{%s}{%s}' % (_hex(by_code[c].get('color'))[1:].upper(), _tex(item['p'])) for c in item['langs'])
-    cols = 'l|' + '|'.join('c' for _ in spec['columns'])
-    rows = []
-    for r in spec['rows']:
-        cells = [' '.join(sound(i) for i in m['cells'].get(r, {}).get(c, [])) for c in spec['columns']]
-        rows.append(f'{_tex(r)} & ' + ' & '.join(cells) + r' \\')
-    head = ' & ' + ' & '.join(_tex(c) for c in spec['columns']) + r' \\'
-    return ('\\begin{table}[ht]\n\\centering\n\\caption{%s}\n%s\\resizebox{\\linewidth}{!}{%%\n\\begin{tabular}{%s}\n\\toprule\n%s\n\\midrule\n%s\n\\bottomrule\n\\end{tabular}}\n\\end{table}\n'
-            % (render_text(spec['caption']), ('\\label{tab:%s}\n' % spec['label']) if spec.get('label') else '', cols, head, '\n'.join(rows)))
+    present = present_languages(spec, languages)
+    label = spec.get('label') or ''
+    sound = lambda p: _tex(p)
+    if len(present) <= 1:                                        # not split: as it is, with the name of its language if the caption asks for it
+        caption = _cap.fill_language(spec['caption'], [l['name'] for l in (present or languages)], lab)
+        cells = {}
+        for l in present:
+            for r in spec['rows']:
+                for c in spec['columns']:
+                    cells[(r, c)] = ' '.join(sound(p) for p in phonemes(spec['inventory'][l['code']].get(r, {}).get(c, '')))
+        return _latex_table(render_text(caption), spec['columns'], spec['rows'], cells, ('\\label{tab:%s}\n' % label) if label else '')
+    out = ['\\tabgroupstart']
+    for k, l in enumerate(present):
+        inv = spec['inventory'][l['code']]
+        rows = [r for r in spec['rows'] if any(phonemes(inv.get(r, {}).get(c, '')) for c in spec['columns'])]
+        cols = [c for c in spec['columns'] if any(phonemes(inv.get(r, {}).get(c, '')) for r in rows)]
+        cells = {(r, c): ' '.join(sound(p) for p in phonemes(inv.get(r, {}).get(c, ''))) for r in rows for c in cols}
+        base = spec['caption']
+        caption = base.replace(_cap.LANGUAGE, l['name']) if _cap.LANGUAGE in base else (f"{base} ({l['name']})" if base.strip() else l['name'])
+        extra = ''
+        if label:                                                # tab:L:code is this table, tab:L (the number) and tab:L:first / tab:L:last the group
+            extra += '\\label{tab:%s:%s}\n' % (label, _cap.clean_label(l['code']))
+            if k == 0:
+                extra += '\\labelas{tab:%s}{\\arabic{table}}\n\\label{tab:%s:first}\n' % (label, label)
+            if k == len(present) - 1:
+                extra += '\\labelas{tab:%s:last}{\\alph{tabpart}}\n' % label
+        if k:
+            out.append('\\tabgroupnext')
+        out.append(_latex_table(render_text(caption), cols, rows, cells, extra))
+    out.append('\\tabgroupend')
+    return '\n'.join(out) + '\n'
 
 
 # ── in a section: lift the blocks out before Markdown, put the charts in after ──
@@ -222,17 +261,20 @@ def render_block(text, languages, fmt='html', number=None, lab=None, render_text
         spec, err = clean(spec, {l['code'] for l in languages})
     if spec is None:
         return ('<div class="shortcode-error">Phonological table: %s</div>' % _html.escape(err)) if fmt == 'html' else '%% phonological table: %s\n' % err.replace('\n', ' ')
-    return render_html(spec, languages, number, lab) if fmt == 'html' else render_latex(spec, languages, render_text)
+    return render_html(spec, languages, number, lab) if fmt == 'html' else render_latex(spec, languages, render_text, lab)
 
 
 def list_charts(blocks, languages):
-    """[(label, caption)] of the blocks that are charts that can be shown, in order: what the grammar can refer to."""
+    """[(label, caption, parts)] of the blocks that are charts that can be shown, in order: what the grammar can refer to. The caption is the one
+    the website shows ({language} filled); the parts are the codes of the languages that the exports give a table of their own, none if the chart
+    is not split (fewer than two languages)."""
     codes, out = {l['code'] for l in languages}, []
     for b in blocks:
         spec = parse_block(b)[0]
         spec = clean(spec, codes)[0] if spec is not None else None
         if spec is not None:
-            out.append((spec['label'], spec['caption']))
+            present = present_languages(spec, languages)
+            out.append((spec['label'], _cap.fill_language(spec['caption'], caption_names(spec, languages)), [l['code'] for l in present] if len(present) > 1 else []))
     return out
 
 
