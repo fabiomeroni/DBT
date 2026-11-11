@@ -16,8 +16,8 @@ def check(name, got, want):
         bad += 1; print(f"✗ {name}\n    got : {got!r}\n    want: {want!r}")
 
 # ── the words ──
-check('the defaults are Table, Figure and an en dash', C.labels(None), {'table': 'Table', 'figure': 'Figure', 'separator': ' – '})
-check('a project can say its own words and separator', C.labels({'table': 'Tableau', 'figure': 'Figure', 'separator': ' : '}), {'table': 'Tableau', 'figure': 'Figure', 'separator': ' : '})
+check('the defaults are Table, Figure, an en dash, the plurals and the word and', C.labels(None), {'table': 'Table', 'figure': 'Figure', 'separator': ' – ', 'tables': 'Tables', 'figures': 'Figures', 'and': 'and'})
+check('a project can say its own words and separator (the plural is the singular and an s unless it gives one, or it keeps the default when the word is not changed)', (C.labels({'table': 'Tableau', 'figure': 'Figure', 'separator': ' : '}), C.labels({'table': 'Tableau', 'tables': 'Tableaux', 'and': 'et'})), ({'table': 'Tableau', 'figure': 'Figure', 'separator': ' : ', 'tables': 'Tableaus', 'figures': 'Figures', 'and': 'and'}, {'table': 'Tableau', 'figure': 'Figure', 'separator': ' – ', 'tables': 'Tableaux', 'figures': 'Figures', 'and': 'et'}))
 check('a word that is empty, too long, or not a text, is ignored: the default stays', C.labels({'table': '', 'figure': 'x' * 40, 'separator': 5}), C.DEFAULTS)
 check('what is not a settings object is ignored', (C.labels('Table'), C.labels([1])), (C.DEFAULTS, C.DEFAULTS))
 check('the caption text: spaces collapsed, cut at 400 without a trailing space', (C.caption_text('  a   b \n c '), len(C.caption_text('x ' * 300)), C.caption_text(None)), ('a b c', 399, ''))
@@ -74,6 +74,18 @@ ex2 = C.expand_refs('<p><img alt="See {{ref: map}}" src="a.png" /></p><figcaptio
 check('a reference inside a tag (the alt text of an image) is left as it is, so that the markup stays whole; one in the text of the caption becomes a link', ('alt="See {{ref: map}}" src="a.png"' in ex2, 'See <a class="xref" href="#fig-map"' in ex2), (True, True))
 check('a text for LaTeX: the ordinary parts escaped, a reference as LaTeX’s own number', C.latex_text('R&D, see {{ref: map}} (50%)', by, lambda s: s.replace('&', '\\&').replace('%', '\\%')), 'R\\&D, see \\figurename~\\ref{fig:map} (50\\%)')
 check('a figure caption with a reference in LaTeX', 'See \\figurename~\\ref{fig:map}' in C.figure_latex('See {{ref: map}}', 'images/a.png', lambda s_: C.latex_text(s_, by, str), 'x'), True)
+
+# ═════════ {language}, parts and groups (the exports split a chart into one table for each language) ═════════
+check('{language} in a caption becomes the names of the languages, joined with the project’s word for and; a caption without it is unchanged', (C.fill_language('Consonants of {language}', ['Nume', 'Dorig', 'Koro']), C.fill_language('Consonants of {language}', ['Nume']), C.fill_language('Consonants of {language}', ['Nume', 'Dorig'], {'and': 'et'}), C.fill_language('Consonants', ['Nume']), C.fill_language(None, ['a'])), ('Consonants of Nume, Dorig and Koro', 'Consonants of Nume', 'Consonants of Nume et Dorig', 'Consonants', ''))
+IDX2 = [('s1', {'tables': [('cons', 'C', ['num', 'drg', 'kro']), ('two', 'T', ['a', 'b']), ('one', 'O', []), ('', 'No label', ['x', 'y'])], 'figures': [('map', 'M')]})]
+_i2, by2, _d2 = C.build_index(IDX2)
+check('an item of the index knows its parts (the languages of a chart that the exports split), and has none if it is not split', (by2['cons']['parts'], by2['one']['parts'], by2['map']['parts']), (['num', 'drg', 'kro'], [], []))
+check('in LaTeX a split chart is referred to as a group: the first part and the letter of the last (Tables 1a–e, and for two parts Tables 1a–b)', (C.ref_latex('cons', by2), C.ref_latex('two', by2)), ('\\tablesname~\\ref{tab:cons:first}--\\ref{tab:cons:last}', '\\tablesname~\\ref{tab:two:first}--\\ref{tab:two:last}'))
+check('{{ref: label#code}} is one part (Table 1b); a part that does not exist is ??; a table that is not split is Table 1 whatever is after the #', (C.ref_latex('cons#drg', by2), C.ref_latex('cons#zzz', by2), C.ref_latex('one#drg', by2)), ('\\tablename~\\ref{tab:cons:drg}', '\\textbf{??}', '\\tablename~\\ref{tab:one}'))
+check('the website has one chart: a reference with a part is a link to the chart, Table 1', re.sub(r'<[^>]+>', '', C.ref_html('cons#drg', by2)), 'Table 1')
+check('the words of the project in a list of references: its word for and, and its plural for a group in LaTeX', (re.sub(r'<[^>]+>', '', C.ref_html('cons, map', by2, {'and': 'et'})), 'tablesname' in C.ref_latex('cons', by2, {'tables': 'Tableaux'}), '\\newcommand{\\tablesname}{Tableaux}' in C.latex_setup({'tables': 'Tableaux'})), ('Table 1 et Figure 1', True, True))
+su = C.latex_setup(None)
+check('the preamble has the macros that number the tables of a group 1a, 1b … and the labels that show a number or a letter only', all(x in su for x in ('\\newcounter{tabpart}', '\\tabgroupstart', '\\tabgroupnext', '\\tabgroupend', '\\labelas', '\\tablesname', '\\figuresname')), True)
 
 print(f"\n{ok} passed, {bad} failed")
 sys.exit(1 if bad else 0)
