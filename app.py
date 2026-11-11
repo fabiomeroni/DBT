@@ -3398,17 +3398,23 @@ def _apply_inline(text):
     # escape the literal parts between commands.
     return text
 
-_LATEX_DOC = r"""\documentclass[12pt, a4paper]{{article}}
-\usepackage[utf8]{{inputenc}}
-\usepackage[T1]{{fontenc}}
+_LATEX_DOC = r"""% !TEX program = xelatex
+% Compile with XeLaTeX (or LuaLaTeX): the IPA and the fonts need it. Overleaf: Menu > Compiler. Command line: xelatex grammar.tex (twice).
+\documentclass[12pt, a4paper]{{article}}
+\usepackage{{iftex}}
+\ifPDFTeX\PackageError{{grammar}}{{This file must be compiled with XeLaTeX or LuaLaTeX, not with pdfLaTeX}}{{Choose XeLaTeX as the engine (Overleaf: Menu > Compiler; TeXstudio: Options > Configure > Build) or run: xelatex grammar.tex}}\fi
+\usepackage{{fontspec}}
+{latex_fonts}
+\usepackage{{newunicodechar}}
+{latex_ipachars}
 \usepackage{{gb4e}}\noautomath
 \usepackage{{booktabs}}
-\usepackage{{microtype}}
 \usepackage{{hyperref}}
 \usepackage{{xcolor}}
 \usepackage{{graphicx}}
 \usepackage[export]{{adjustbox}}
 {latex_captions}
+{latex_captionfont}
 {latex_colors}
 \title{{{latex_title}\\
 \large {latex_subtitle}}}
@@ -3423,6 +3429,50 @@ _LATEX_DOC = r"""\documentclass[12pt, a4paper]{{article}}
 
 \end{{document}}
 """
+
+# The fonts of the export, by role. A project can choose them in project.json ("latex": {"fonts": {"body": "...", "headings": "...", "captions": "...",
+# "ipa": "..."}}); a font that is not installed on the machine that compiles falls back to Latin Modern, so that the document always compiles.
+_LATEX_FONT_ROLES = {'body': 'Latin Modern Roman', 'headings': None, 'captions': None, 'ipa': 'Charis SIL'}
+_LATEX_FONT_FALLBACK = 'Latin Modern Roman'
+
+def _font_name(v):
+    v = str(v or '').strip()
+    return v if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,59}", v) else ''             # a font name, nothing that could carry LaTeX
+
+def _latex_fonts(settings):
+    """The preamble lines that set the fonts of the roles: main text, headings, captions and IPA (\\ipafont, also used in the charts)."""
+    f = (settings or {}).get('fonts') if isinstance(settings, dict) else None
+    f = f if isinstance(f, dict) else {}
+    pick = {role: _font_name(f.get(role)) or default for role, default in _LATEX_FONT_ROLES.items()}
+    fb = _LATEX_FONT_FALLBACK
+    ex = lambda name, then: '\\IfFontExistsTF{%s}{%s}{%s}' % (name, then % name, then % fb)
+    # the IPA font: the one asked for, then the usual ones that have the IPA, then Latin Modern (which has not: the compilation says so)
+    chain = [n for n in dict.fromkeys([pick['ipa'], 'Charis SIL', 'Gentium Plus', 'Doulos SIL', 'DejaVu Serif']) if n]
+    ipa = ('\\PackageWarningNoLine{grammar}{No font with the IPA was found (Charis SIL is recommended): the IPA letters will be missing}'
+           '\\newfontfamily\\ipafont{%s}' % fb)
+    for n in reversed(chain):
+        ipa = '\\IfFontExistsTF{%s}{\\newfontfamily\\ipafont{%s}}{%s}' % (n, n, ipa)
+    lines = [ex(pick['body'], '\\setmainfont{%s}'), ipa]
+    if pick['headings']:
+        lines += [ex(pick['headings'], '\\newfontfamily\\headingfont{%s}'), '\\usepackage{titlesec}',
+                  '\\titleformat{\\section}{\\headingfont\\Large\\bfseries}{\\thesection}{1em}{}',
+                  '\\titleformat{\\subsection}{\\headingfont\\large\\bfseries}{\\thesubsection}{1em}{}',
+                  '\\titleformat{\\subsubsection}{\\headingfont\\normalsize\\bfseries}{\\thesubsubsection}{1em}{}']
+    if pick['captions']:
+        lines += [ex(pick['captions'], '\\newfontfamily\\dbtcaptionfont{%s}')]
+    return '\n'.join(lines)
+
+def _latex_caption_font(settings):
+    """Once the caption package is loaded: the captions in their font, if the project chose one."""
+    f = (settings or {}).get('fonts') if isinstance(settings, dict) else None
+    return '\\DeclareCaptionFont{dbtcap}{\\dbtcaptionfont}\\captionsetup{font={small,dbtcap}}' if isinstance(f, dict) and _font_name(f.get('captions')) else ''
+
+_IPA_CHARS = re.compile('[\u0250-\u02FF\u1D00-\u1DBF\u207F\u00E6\u00F0\u00F8\u0153\u014B\u03B2\u03B8\u03C7]')
+
+def _latex_ipa_chars(text):
+    """For each IPA letter that occurs in the document, a line that sets it in the IPA font wherever it appears (the same letters as on the site;
+    the combining marks and the ordinary letters are left to the text font)."""
+    return '\n'.join('\\newunicodechar{%s}{{\\ipafont\\char"%04X }}' % (ch, ord(ch)) for ch in sorted(set(_IPA_CHARS.findall(text))))
 
 @app.route('/api/grammar/export/latex')
 def export_grammar_latex():
@@ -3446,6 +3496,7 @@ def export_grammar_latex():
                  + refs_lib.latex_list(used, _le, refs_lib.Context(_refs_load())))
     lx   = PROJECT['latex']
     tex  = _LATEX_DOC.format(body=body, latex_title=lx.get('title', 'Comparative Grammar'),
+                             latex_fonts=_latex_fonts(lx), latex_captionfont=_latex_caption_font(lx), latex_ipachars=_latex_ipa_chars(body),
                              latex_subtitle=lx.get('subtitle', ''), latex_author=lx.get('author', ''),
                              latex_captions=captions_lib.latex_setup(PROJECT['captions']),
                              latex_colors='\n'.join(
