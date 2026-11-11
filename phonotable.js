@@ -66,7 +66,7 @@ const PhonoEditor = (() => {
       const k = KIND_NAME[spec.kind];
       root.innerHTML = `<div class="pt-bar" style="justify-content:space-between;"><strong>${index === null ? 'New' : 'Edit the'} ${k} chart</strong><button type="button" class="pt-btn" data-act="back">← Charts of this section</button></div>
         <h4>Caption</h4>
-        <p class="pt-help">Shown above the chart as “${esc(D.captions.table)} 3${esc(D.captions.separator)}…”: you write only the text, the number is automatic and goes on through the whole grammar. Leave it empty for the number alone.</p>
+        <p class="pt-help">Shown above the chart as “${esc(D.captions.table)} 3${esc(D.captions.separator)}…”: you write only the text, the number is automatic and goes on through the whole grammar. Leave it empty for the number alone. Write <code>{language}</code> where the name of the language belongs: the site shows the names of the languages of the chart, and the PDF, Word and LaTeX exports print one table for each language (Table 1a, 1b…), each with its own name (without <code>{language}</code>, the name is added in parentheses).</p>
         <div class="pt-field"><input type="text" id="pt-caption-${id}" value="${esc(spec.caption)}" maxlength="400" aria-label="Caption of the chart"></div>
         <h4>Label</h4>
         <p class="pt-help">Optional. A short name (letters, digits, - and _) that lets the text refer to this table: <code>{{ref: name}}</code> becomes a link reading “${esc(D.captions.table)} 3”, always with the right number, in the grammar and in the dictionary.</p>
