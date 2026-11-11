@@ -1331,7 +1331,7 @@ async function loadCaptionIndex() {
 // {{ref: label}} (or several, {{ref: a, b}}) becomes a link to the table or the figure in the grammar, with the number it has now. The same as in the grammar.
 function xref(text) {
   return String(text ?? '').replace(/\{\{\s*ref\s*:\s*([^}]*)\}\}/g, (_m, spec) => {
-    const labels = spec.split(/[,;]/).map(s => s.trim().replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 40)).filter(Boolean);
+    const labels = spec.split(/[,;]/).map(s => s.trim().split('#')[0].replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 40)).filter(Boolean);
     if (!labels.length) return '<span class="shortcode-error">Reference needs a label</span>';
     const parts = labels.map(l => {
       const it = CAP.by[l.toLowerCase()];
