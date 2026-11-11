@@ -19,17 +19,22 @@ has its own. Nothing here knows a language of the project or the web framework.
 import html as _html
 import re
 
-DEFAULTS = {'table': 'Table', 'figure': 'Figure', 'separator': ' – '}
+DEFAULTS = {'table': 'Table', 'figure': 'Figure', 'separator': ' – ', 'tables': 'Tables', 'figures': 'Figures', 'and': 'and'}
 MAX_WORD, MAX_SEP, MAX_LABEL = 30, 8, 40
 
 
 def labels(settings=None):
-    """The words of the captions: the defaults, changed by what the project says (short plain strings only)."""
+    """The words of the captions: the defaults, changed by what the project says (short plain strings only). The plural forms ("Tables 1a–e")
+    are the singular with an s unless the project gives them; `and` is the word between the last two items of a list."""
     out = dict(DEFAULTS)
-    for k, limit in (('table', MAX_WORD), ('figure', MAX_WORD), ('separator', MAX_SEP)):
+    for k, limit in (('table', MAX_WORD), ('figure', MAX_WORD), ('separator', MAX_SEP), ('tables', MAX_WORD), ('figures', MAX_WORD), ('and', MAX_WORD)):
         v = (settings or {}).get(k) if isinstance(settings, dict) else None
         if isinstance(v, str) and 0 < len(v.strip() if k != 'separator' else v) <= limit:
             out[k] = v.strip() if k != 'separator' else v
+    for one, many in (('table', 'tables'), ('figure', 'figures')):
+        given = isinstance(settings, dict) and isinstance(settings.get(many), str) and settings.get(many).strip()
+        if out[one] != DEFAULTS[one] and not given:
+            out[many] = out[one] + 's'
     return out
 
 
@@ -48,9 +53,24 @@ def anchor(kind, label):
     return ('tab-' if kind == 'table' else 'fig-') + label
 
 
+LANGUAGE = '{language}'
+
+
+def join_names(names, lab=None):
+    """['Alpha', 'Beta', 'Gamma'] -> 'Alpha, Beta and Gamma' (the word between the last two is the project's)."""
+    names = [str(n) for n in names if str(n)]
+    word = f" {labels(lab)['and']} "
+    return names[0] if len(names) == 1 else (', '.join(names[:-1]) + word + names[-1]) if names else ''
+
+
+def fill_language(text, names, lab=None):
+    """The caption of a chart with {language} replaced by the names of the languages (all of them on the website, one for each table in the exports)."""
+    return str(text or '').replace(LANGUAGE, join_names(names, lab))
+
+
 def caption_html(kind, number, text, lab=None):
     """<figcaption> for a 'table' or a 'figure': the label and the number, then the separator and the text (if there is one)."""
-    lab = lab or DEFAULTS
+    lab = labels(lab)
     e = _html.escape
     name = lab[kind] + (f' {number}' if number is not None else '')
     text = caption_text(text)
@@ -105,10 +125,11 @@ def build_index(sections):
     items, by_label, dup, counters = [], {}, [], {'table': 0, 'figure': 0}
     for sid, found in sections:
         for kind, key in (('table', 'tables'), ('figure', 'figures')):
-            for k, (label, text) in enumerate(found.get(key, [])):
+            for k, entry in enumerate(found.get(key, [])):
+                label, text = entry[0], entry[1]
                 counters[kind] += 1
                 it = {'kind': kind, 'number': counters[kind], 'label': label, 'text': text, 'section': sid, 'kindIndex': k,
-                      'anchor': anchor(kind, label) if label else ''}
+                      'anchor': anchor(kind, label) if label else '', 'parts': list(entry[2]) if len(entry) > 2 else []}
                 items.append(it)
                 if label:
                     if label.lower() in by_label: dup.append(label)
@@ -121,7 +142,13 @@ _CODE = re.compile(r'(<pre\b.*?</pre>|<code\b.*?</code>)', re.S)
 
 
 def _labels_of(spec):
-    return [clean_label(x) for x in re.split(r'[,;]', spec) if x.strip()]
+    """[(label, part)] of a {{ref: …}}: `cons` or `cons#drg` (a part is one language's table of a chart in the exports: the website ignores it)."""
+    out = []
+    for x in re.split(r'[,;]', spec):
+        if x.strip():
+            l, _, p = x.strip().partition('#')
+            out.append((clean_label(l), clean_label(p)))
+    return out
 
 
 def _join(parts, last=' and '):
@@ -131,16 +158,16 @@ def _join(parts, last=' and '):
 def ref_html(spec, by_label, lab=None, base=''):
     """The text of one {{ref: …}}: a link for each label, "Table 2" or "Figure 3" with the number it has now. `base` is the page the links go to
     ('' on the page that has the item)."""
-    lab, e = lab or DEFAULTS, _html.escape
-    labels = _labels_of(spec)
-    if not labels:
+    lab, e = labels(lab), _html.escape
+    labels_ = _labels_of(spec)
+    if not labels_:
         return '<span class="shortcode-error">Reference needs a label</span>'
     parts = []
-    for l in labels:
+    for l, _part in labels_:
         it = by_label.get(l.lower())
         parts.append(f'<a class="xref" href="{e(base)}#{e(it["anchor"])}" title="{e(caption_text(it["text"]))}">{e(lab[it["kind"]])} {it["number"]}</a>' if it
                      else f'<span class="shortcode-error">Reference not found: {e(l)}</span>')
-    return _join(parts)
+    return _join(parts, f" {lab['and']} ")
 
 
 _TAG = re.compile(r'(<[^>]*>)')
@@ -160,12 +187,27 @@ def expand_refs(text, by_label, lab=None, base=''):
 
 
 def ref_latex(spec, by_label, lab=None):
-    """{{ref: …}} for LaTeX: the word of the project and the number LaTeX gives the table or figure (\\ref), with a label that exists."""
-    parts = []
-    for l in _labels_of(spec):
+    """{{ref: …}} for LaTeX: the word of the project and the number LaTeX gives (\\ref). A chart that the exports split into one table for each
+    language is referred to as a group, "Tables 1a–e" (the first part and the letter of the last), or, with {{ref: label#code}}, as one part,
+    "Table 1b"; a table that is not split is "Table 1"."""
+    lab = labels(lab)
+    out = []
+    for l, part in _labels_of(spec):
         it = by_label.get(l.lower())
-        parts.append(('\\%sname~\\ref{%s:%s}' % (it['kind'], 'tab' if it['kind'] == 'table' else 'fig', it['label'])) if it else '\\textbf{??}')
-    return _join(parts) if parts else '\\textbf{??}'
+        if not it:
+            out.append('\\textbf{??}'); continue
+        kind, pre = it['kind'], ('tab' if it['kind'] == 'table' else 'fig')
+        parts = it.get('parts') or []
+        if kind == 'table' and len(parts) > 1:
+            if part and part in parts:
+                out.append('\\tablename~\\ref{tab:%s:%s}' % (it['label'], part))
+            elif part:
+                out.append('\\textbf{??}')
+            else:
+                out.append('\\tablesname~\\ref{tab:%s:first}--\\ref{tab:%s:last}' % (it['label'], it['label']))
+        else:
+            out.append('\\%sname~\\ref{%s:%s}' % (kind, pre, it['label']))
+    return _join(out, ' ' + lab['and'] + ' ') if out else '\\textbf{??}'
 
 
 # ── LaTeX: the figures and the words of the captions ──
@@ -197,10 +239,19 @@ def figure_latex(alt, src, escape, label=''):
 
 
 def latex_setup(lab=None):
-    """The lines of the preamble that give LaTeX the project's words and separator for its own numbering."""
-    lab = lab or DEFAULTS
+    """The lines of the preamble that give LaTeX the project's words and separator for its own numbering, and the macros that number the tables of a
+    chart split by language 1a, 1b … (the counter of tables goes up once for the group)."""
+    lab = labels(lab)
     sep = lab['separator'].strip()
     labelsep = {'.': 'period', ':': 'colon', '–': 'endash', '-': 'endash', '—': 'endash'}.get(sep, 'endash')
     word = lambda s: s.replace('\\', '').replace('{', '').replace('}', '').replace('%', '').replace('#', '').replace('&', '\\&').replace('_', '\\_')
-    return ('\\usepackage[labelsep=%s]{caption}\n\\AtBeginDocument{\\renewcommand{\\tablename}{%s}\\renewcommand{\\figurename}{%s}}'
-            % (labelsep, word(lab['table']), word(lab['figure'])))
+    return ('\\usepackage[labelsep=%s]{caption}\n'
+            '\\AtBeginDocument{\\renewcommand{\\tablename}{%s}\\renewcommand{\\figurename}{%s}}\n'
+            '\\newcommand{\\tablesname}{%s}\\newcommand{\\figuresname}{%s}\n'
+            '%% the tables of a chart split by language are numbered 1a, 1b ...: the counter of tables goes up once for the group\n'
+            '\\newcounter{tabpart}\n'
+            '\\newcommand{\\tabgroupstart}{\\setcounter{tabpart}{1}\\renewcommand{\\thetable}{\\arabic{table}\\alph{tabpart}}}\n'
+            '\\newcommand{\\tabgroupnext}{\\addtocounter{table}{-1}\\stepcounter{tabpart}}\n'
+            '\\newcommand{\\tabgroupend}{\\renewcommand{\\thetable}{\\arabic{table}}}\n'
+            '\\makeatletter\\newcommand{\\labelas}[2]{{\\def\\@currentlabel{#2}\\label{#1}}}\\makeatother'
+            % (labelsep, word(lab['table']), word(lab['figure']), word(lab['tables']), word(lab['figures'])))
