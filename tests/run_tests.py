@@ -64,7 +64,7 @@ class Site:
             prepare(self.dir)
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0)); self.port = s.getsockname()[1]
-        self.env = dict(os.environ, AUTHOR_PASSWORD=PASSWORD, PORT=str(self.port), DBT_DEBUG="0", PYTHONUNBUFFERED="1")
+        self.env = dict(os.environ, AUTHOR_PASSWORD=PASSWORD, PORT=str(self.port), DBT_DEBUG="0", PYTHONUNBUFFERED="1", DBT_SNAPSHOT_DISABLE="1")      # no daily snapshot, except in the backup group
         for k in env_unset: self.env.pop(k, None)
         self.env.update(extra_env or {})
         self.url = f"http://127.0.0.1:{self.port}/"
@@ -3893,12 +3893,138 @@ def suite_glossary(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 22. backups: the button, the reminder, the daily snapshots, their disposal after a month ─────────────────────────
+def suite_backup(browser, args):
+    import datetime as dt, hashlib, zipfile, io as _io
+    S = "backup"
+    section("backups: the Backup button, the reminder, the daily snapshots")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_backup.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the backup engine passes its own direct tests (files kept, fingerprint, archive, reminder, when a snapshot is due, the one-month disposal)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site(extra_env={"DBT_SNAPSHOT_DISABLE": "0", "DBT_SNAPSHOT_CHECK_SECONDS": "0"})
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        J = {"Content-Type": "application/json"}; U = lambda p: site.url + "api/backup/" + p
+        snapdir = site.dir / "uploads" / "backups" / "snapshots"; state = site.dir / "uploads" / "backup_state.json"
+        today = dt.date.today()
+        check(S, "the backup is the author’s alone: a visitor gets 401 for the status, the download, the list of snapshots, a snapshot and a disposal", [va.get(U("status")).status, va.get(U("download")).status, va.get(U("snapshots")).status, va.get(U("snapshots/daily-2026-01-01.zip")).status, va.post(U("snapshots/dispose"), headers=J, data="{}").status] == [401] * 5, "")
+        st0 = aa.get(U("status")).json()
+        check(S, "before anything is downloaded the reminder says never, and counts the files that would be kept", st0["level"] == "never" and st0["lastBackup"] is None and st0["files"] >= 15, str(st0)[:200])
+        # ── the daily snapshot ──
+        def snaps(): return aa.get(U("snapshots")).json()["snapshots"]
+        for _ in range(40):
+            if snaps(): break
+            time.sleep(0.25)
+        s1 = snaps()
+        check(S, "the first request of the site makes the first daily snapshot by itself (named with the day), a valid archive of the same kind as the download", len(s1) == 1 and s1[0]["name"] == f"daily-{today.isoformat()}.zip" and s1[0]["eligible"] is False and zipfile.ZipFile(snapdir / s1[0]["name"]).testzip() is None, str(s1))
+        z = zipfile.ZipFile(snapdir / s1[0]["name"]); top = [n for n in z.namelist() if n.endswith("BACKUP-README.txt")][0].split("/")[0] + "/"
+        check(S, "…it says in its readme that it is a daily snapshot and how to restore, and holds the dictionary, the grammar, the glossary, the references, the images and the project settings", "daily snapshot" in z.read(top + "BACKUP-README.txt").decode() and all(top + p in z.namelist() for p in ("project/dictionary.xml", "project/grammar/s1.md", "project/glossary/predicate.md", "project/references.json", "project/project.json", "manifest.json")) and any(n.startswith(top + "project/images/") for n in z.namelist()), str(z.namelist()[:5]))
+        for _ in range(6): aa.get(U("status")); time.sleep(0.1)
+        time.sleep(0.6)
+        check(S, "within the day no other snapshot is made, however much the site is used, and even after an edit", len(snaps()) == 1 and (aa.post(site.url + "api/glossary/predicate", headers=J, data=json.dumps({"source": "## Predicate\n\nEdited today."})).status == 200) and (time.sleep(0.6) or len(snaps()) == 1), str(len(snaps())))
+        sd = json.loads(state.read_text(encoding="utf-8")); sd["lastSnapshotAt"] = (dt.datetime.now() - dt.timedelta(days=2)).isoformat(timespec="seconds"); state.write_text(json.dumps(sd), encoding="utf-8")
+        aa.get(U("status")); time.sleep(0.2); aa.get(U("status"))
+        for _ in range(40):
+            if len(snaps()) == 2: break
+            time.sleep(0.25)
+        check(S, "a day later, after an edit, the next use of the site makes a new snapshot (a second one on the same day has the hour in its name: nothing is overwritten)", len(snaps()) == 2 and snaps()[0]["name"].startswith(f"daily-{today.isoformat()}-"), str([s_["name"] for s_ in snaps()]))
+        sd = json.loads(state.read_text(encoding="utf-8")); sd["lastSnapshotAt"] = (dt.datetime.now() - dt.timedelta(days=3)).isoformat(timespec="seconds"); state.write_text(json.dumps(sd), encoding="utf-8")
+        aa.get(U("status")); time.sleep(0.8); aa.get(U("status")); time.sleep(0.5)
+        check(S, "a day with no edit since the last snapshot is skipped: nothing is kept twice", len(snaps()) == 2, str(len(snaps())))
+        sd = json.loads(state.read_text(encoding="utf-8")); sd["lastSnapshotAt"] = dt.datetime.now().isoformat(timespec="seconds"); state.write_text(json.dumps(sd), encoding="utf-8")      # from here on no snapshot is due: the test is the only one to write the state
+        # ── the download ──
+        r = aa.get(U("download")); body = r.body()
+        zd = zipfile.ZipFile(_io.BytesIO(body)); topd = zd.namelist()[0].split("/")[0] + "/"
+        cd = r.headers.get("content-disposition", "")
+        check(S, "the download is a valid zip, named with the project and the date, sent as a file to save", r.status == 200 and r.headers["content-type"] == "application/zip" and "attachment" in cd and re.search(r"dbt-backup-[a-z0-9-]+-\d{8}-\d{6}\.zip", cd) is not None and zd.testzip() is None, cd)
+        live = {"project/dictionary.xml": site.dir / "project" / "dictionary.xml", "project/grammar/s1.md": site.dir / "project" / "grammar" / "s1.md", "project/glossary/predicate.md": site.dir / "project" / "glossary" / "predicate.md",
+                "project/references.json": site.dir / "project" / "references.json", "project/project.json": site.dir / "project" / "project.json"}
+        check(S, "it holds the live files, byte for byte (the dictionary, a grammar section, a glossary entry as just edited, the references, the project settings)", all(zd.read(topd + k) == v.read_bytes() for k, v in live.items()) and b"Edited today." in zd.read(topd + "project/glossary/predicate.md"), "")
+        mf = json.loads(zd.read(topd + "manifest.json"))
+        check(S, "the manifest lists every file with its SHA-256 and each is right; the backups, the snapshots, the state and the import files are not in the archive", all(hashlib.sha256(zd.read(topd + e["path"])).hexdigest() == e["sha256"] for e in mf["files"]) and not [n for n in zd.namelist() if "backups" in n or "backup_state" in n or "/import/" in n or n.endswith(".tmp")] and len(mf["files"]) == st0["files"], str(len(mf["files"])))
+        st1 = aa.get(U("status")).json()
+        check(S, "after a download the reminder says today, with nothing edited since", st1["level"] == "ok" and st1["daysAgo"] == 0 and st1["changedSince"] is False and st1["lastBackup"][:10] == today.isoformat(), str(st1)[:200])
+        aa.post(site.url + "api/glossary/predicate", headers=J, data=json.dumps({"source": "## Predicate\n\nEdited again."}))
+        st2 = aa.get(U("status")).json()
+        check(S, "an edit makes it say that there are edits since (still fine within a week)", st2["changedSince"] is True and st2["level"] == "ok", str(st2)[:160])
+        def age_download(days):
+            d = json.loads(state.read_text(encoding="utf-8")); d["lastDownloadAt"] = (dt.datetime.now() - dt.timedelta(days=days)).isoformat(timespec="seconds"); state.write_text(json.dumps(d), encoding="utf-8")
+            return aa.get(U("status")).json()
+        check(S, "with edits since, the reminder warns after a week (due) and more after a month (old); a backup is never reproached when nothing has been edited since", (lambda lv: lv == ["ok", "due", "due", "old", "old"])([age_download(d_)["level"] for d_ in (6, 7, 29, 30, 90)]), True)
+        # ── a restore: the archive brings back what was lost ──
+        (site.dir / "project" / "grammar" / "s1.md").unlink(); (site.dir / "project" / "glossary" / "predicate.md").write_text("## Wrecked\n", encoding="utf-8")
+        for n_ in zd.namelist():
+            if n_.startswith(topd + "project/") or n_.startswith(topd + "uploads/"):
+                tgt = site.dir / n_[len(topd):]; tgt.parent.mkdir(parents=True, exist_ok=True); tgt.write_bytes(zd.read(n_))
+        check(S, "restoring (copying the project folder of the archive over the site’s, as its readme says) brings back the section that was deleted and the entry that was wrecked", all((site.dir / k).read_bytes() == zd.read(topd + k) for k in ("project/grammar/s1.md", "project/glossary/predicate.md")) and aa.get(site.url + "api/glossary/predicate").json()["term"] == "Predicate", "")
+        # ── the disposal of snapshots that are a month old ──
+        mk = lambda days: (snapdir / f"daily-{(today - dt.timedelta(days=days)).isoformat()}.zip")
+        for days in (5, 29, 30, 31, 120): mk(days).write_bytes(b"PK" + b"x" * (100 + days))
+        (snapdir / "notes.txt").write_text("keep me", encoding="utf-8")
+        ls = {s_["name"]: s_ for s_ in aa.get(U("snapshots")).json()["snapshots"]}
+        check(S, "the list says for each snapshot its day, age and size, and that it can be disposed of from its 30th day: 29 days no, 30 days yes; other files are not listed", [ls[mk(d_).name]["eligible"] for d_ in (5, 29, 30, 31, 120)] == [False, False, True, True, True] and ls[mk(30).name]["ageDays"] == 30 and "notes.txt" not in ls, str({k: v["ageDays"] for k, v in ls.items()}))
+        stx = aa.get(U("status")).json()["snapshots"]
+        check(S, "the status counts them and says how many (and how much) a month old or more: the three fakes", stx["eligible"]["count"] == 3 and stx["eligible"]["bytes"] == 132 + 133 + 222, str(stx))
+        r1 = aa.post(U("snapshots/dispose"), headers=J, data=json.dumps({"names": [mk(29).name, mk(30).name, "../backup_state.json", "..\\x.zip", "notes.txt", "daily-2020-01-01.zip", 7]})).json()
+        check(S, "disposing the snapshots named removes only the one that is a month old: the one of 29 days, a path, another file and names that do not exist are refused with the reason", [x["name"] for x in r1["removed"]] == [mk(30).name] and len(r1["refused"]) == 6 and not mk(30).exists() and mk(29).exists() and (snapdir / "notes.txt").exists() and state.exists(), str(r1)[:300])
+        r2 = aa.post(U("snapshots/dispose"), headers=J, data=json.dumps({"eligible": True})).json()
+        check(S, "“dispose of all that are a month old” removes the rest of them (31 and 120 days) and reports the space freed; the young ones, today’s snapshots and the other file stay", sorted(x["name"] for x in r2["removed"]) == sorted([mk(31).name, mk(120).name]) and r2["freed"] == 133 + 222 and mk(29).exists() and mk(5).exists() and len(snaps()) == 4 and (snapdir / "notes.txt").exists(), str(r2)[:200])
+        check(S, "a snapshot can be downloaded by its name; a name that is not a snapshot is 404", aa.get(U(f"snapshots/{mk(29).name}")).status == 200 and aa.get(U("snapshots/notes.txt")).status == 404 and aa.get(U("snapshots/..%2Fbackup_state.json")).status in (404, 400), "")
+        # ── the button, in every page ──
+        pv = vis.new_page(); errs = []; watch(pv, errs)
+        pages = ["index.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "glossary.html", "concordance.html"]
+        for p_ in pages:
+            open_page(pv, site, p_, None, 500)
+        check(S, "a visitor sees no Backup button on any page", all((open_page(pv, site, p_, None, 400) or pv.locator("#backup-box").count()) == 0 for p_ in pages[:4]), "")
+        pa = au.new_page(); watch(pa, errs); present = {}
+        for p_ in pages:
+            open_page(pa, site, p_, None, 300); pa.wait_for_timeout(600); present[p_] = pa.locator("#backup-btn").count()
+        open_page(pa, site, "about.html", None, 400)
+        check(S, "the author sees the Backup button (and its reminder) in the top bar of every page that has the author’s login", all(v == 1 for v in present.values()) and pa.locator("#backup-box").count() == 0, str(present))
+        age_download(40)
+        open_page(pa, site, "grammar.html", "#backup-note", 800); pa.wait_for_timeout(800)
+        check(S, "the reminder is beside the button, and turns to a warning when there are edits and the last backup is old (a month: red)", pa.inner_text("#backup-note") == "last backup: 40 days ago" and "old" in (pa.get_attribute("#backup-note", "class") or "") and pa.get_attribute("#backup-btn", "data-level") == "old", pa.inner_text("#backup-note"))
+        with pa.expect_download() as dl: pa.click("#backup-btn")
+        zz = zipfile.ZipFile(dl.value.path()); pa.wait_for_function("document.getElementById('backup-note').textContent === 'last backup: today'", timeout=8000)
+        check(S, "a click on the button downloads the archive, and the reminder says today", zz.testzip() is None and dl.value.suggested_filename.endswith(".zip") and pa.get_attribute("#backup-btn", "data-level") == "ok", dl.value.suggested_filename)
+        # ── the panel ──
+        for days in (31, 45): mk(days).write_bytes(b"PK" + b"y" * 300)
+        pa.click("#backup-note"); pa.wait_for_selector("#bk-download"); pa.wait_for_timeout(400)
+        rows = pa.locator("#backup-modal .bk-table tr").count() - 1; x = pa.locator("#backup-modal .bk-x").count(); wait = pa.locator("#backup-modal .bk-wait").count()
+        check(S, "the panel lists the daily snapshots; a trash can is offered only for those a month old or more, the others say “after 30 days”; a button disposes of all those at once, with their number", rows == len(snaps()) and x == 2 and wait == rows - 2 and "Dispose of them" in pa.inner_text("#bk-dispose-all") and "2" in pa.inner_text("#backup-modal .bk-line:last-of-type"), pa.inner_text("#backup-modal .bk-table")[:200])
+        check(S, "the panel says what the backup is for, what a snapshot is for (and that it does not survive the loss of the server), and that snapshots are never removed by themselves", "protects you if the server is lost" in pa.inner_text("#backup-modal") and "does not survive the loss of the server" in pa.inner_text("#backup-modal") and "never removed by themselves" in pa.inner_text("#backup-modal"), "")
+        pa.locator("#backup-modal .bk-x").first.click(); pa.wait_for_function("document.querySelectorAll('#backup-modal .bk-x').length === 1", timeout=8000)
+        check(S, "the trash can disposes of one snapshot (after the confirmation); the panel and the folder show it", pa.locator("#backup-modal .bk-x").count() == 1 and len(list(snapdir.glob("daily-*.zip"))) == rows - 1, f"{len(list(snapdir.glob('daily-*.zip')))} files, {rows} rows")
+        n_before = len(list(snapdir.glob("daily-*.zip")))
+        pa.click("#bk-dispose-all"); pa.wait_for_function("document.querySelectorAll('#backup-modal .bk-x').length === 0", timeout=8000); pa.wait_for_timeout(300)
+        check(S, "the button disposes of all that are a month old; the message says how many and how much space is freed; none remains to dispose of, and the young ones are still there", "snapshot" in pa.inner_text("#bk-msg") and "freed" in pa.inner_text("#bk-msg") and pa.locator("#bk-dispose-all").count() == 0 and not any(s_["eligible"] for s_ in snaps()) and mk(29).exists() and len(list(snapdir.glob("daily-*.zip"))) == n_before - 1, pa.inner_text("#bk-msg"))
+        pa.click("#bk-close")
+        check(S, "the panel closes", not pa.locator("#backup-modal.visible").count(), "")
+        # ── a narrow screen ──
+        nc = new_context(browser, site, 600, author=True); pn = nc.new_page(); watch(pn, errs); open_page(pn, site, "grammar.html", "#backup-btn", 800); pn.wait_for_timeout(700)
+        bb = pn.locator("#backup-btn").bounding_box()
+        check(S, "on a narrow screen the button stays (its icon), the long reminder gives way to a coloured dot, and the navigation bar does not overflow", bb is not None and bb["x"] + bb["width"] <= 600 and not pn.locator("#backup-note").is_visible() and pn.evaluate("(() => { const n = document.querySelector('.topnav'); return n.scrollWidth <= n.clientWidth; })()"), str(bb))
+        check(S, "no JavaScript or loading error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close(); nc.close()
+    finally:
+        site.stop()
+    # snapshots are off by default in the tests, and can be switched off by the owner
+    site = Site()
+    try:
+        c = new_context(browser, site, 1280, author=True); c.request.get(site.url + "api/backup/status"); c.request.get(site.url + "api/dictionary/entries"); time.sleep(1.0)
+        check(S, "with DBT_SNAPSHOT_DISABLE=1 no snapshot is ever made", not (site.dir / "uploads" / "backups" / "snapshots").exists(), "")
+        c.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -3930,6 +4056,7 @@ def main():
             if args.only in (None, "xmlimport"): suite_xmlimport(browser, args); suite_import_extras(browser, args)
             if args.only in (None, "relations"): suite_relations(browser, args)
             if args.only in (None, "glossary"): suite_glossary(browser, args)
+            if args.only in (None, "backup"): suite_backup(browser, args)
             browser.close()
     finally:
         site.stop()
