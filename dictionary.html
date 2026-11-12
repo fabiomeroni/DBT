@@ -547,8 +547,45 @@ const COLORS    = DBT.colorByName;
 const LANG_CODE  = DBT.codeByName;
 
 // ── Runtime state ──────────────────────────────────────────────
+// ── Semantic relations: synonyms and antonyms, from a sense to another sense (the same words as the server) ──
+const REL_ALIAS = { synonym: 'synonym', synonyme: 'synonym', synonymie: 'synonym', synonymy: 'synonym', synonyms: 'synonym', syn: 'synonym',
+                    antonym: 'antonym', antonyme: 'antonym', antonymie: 'antonym', antonymy: 'antonym', antonyms: 'antonym', ant: 'antonym' };
+const relType = s => REL_ALIAS[String(s || '').replace(/[\s.]+/g, '').toLowerCase()] || null;
+let SHOW_RELATIONS = true;                            // the author can hide them (Settings)
 let DICTIONARY = [];
 let DICT_MAP   = {};
+let _relCache = { src: null, sense: {}, reverse: {} };
+function relIndex() {                                 // {sense id: {entry, sense}} and the relations each sense is the target of, rebuilt when the dictionary changes
+  if (_relCache.src === DICTIONARY) return _relCache;
+  const sense = {}, reverse = {};
+  DICTIONARY.forEach(e => e.senses.forEach(s => { if (s.id) sense[s.id] = { entry: e, sense: s }; }));
+  DICTIONARY.forEach(e => e.senses.forEach(s => (s.relations || []).forEach(r => { if (sense[r.target]) (reverse[r.target] = reverse[r.target] || []).push({ type: r.type, from: { entry: e, sense: s } }); })));
+  _relCache = { src: DICTIONARY, sense, reverse };
+  return _relCache;
+}
+const entryLabel = e => e.langs[activeLang] || e.hw || e.id;
+function relationsOf(sn) {                            // the synonyms and antonyms of a sense: those it declares and those that declare it (both types are symmetric)
+  const ix = relIndex(), out = { synonym: [], antonym: [] }, seen = new Set();
+  const add = (t, x) => { const k = t + '|' + x.sense.id; if (!seen.has(k) && out[t] && x.sense.id !== sn.id) { seen.add(k); out[t].push(x); } };
+  (sn.relations || []).forEach(r => { if (ix.sense[r.target]) add(r.type, ix.sense[r.target]); });
+  (ix.reverse[sn.id] || []).forEach(r => add(r.type, r.from));
+  return out;
+}
+function relLinkHTML(x) {
+  const many = x.entry.senses.length > 1 ? `<sup>${escHTML(x.sense.n)}</sup>` : '';
+  return `<a class="rel-link" href="#${escHTML(x.entry.id)}" data-entry="${escHTML(x.entry.id)}" title="${escHTML(stripTags(x.sense.definition || x.sense.gloss || ''))}">${escHTML(entryLabel(x.entry))}${many}</a>`;
+}
+function relationsHTML(entry, sn) {
+  if (!SHOW_RELATIONS || !sn.id) return '';
+  const rel = relationsOf(sn), parts = [];
+  [['synonym', 'Synonym'], ['antonym', 'Antonym']].forEach(([k, label]) => {
+    if (rel[k].length) parts.push(`<span class="rel-group"><span class="rel-type">${label}${rel[k].length > 1 ? 's' : ''}:</span> ${rel[k].map(relLinkHTML).join(', ')}</span>`);
+  });
+  return parts.length ? `<div class="entry-rel">${parts.join(' · ')}</div>` : '';
+}
+async function loadDisplay() {
+  try { const r = await fetch('/api/dictionary/display'); if (r.ok) SHOW_RELATIONS = (await r.json()).relations !== false; } catch (e) { /* the default: shown */ }
+}
 let activeLang = DBT.nameByCode[DBT.project.headwordLanguage];
 let searchQ    = '';
 
@@ -620,7 +657,8 @@ async function parseLexicaXML(url) {
       // the examples the author chose for this sense: {{cite: …}} lines, as in the grammar
       const exampleText = sn.querySelector(':scope > Exemples')?.textContent.trim() ?? '';
       const exampleKeys = [...exampleText.matchAll(/\{\{\s*cite\s*:\s*([^}]*?)\s*\}\}/g)].map(m => m[1].trim());
-      return { ref, n: /^\d+$/.test(num || '') ? num : String(ref + 1), gloss, definition, shortGloss, notes, langs: langsAttr(sn), exampleText, exampleKeys };
+      const relations = [...sn.querySelectorAll(':scope > RelationSémantique')].map(r => ({ type: relType(r.querySelector(':scope > Type')?.textContent), target: r.querySelector(':scope > Cible')?.getAttribute('cible') || '' })).filter(r => r.type && r.target);
+       return { ref, id: sn.getAttribute('identifiant') || '', n: /^\d+$/.test(num || '') ? num : String(ref + 1), gloss, definition, shortGloss, notes, langs: langsAttr(sn), exampleText, exampleKeys, relations };
     });
     // the first sense is mirrored on the entry, for code that only needs "the" gloss
     const first = senses[0] || { gloss: '', definition: '', shortGloss: '', notes: '' };
@@ -916,6 +954,7 @@ function senseHTML(entry, sn, multi, vis, number, cognate) {
     ${head}
     <div class="entry-gloss">${xref(sn.definition)}</div>
     <div class="entry-notes">${xref(sn.notes)}</div>
+    ${relationsHTML(entry, sn)}
     ${hiddenFormsHTML(entry, cognate, sn)}
     ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
     ${missingExamplesHTML(entry, sn)}
@@ -1016,6 +1055,7 @@ function senseItemHTML(entry, sn) {
     <div class="entry-gloss">${xref(sn.definition)}</div>
     ${eb.html}
     <div class="entry-notes">${xref(sn.notes)}</div>
+    ${relationsHTML(entry, sn)}
     ${hiddenFormsHTML(entry, eb.cognate, sn)}
     ${textExamplesHTML(entry, examplesForSense(entry, sn), 's' + sn.ref)}
     ${missingExamplesHTML(entry, sn)}
@@ -1441,7 +1481,7 @@ let _etyms  = [];      // the etymology cards of the open editor: {ref, lang, fo
 let _etymDirty = false;
 let _homTouched = false;
 
-const _blankSense = () => ({ ref: null, definition: '', shortGloss: '', notes: '', langs: LANGS.slice(), examples: '' });
+const _blankSense = () => ({ ref: null, definition: '', shortGloss: '', notes: '', langs: LANGS.slice(), examples: '', relations: [] });
 
 // "This sense / this etymology applies to": one tick per language of the project, in its colour (nothing for a one-language project)
 function langTicks(selected, kind, label) {
@@ -1461,6 +1501,30 @@ function attestedPicker(s) {
     const k = exKey(ex);
     return `<button type="button" class="em-ex-add" data-key="${escHTML(k)}"${used.has(k) ? ' disabled' : ''} title="${escHTML(k)}">＋ ${escHTML(short(ex))}</button>`;
   }).join('') + `</div>`;
+}
+// The relations of a sense in the editor: the ones it declares, and a search over the senses of the dictionary to add one
+function relEditorHTML(s) {
+  const ix = relIndex();
+  const items = (s.relations || []).map((r, k) => {
+    const t = ix.sense[r.target];
+    const label = t ? entryLabel(t.entry) + (t.entry.senses.length > 1 ? ` (sense ${t.sense.n})` : '') : r.target;
+    return `<span class="em-rel-item">${r.type === 'antonym' ? 'Antonym' : 'Synonym'}: <b>${escHTML(label)}</b><button type="button" data-act="rel-del" data-k="${k}" title="Remove this relation">✕</button></span>`;
+  }).join('');
+  return `<div class="em-rel"><label>Semantic relations <span class="em-sub">— synonyms and antonyms of this sense; they are shown on both senses</span></label>
+    <div class="em-rel-list">${items || '<span class="em-sub">none</span>'}</div>
+    <div class="em-rel-add"><select data-rel="type"><option value="synonym">Synonym</option><option value="antonym">Antonym</option></select>
+      <input type="text" data-rel="q" placeholder="search a sense: a form or a meaning" autocomplete="off" spellcheck="false"><div class="em-rel-results" data-rel="results"></div></div></div>`;
+}
+function relSearch(card, q) {
+  const s = _senses[+card.dataset.i], res = card.querySelector('[data-rel="results"]'), words = q.toLowerCase().trim();
+  if (!words) { res.innerHTML = ''; return; }
+  const hits = [];
+  DICTIONARY.forEach(e => e.senses.forEach(sn => {
+    if (!sn.id || (s.id && sn.id === s.id) || (s.relations || []).some(r => r.target === sn.id)) return;
+    const hay = [...Object.values(e.langs), e.hw, sn.shortGloss, sn.gloss, stripTags(sn.definition || '')].join(' ').toLowerCase();
+    if (hay.includes(words) && hits.length < 10) hits.push({ e, sn });
+  }));
+  res.innerHTML = hits.length ? hits.map(h => `<button type="button" data-act="rel-add" data-id="${escHTML(h.sn.id)}"><b>${escHTML(entryLabel(h.e))}</b>${h.e.senses.length > 1 ? ' · sense ' + escHTML(h.sn.n) : ''} <small>${escHTML(stripTags(h.sn.shortGloss || h.sn.definition || '').slice(0, 60))}</small></button>`).join('') : '<span class="em-sub">no sense found</span>';
 }
 function renderSenseCards() {
   const box = document.getElementById('em-senses');
@@ -1486,6 +1550,7 @@ function renderSenseCards() {
       <label>Examples <span class="em-sub">— the ones shown for this sense: one {{cite: …}} per line, as in the grammar</span></label>
       <textarea class="em-input em-code" data-f="examples" spellcheck="false" placeholder="{{cite: fieldnotes#0#d01.Road:02}}">${escHTML(s.examples || '')}</textarea>
       ${attestedPicker(s)}
+      ${relEditorHTML(s)}
       ${langTicks(s.langs, 'sense', 'This sense applies to')}
     </div>`).join('');
 }
@@ -1606,7 +1671,7 @@ function _openEntryModal(title, entry) {
     document.getElementById('ef-domain').value = entry.domain || '';
     document.getElementById('ef-hom').value    = entry.homonym || '';
     _senses = entry.senses.map(s => ({ ref: s.ref, definition: s.definition || '',
-                                       shortGloss: s.shortGloss || '', notes: s.notes || '', langs: s.langs ? s.langs.slice() : LANGS.slice(), examples: s.exampleText || '' }));
+                                       shortGloss: s.shortGloss || '', notes: s.notes || '', langs: s.langs ? s.langs.slice() : LANGS.slice(), examples: s.exampleText || '', relations: (s.relations || []).map(r => ({ ...r })), id: s.id }));
     // an etymology with no language list applies to every language (legacyAll): it is left that way unless the author changes the ticks
     _etyms = (entry.etyms || []).map(e => ({ ...e, langs: e.langs ? e.langs.slice() : LANGS.slice(), legacyAll: !e.langs }));
   } else {
@@ -1641,7 +1706,8 @@ function _collectEntryData() {
     domain:  document.getElementById('ef-domain')?.value.trim() || '',
     homonym: document.getElementById('ef-hom')?.value.trim()    || '',
     senses:  _senses.map(s => ({ ref: s.ref, definition: s.definition.trim(),
-                                 shortGloss: s.shortGloss.trim(), notes: s.notes.trim(), langs: s.langs.map(l => LANG_CODE[l]), examples: s.examples || '' })),
+                                 shortGloss: s.shortGloss.trim(), notes: s.notes.trim(), langs: s.langs.map(l => LANG_CODE[l]), examples: s.examples || '',
+                                 relations: (s.relations || []).map(r => ({ type: r.type, target: r.target })) })),
     etyms,
   };
 }
@@ -1759,6 +1825,7 @@ function _bindEntryModal() {
   box.addEventListener('input', e => {
     const card = e.target.closest('.em-sense'), fld = e.target.dataset.f;
     if (card && fld) _senses[+card.dataset.i][fld] = e.target.value;
+    if (card && e.target.dataset.rel === 'q') relSearch(card, e.target.value);
   });
   box.addEventListener('click', e => {                        // add an attested example to the sense
     const b = e.target.closest('.em-ex-add');
@@ -1777,6 +1844,12 @@ function _bindEntryModal() {
     const b = e.target.closest('button[data-act]');
     if (!b) return;
     const i = +b.closest('.em-sense').dataset.i, act = b.dataset.act;
+    if (act === 'rel-add') {
+      const type = b.closest('.em-sense').querySelector('[data-rel="type"]').value, s = _senses[i];
+      s.relations = s.relations || []; if (!s.relations.some(r => r.target === b.dataset.id)) s.relations.push({ type, target: b.dataset.id });
+      renderSenseCards(); return;
+    }
+    if (act === 'rel-del') { _senses[i].relations.splice(+b.dataset.k, 1); renderSenseCards(); return; }
     if (act === 'del') {
       const s = _senses[i], filled = s.definition || s.shortGloss || s.notes;
       if (s.ref !== null && !confirm(`Remove sense ${i + 1}? Its examples and relations in the XML are deleted with it.`)) return;
@@ -1983,6 +2056,7 @@ async function openSettings() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
     _stDefaults = d.defaults;
+    document.getElementById('st-rel').checked = !d.display || d.display.relations !== false;
     _stColors = {...d.colors}; _stColorsLoaded = {...d.colors}; _stDefaultColors = d.default_colors; _stColorNames = d.color_names;
     renderColorRows();
     stLoad(d.correspondences);
@@ -1994,9 +2068,11 @@ async function saveSettings() {
   msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg'; btn.disabled = true;
   try {
     const r = await fetch('/api/dictionary/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ correspondences: stCollect(), colors: _stColors, rederive: document.getElementById('st-rederive').checked }) });
+      body: JSON.stringify({ correspondences: stCollect(), colors: _stColors, display: { relations: document.getElementById('st-rel').checked }, rederive: document.getElementById('st-rederive').checked }) });
     const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    const wasRel = SHOW_RELATIONS; SHOW_RELATIONS = document.getElementById('st-rel').checked;
+    if (wasRel !== SHOW_RELATIONS) reloadDictionary();                  // the senses are drawn again with or without their relations
     msg.textContent = 'Saved.' + (d.rederived ? ` ${d.rederived} provisional transcription${d.rederived > 1 ? 's' : ''} re-derived.` : '');
     msg.className = 'dbt-modal-msg success';
     if (JSON.stringify(_stColors) !== JSON.stringify(_stColorsLoaded)) {      // the colours are used by every page: reload to apply them
@@ -2098,7 +2174,7 @@ async function init() {
     DICTIONARY = await loadActiveDictionary();
     DICTIONARY.forEach(e => { DICT_MAP[e.id] = e; });
     buildFormIndex();
-    await Promise.all([loadProposedEntries(), loadDictExamples(), loadCaptionIndex()]);
+    await Promise.all([loadProposedEntries(), loadDictExamples(), loadCaptionIndex(), loadDisplay()]);
     buildPills();
     bindSearch();
     document.getElementById('mode-switch').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
@@ -2202,7 +2278,9 @@ init();
 <div class="dbt-modal-backdrop" id="settings-modal">
   <div class="dbt-modal" style="max-width:700px;width:96vw;max-height:92vh;overflow-y:auto;">
     <h3>Dictionary settings</h3>
-    <h4 class="st-h">Language colours</h4>
+    <h4 class="st-h">Display</h4>
+    <label class="st-check"><input type="checkbox" id="st-rel"> Show the semantic relations (synonyms, antonyms) under the senses</label>
+    <h4 class="st-h" style="margin-top:1.1rem;">Language colours</h4>
     <p class="modal-desc">The colour that codes each language everywhere on the site: headwords, tables, texts, the grammar and the LaTeX export.</p>
     <div id="st-colors" class="st-colors"></div>
     <div class="st-actions" style="margin-top:0.2rem;">
@@ -2279,17 +2357,19 @@ init();
     </div>
   </div>
 </div>
-<!-- ── Upload dictionary modal ── -->
+<!-- ── Import wizard: any XML dictionary → the DBT's format (the logic of LExport) ── -->
 <div class="dbt-modal-backdrop" id="upload-modal">
-  <div class="dbt-modal">
-    <h3>Upload Dictionary XML</h3>
-    <p class="modal-desc">Select a LEXICA-format XML file to replace the current dictionary.
-    All the language forms will be reloaded automatically.</p>
-    <input type="file" id="dict-file" accept=".xml">
+  <div class="dbt-modal imp-modal" role="dialog" aria-labelledby="imp-title">
+    <h3 id="imp-title">Upload an XML dictionary</h3>
+    <div class="imp-progress" id="imp-progress"></div>
+    <div class="imp-body" id="imp-body"></div>
     <div class="dbt-modal-msg" id="upload-msg"></div>
-    <div class="dbt-modal-row">
+    <div class="dbt-modal-row imp-nav">
+      <span class="imp-powered">Powered by <a href="https://lexport-anonymous.streamlit.app/" target="_blank" rel="noopener">LExport</a></span>
+      <span style="flex:1"></span>
       <button class="modal-btn" id="upload-cancel">Cancel</button>
-      <button class="modal-btn primary" id="upload-submit">Upload</button>
+      <button class="modal-btn" id="imp-back">← Back</button>
+      <button class="modal-btn primary" id="imp-next">Next →</button>
     </div>
   </div>
 </div>
@@ -2312,46 +2392,355 @@ async function onAuthChange(loggedIn) {
 bindLoginModal();
 checkAuth();
 
-// Edit tab → open upload modal
-const dictEditTab = document.getElementById('dict-edit-tab');
-if (dictEditTab) {
-  dictEditTab.addEventListener('click', () => {
-    document.getElementById('upload-msg').textContent = '';
-    document.getElementById('upload-msg').className = 'dbt-modal-msg';
-    document.getElementById('upload-modal').classList.add('visible');
-  });
+// ══ Import wizard ═══════════════════════════════════════════════════════════════
+// Any XML dictionary can be imported: the author says which node is what, once, and the server converts it into the DBT's format.
+// The logic is that of LExport (https://lexport-anonymous.streamlit.app/): entry node, then each field as a node, an attribute or a child, with
+// a filter on an attribute (the language of a gloss), tables for the values (languages, parts of speech) and a coverage report before anything is written.
+const IMP_STEPS = ['File', 'Entries', 'Headwords', 'Grammar', 'Senses', 'Examples', 'Relations', 'Etymology', 'Review'];
+const IMP_LAST = IMP_STEPS.length - 1;
+let IMP = null;
+const impEsc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const impEl = id => document.getElementById(id);
+async function impApi(path, body) {
+  try {
+    const r = await fetch('/api/import/dictionary/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+  } catch (e) { return { ok: false, status: 0, data: { error: 'Network error.' } }; }
+}
+function impMsg(text, kind) { const m = impEl('upload-msg'); m.textContent = text || ''; m.className = 'dbt-modal-msg' + (kind ? ' ' + kind : ''); }
+function impReset() { IMP = { step: 0, file: null, token: null, info: null, entryTag: '', count: 0, paths: [], samples: [], cfg: {}, suggested: null, mode: 'replace', langValues: [], posValues: [], domainValues: [], review: null, done: false, sense: '', useExamples: false, useRelations: false, entryAttrs: {}, relTypeValues: [], suggestedExamples: null, exLangValues: [] }; }
+const impGet = (k) => k.split('.').reduce((o, p) => (o == null ? o : o[p]), IMP.cfg);
+function impSet(k, v) { const ps = k.split('.'); let o = IMP.cfg; ps.slice(0, -1).forEach(p => { o = (o[p] = o[p] || {}); }); if (v === undefined) delete o[ps[ps.length - 1]]; else o[ps[ps.length - 1]] = v; }
+const impPathInfo = p => IMP.paths.find(x => x.path === p);
+const impAbs = (base, rel) => !rel ? base : (base ? base + rel.slice(1) : rel);
+
+// ── a field: the node, what is read from it, and (for glosses, notes …) an attribute filter ──
+function impFieldHTML(key, label, o) {
+  o = o || {}; const base = o.base || '', f = impGet(key) || {};
+  const opts = IMP.paths.filter(p => !base || p.path.startsWith(base + '/'));
+  const pathOpts = (o.self ? `<option value="" ${f.path === '' && f.value !== undefined ? 'selected' : ''}>(the element itself)</option>` : '') +
+    `<option value="__none" ${!f.path && !(o.self && f.path === '') ? 'selected' : ''}>(none)</option>` +
+    opts.map(p => { const rel = base ? '.' + p.path.slice(base.length) : p.path; return `<option value="${impEsc(rel)}" ${f.path === rel ? 'selected' : ''}>${'\u00a0\u00a0'.repeat(Math.max(0, p.depth - 1 - (base ? base.split('/').length - 1 : 0)))}${impEsc(rel)}  (${p.count})${p.sample ? ' — ' + impEsc(p.sample.slice(0, 30)) : ''}</option>`; }).join('');
+  let valueHTML = '', filterHTML = '', sample = '';
+  const has = f.path || (o.self && f.path === '' && f.value !== undefined);
+  if (has) {
+    const abs = impAbs(base, f.path), info = f.path === '' && base ? impPathInfo(base) : impPathInfo(abs);
+    const vopts = [['', 'the text of the element' + (info && info.sample ? ' — ' + info.sample.slice(0, 30) : '')]];
+    Object.entries((info && info.attrs) || {}).forEach(([a, vs]) => vopts.push(['@' + a, `the attribute ${a} — ${vs.slice(0, 3).join(', ')}`]));
+    IMP.paths.filter(p => p.path.startsWith(abs + '/')).forEach(p => vopts.push(['.' + p.path.slice(abs.length), `the text of ${'.' + p.path.slice(abs.length)}${p.sample ? ' — ' + p.sample.slice(0, 30) : ''}`]));
+    if (f.value && !vopts.some(v => v[0] === f.value)) vopts.push([f.value, `the text of ${f.value}`]);
+    valueHTML = `<label class="imp-sub">read</label><select class="imp-value">${vopts.map(([v, t]) => `<option value="${impEsc(v)}" ${(f.value || '') === v ? 'selected' : ''}>${impEsc(t)}</option>`).join('')}</select>`;
+    if (o.filter && info && Object.keys(info.attrs || {}).length) {
+      const attrs = Object.keys(info.attrs);
+      const vals = (IMP.fvals && IMP.fvals[key + '|' + f.filterAttr]) || (info.attrs[f.filterAttr] || []).map(v => ({ value: v }));
+      filterHTML = `<div class="imp-filter">only where <select class="imp-fattr"><option value="">(any)</option>${attrs.map(a => `<option ${f.filterAttr === a ? 'selected' : ''}>${impEsc(a)}</option>`).join('')}</select>` +
+        (f.filterAttr ? ` is <select class="imp-fval">${vals.map(v => `<option ${f.filterValue === v.value ? 'selected' : ''}>${impEsc(v.value)}</option>`).join('')}</select>` : '') + (o.filterHelp ? ` <span class="imp-help">${impEsc(o.filterHelp)}</span>` : '') + '</div>';
+    }
+    const ex = impSample(base, f);
+    if (ex.length) sample = `<div class="imp-sample">e.g. ${ex.map(impEsc).join(' · ')}</div>`;
+  }
+  return `<div class="imp-field" data-key="${impEsc(key)}" data-base="${impEsc(base)}" data-filter="${o.filter ? 1 : ''}" data-self="${o.self ? 1 : ''}"><label>${impEsc(label)}${o.required ? ' *' : ''}</label>` +
+         `<select class="imp-path">${pathOpts}</select>${valueHTML}${filterHTML}${sample}${o.help ? `<div class="imp-help">${impEsc(o.help)}</div>` : ''}</div>`;
+}
+// sample values of a field, read from the raw XML of the first entries shown (the server's samples)
+function impSample(base, f) {
+  try {
+    const doc = new DOMParser().parseFromString('<r>' + IMP.samples.join('') + '</r>', 'text/xml'); const out = [];
+    doc.querySelectorAll(IMP.entryTag).forEach(entry => {
+      const scope = base ? [...entry.querySelectorAll(':scope > ' + base.slice(2).split('/').join(' > '))] : [entry];
+      scope.forEach(sc => {
+        const sel = f.path === '' ? [sc] : [...sc.querySelectorAll(f.path.startsWith('./') ? ':scope > ' + f.path.slice(2).split('/').join(' > ') : f.path)];
+        sel.forEach(el => {
+          if (f.filterAttr && el.getAttribute(f.filterAttr) !== f.filterValue) return;
+          const v = !f.value ? el.textContent.trim().replace(/\s+/g, ' ') : f.value.startsWith('@') ? (el.getAttribute(f.value.slice(1)) || '') : ((el.querySelector(f.value.startsWith('./') ? ':scope > ' + f.value.slice(2).split('/').join(' > ') : f.value) || {}).textContent || '').trim();
+          if (v && out.length < 4) out.push(v.slice(0, 40));
+        });
+      });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+async function impOnField(key, which, value, box) {
+  const o = { self: box.dataset.self === '1' }; let f = Object.assign({}, impGet(key) || {});
+  if (which === 'path') {
+    if (value === '__none') { impSet(key, undefined); }
+    else {
+      f = { path: value, value: '' }; const base = box.dataset.base, info = impPathInfo(impAbs(base, value));
+      if (value !== '' && info && !info.sample) { const kid = IMP.paths.find(p => p.path.startsWith(impAbs(base, value) + '/') && p.sample); if (kid) f.value = '.' + kid.path.slice(impAbs(base, value).length); }
+      impSet(key, f);
+    }
+  } else if (which === 'value') { f.value = value; impSet(key, f); }
+  else if (which === 'fattr') {
+    if (!value) { delete f.filterAttr; delete f.filterValue; }
+    else { f.filterAttr = value; const r = await impApi('values', { token: IMP.token, entryTag: IMP.entryTag, field: { path: impAbs(box.dataset.base, f.path), value: '@' + value } });
+           IMP.fvals = IMP.fvals || {}; IMP.fvals[key + '|' + value] = (r.data.values || []); f.filterValue = (r.data.values && r.data.values[0] ? r.data.values[0].value : ''); }
+    impSet(key, f);
+  } else if (which === 'fval') { f.filterValue = value; impSet(key, f); }
+  impRender();
 }
 
-// Upload modal buttons
-document.getElementById('upload-cancel').addEventListener('click', () => {
-  document.getElementById('upload-modal').classList.remove('visible');
-});
-document.getElementById('upload-modal').addEventListener('click', e => {
-  if (e.target === e.currentTarget)
-    document.getElementById('upload-modal').classList.remove('visible');
-});
-document.getElementById('upload-submit').addEventListener('click', async () => {
-  const file = document.getElementById('dict-file').files[0];
-  const msg  = document.getElementById('upload-msg');
-  if (!file) { msg.textContent = 'Please choose a file.'; msg.className='dbt-modal-msg error'; return; }
+// ── a table of values: the languages of the headwords, the parts of speech … ──
+async function impLoadValues(key, field, into) {
+  const r = await impApi('values', { token: IMP.token, entryTag: IMP.entryTag, field });
+  IMP[into] = r.data.values || []; impRender();
+}
+function impMapHTML(kind) {
+  const vals = IMP[kind + 'Values'] || []; if (!vals.length) return '';
+  const map = IMP.cfg[kind + 'Map'] = IMP.cfg[kind + 'Map'] || {};
+  return `<table class="imp-table"><tr><th>in the file</th><th>entries</th><th>in the DBT</th></tr>${vals.map(v => `<tr><td>${impEsc(v.value)}</td><td>${v.count}</td><td><input type="text" class="imp-map" data-kind="${kind}" data-value="${impEsc(v.value)}" value="${impEsc(map[v.value] ?? v.value)}"></td></tr>`).join('')}</table>`;
+}
+
+// ── the steps ──
+function impStepFile() {
+  const i = IMP.info; let h = '<p class="modal-desc">Choose your dictionary: any XML file (LIFT from FLEx, WeSay or Lexique Pro, TEI, a custom schema …). You will say which XML node is what, and the DBT converts it.</p><input type="file" id="dict-file" accept=".xml,.lift,.tei,text/xml,application/xml">';
+  if (i) {
+    h += `<div class="imp-note ok">✔ <b>${impEsc(i.filename)}</b> — ${(i.bytes / 1024).toFixed(0)} KB, root <code>&lt;${impEsc(i.rootTag)}&gt;</code>${i.namespaces ? ' (XML namespaces were removed so that you see plain tag names)' : ''}.</div>`;
+    if (i.native) h += '<div class="imp-note">This file is <b>already in the DBT\'s own format</b> (LEXICA XML). You can use it as it is, or map it with the wizard anyway.<br><button class="modal-btn primary" id="imp-native">Use it as it is (replaces the dictionary)</button></div>';
+  }
+  return h;
+}
+function impStepEntries() {
+  const i = IMP.info, c = i.candidates;
+  let h = '<p class="modal-desc">Which node wraps <b>each dictionary entry</b>?</p><div class="imp-field"><label>Entry node *</label><select id="imp-entry">' + '<option value="">(choose)</option>' + c.map(x => `<option value="${impEsc(x.tag)}" ${IMP.entryTag === x.tag ? 'selected' : ''}>&lt;${impEsc(x.tag)}&gt;  — ${x.count} time${x.count === 1 ? '' : 's'}${x.likely ? '  (probably this one)' : ''}</option>`).join('') + '</select></div>';
+  if (IMP.entryTag) {
+    h += `<div class="imp-note ok">Found <b>${IMP.count}</b> &lt;${impEsc(IMP.entryTag)}&gt; entries.${IMP.suggested ? ' The mapping has been started for you (this looks like a LIFT or TEI file): check each step.' : ''}</div>`;
+    h += '<details><summary>The first entries, as XML</summary>' + IMP.samples.map(s => `<pre class="imp-xml">${impEsc(s)}</pre>`).join('') + '</details>';
+  }
+  return h;
+}
+function impStepHeadwords() {
+  const p = IMP.cfg.lemma && IMP.cfg.lemma.path ? impPathInfo(impAbs('', IMP.cfg.lemma.path)) : null;
+  const lang = IMP.cfg.language = IMP.cfg.language || { mode: 'fixed' }, langs = IMP.info.project.languages;
+  let h = impFieldHTML('lemma', 'Headword', { required: true, help: 'The element that holds the headword (in LIFT, ./lexical-unit/form with the text in ./text).' });
+  h += '<div class="imp-field"><label>Language of the headwords *</label>' +
+       `<label class="imp-radio"><input type="radio" name="imp-lm" value="fixed" ${lang.mode !== 'attr' ? 'checked' : ''}> all the headwords are in <select id="imp-lcode"><option value="">(choose)</option>${langs.map(l => `<option value="${l.code}" ${lang.code === l.code ? 'selected' : ''}>${impEsc(l.name)} (${l.code})</option>`).join('')}</select></label>`;
+  if (p && Object.keys(p.attrs || {}).length) {
+    h += `<label class="imp-radio"><input type="radio" name="imp-lm" value="attr" ${lang.mode === 'attr' ? 'checked' : ''}> the language is given by the attribute <select id="imp-lattr">${Object.keys(p.attrs).map(a => `<option ${lang.attr === a ? 'selected' : ''}>${impEsc(a)}</option>`).join('')}</select></label>`;
+    if (lang.mode === 'attr') {
+      h += '<div class="imp-help">Say which language of the project each value is (leave blank to ignore those headwords).</div>' +
+        (IMP.langValues.length ? `<table class="imp-table"><tr><th>in the file</th><th>headwords</th><th>language of the project</th></tr>${IMP.langValues.map(v => `<tr><td>${impEsc(v.value)}</td><td>${v.count}</td><td><select class="imp-lmap" data-value="${impEsc(v.value)}"><option value="">(ignore)</option>${langs.map(l => `<option value="${l.code}" ${((lang.map || {})[v.value] === l.code) ? 'selected' : ''}>${impEsc(l.name)}</option>`).join('')}</select></td></tr>`).join('')}</table>` : '');
+    }
+  } else h += '<div class="imp-help">The headword element has no attribute: choose the language above.</div>';
+  h += '</div>';
+  h += impFieldHTML('ipa', 'IPA (optional)', { help: 'If the file has phonetic forms. The others are derived from your orthography ↔ IPA table, as usual.' });
+  return h;
+}
+function impStepGrammar() {
+  return impFieldHTML('pos', 'Part of speech', { help: 'In LIFT it is an attribute: ./sense/grammatical-info, read the attribute value.' }) + (IMP.cfg.pos ? '<p class="imp-help">How each value is written in the DBT (n., v., pro. …):</p>' + impMapHTML('pos') : '') +
+         impFieldHTML('domain', 'Semantic domain (optional)') + (IMP.cfg.domain ? impMapHTML('domain') : '');
+}
+function impStepSenses() {
+  const s = IMP.cfg.sense && IMP.cfg.sense.path || '', base = s;
+  const sp = IMP.paths.filter(p => p.count >= 1);
+  let h = '<div class="imp-field"><label>Sense node</label><select id="imp-sense"><option value="">(none: the entry itself is the sense)</option>' + sp.map(p => `<option value="${impEsc(p.path)}" ${s === p.path ? 'selected' : ''}>${impEsc(p.path)}  (${p.count})</option>`).join('') + '</select><div class="imp-help">If an entry has several senses, each becomes a sense of its own in the DBT.</div></div>';
+  if (s) h += impFieldHTML('subsense', 'Subsense node (optional)', { base, help: 'Subsenses become senses of their own, numbered after their parent.' });
+  h += impFieldHTML('definition', 'Definition (English)', { base, filter: true, filterHelp: 'e.g. lang is en', help: 'The DBT shows English definitions.' }) +
+       impFieldHTML('gloss', 'Short gloss (optional)', { base, filter: true, help: 'The short gloss used in interlinear glossing. Without it the definition is used.' }) +
+       impFieldHTML('notes', 'Notes (optional)', { base, filter: true });
+  return h;
+}
+function impStepExamples() {
+  const w = IMP.cfg.examples && IMP.cfg.examples.path || '';
+  let h = '<p class="modal-desc">Does your dictionary have <b>example sentences</b>? They can be added to the DBT as a <b>text of the Texts page</b>, <i>“Examples from pre-existent dictionary”</i> (one text for each language, since a text has one language), and each example is then shown under the sense it came from. You can gloss them like any other text. Or you can ignore them.</p>' +
+    `<label class="imp-radio"><input type="radio" name="imp-exuse" value="0" ${!IMP.useExamples ? 'checked' : ''}> ignore the examples</label>` +
+    `<label class="imp-radio"><input type="radio" name="imp-exuse" value="1" ${IMP.useExamples ? 'checked' : ''}> use them (a new text is created)</label>`;
+  if (IMP.useExamples) {
+    h += '<div class="imp-field"><label>Example node *</label><select id="imp-exw"><option value="">(choose)</option>' + IMP.paths.map(p => `<option value="${impEsc(p.path)}" ${w === p.path ? 'selected' : ''}>${impEsc(p.path)}  (${p.count})</option>`).join('') + '</select><div class="imp-help">The node that wraps one example (in LIFT, ./sense/example).</div></div>';
+    if (w) h += impFieldHTML('examples.text', 'Sentence', { base: w, required: true, help: 'In LIFT: ./form, read ./text. The language of a sentence is the one given for the headwords.' }) +
+                impFieldHTML('examples.translation', 'Translation (optional)', { base: w, filter: true, filterHelp: 'e.g. lang is en' });
+    const lang = IMP.cfg.language, langs = IMP.info.project.languages;
+    if (w && lang && lang.mode === 'attr' && IMP.exLangValues.length)       // the languages of the sentences can be ones no headword has: they are mapped here
+      h += '<div class="imp-field"><label>Language of the sentences</label><div class="imp-help">The attribute ' + impEsc(lang.attr) + ' of the sentence says its language: say which language of the project each value is (a sentence whose value is left blank is ignored).</div>' +
+        `<table class="imp-table"><tr><th>in the file</th><th>sentences</th><th>language of the project</th></tr>${IMP.exLangValues.map(v => `<tr><td>${impEsc(v.value)}</td><td>${v.count}</td><td><select class="imp-lmap" data-value="${impEsc(v.value)}"><option value="">(ignore)</option>${langs.map(l => `<option value="${l.code}" ${((lang.map || {})[v.value] === l.code) ? 'selected' : ''}>${impEsc(l.name)}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`;
+  }
+  return h;
+}
+function impStepRelations() {
+  const rl = IMP.cfg.relations, w = rl && rl.path || '', sp = IMP.cfg.sense && IMP.cfg.sense.path;
+  let h = '<p class="modal-desc">Does your dictionary say that a sense is a <b>synonym</b> or an <b>antonym</b> of another? The DBT can show these relations under the senses (on both of them, since they are symmetric; you can hide them in the Settings). A relation belongs to a sense, and points to a sense.</p>' +
+    `<label class="imp-radio"><input type="radio" name="imp-rluse" value="0" ${!IMP.useRelations ? 'checked' : ''}> ignore the relations</label>` +
+    `<label class="imp-radio"><input type="radio" name="imp-rluse" value="1" ${IMP.useRelations ? 'checked' : ''}> import them</label>`;
+  if (IMP.useRelations) {
+    h += '<div class="imp-field"><label>Relation node *</label><select id="imp-rlw"><option value="">(choose)</option>' + IMP.paths.map(p => `<option value="${impEsc(p.path)}" ${w === p.path ? 'selected' : ''}>${impEsc(p.path)}  (${p.count})</option>`).join('') + '</select><div class="imp-help">One node for each relation (in LIFT, ./sense/relation or ./relation; in TEI, ./sense/xr). A relation under a sense belongs to it; one under the entry belongs to its first sense.</div></div>';
+    if (w) {
+      h += impFieldHTML('relations.type', 'Type of the relation', { base: w, self: true, required: true, help: 'In LIFT it is the attribute type of the relation element itself.' });
+      if (rl.type && (rl.type.path !== undefined)) h += '<p class="imp-help">What each type is in the DBT (the others are not imported):</p>' + (IMP.relTypeValues.length ? `<table class="imp-table"><tr><th>in the file</th><th>relations</th><th>in the DBT</th></tr>${IMP.relTypeValues.map(v => `<tr><td>${impEsc(v.value)}</td><td>${v.count}</td><td><select class="imp-rmap" data-value="${impEsc(v.value)}">${[['', '(not imported)'], ['synonym', 'Synonym'], ['antonym', 'Antonym']].map(([k, t]) => `<option value="${k}" ${((rl.typeMap || {})[v.value] || '') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td></tr>`).join('')}</table>` : '');
+      h += impFieldHTML('relations.target', 'Target of the relation', { base: w, self: true, required: true, help: 'In LIFT it is the attribute ref of the relation element itself.' });
+      const entryOpts = ['<option value="">(none)</option>'].concat(Object.keys(IMP.entryAttrs).map(a => `<option value="@${impEsc(a)}" ${rl.entryKey === '@' + a ? 'selected' : ''}>@${impEsc(a)}</option>`)).join('');
+      const sinfo = sp ? impPathInfo(sp) : null, sAttrs = sinfo ? Object.keys(sinfo.attrs || {}) : Object.keys(IMP.entryAttrs);
+      const senseOpts = ['<option value="">(none)</option>'].concat(sAttrs.map(a => `<option value="@${impEsc(a)}" ${rl.senseKey === '@' + a ? 'selected' : ''}>@${impEsc(a)}</option>`)).join('');
+      h += '<div class="imp-field"><label>The target is found by</label>' +
+        `<label class="imp-radio"><input type="radio" name="imp-rby" value="id" ${rl.by !== 'headword' ? 'checked' : ''}> an identifier: entries have it in <select id="imp-rke">${entryOpts}</select>, senses in <select id="imp-rks">${senseOpts}</select></label>` +
+        `<label class="imp-radio"><input type="radio" name="imp-rby" value="headword" ${rl.by === 'headword' ? 'checked' : ''}> its headword (the target is written as a word; it points to the first sense of that entry)</label></div>`;
+    }
+  }
+  return h;
+}
+function impStepEtymology() {
+  const w = IMP.cfg.etymology && IMP.cfg.etymology.path || '';
+  let h = '<div class="imp-field"><label>Etymology node (optional)</label><select id="imp-ety"><option value="">(none)</option>' + IMP.paths.map(p => `<option value="${impEsc(p.path)}" ${w === p.path ? 'selected' : ''}>${impEsc(p.path)}  (${p.count})</option>`).join('') + '</select></div>';
+  if (w) h += impFieldHTML('etymology.form', 'Form', { base: w, required: true }) + impFieldHTML('etymology.lang', 'Language of the etymon', { base: w, self: true, help: 'A node below the etymology, or an attribute of the etymology element itself (choose “the element itself”).' }) + impFieldHTML('etymology.gloss', 'Gloss (optional)', { base: w });
+  return h;
+}
+function impStepReview() {
+  const r = IMP.review;
+  let h = '<p class="modal-desc">Check what will be imported. Nothing is written until you press <b>Import</b>.</p>';
+  if (!r) return h + '<div class="imp-note">Checking the mapping …</div>';
+  if (r.errors) return h + `<div class="imp-note err">${r.errors.map(impEsc).join('<br>')}</div>`;
+  const rep = r.report;
+  h += `<div class="imp-note ok"><b>${rep.imported}</b> of ${rep.total} entries will be imported, with <b>${rep.senses}</b> senses.</div>`;
+  rep.skipped.forEach(s => { h += `<div class="imp-note warn">${s.count} entr${s.count === 1 ? 'y' : 'ies'} skipped: ${impEsc(s.reason)} (e.g. ${s.sample.map(impEsc).join(', ')}).</div>`; });
+  rep.warnings.forEach(w => { h += `<div class="imp-note warn">${impEsc(w)}</div>`; });
+  h += '<table class="imp-table"><tr><th>field</th><th>present</th><th>missing</th><th>examples of entries without it</th></tr>' + r.coverage.map(c => `<tr class="${c.missing && c.required ? 'imp-miss' : ''}"><td>${impEsc(c.label)}</td><td>${c.present}</td><td>${c.missing} (${c.missingPct}%)</td><td>${c.sample.map(impEsc).join(', ')}</td></tr>`).join('') + '</table>';
+  h += '<details><summary>The first entries, as the DBT will hold them</summary>' + r.xml.map(x => `<pre class="imp-xml">${impEsc(x)}</pre>`).join('') + '</details>';
+  h += '<div class="imp-field"><label>What to do with the current dictionary</label>' +
+       `<label class="imp-radio"><input type="radio" name="imp-mode" value="replace" ${IMP.mode === 'replace' ? 'checked' : ''}> replace it (a backup of the current one is made first)</label>` +
+       `<label class="imp-radio"><input type="radio" name="imp-mode" value="add" ${IMP.mode === 'add' ? 'checked' : ''}> add these entries to it (identifiers already in use are not reused)</label></div>`;
+  if (rep.examples) { const n = Object.values(rep.examples).reduce((a, b) => a + b, 0); h += `<div class="imp-note ok"><b>${n}</b> example${n === 1 ? '' : 's'} will go into the text “Examples from pre-existent dictionary” (Texts page)${Object.keys(rep.examples).length > 1 ? ', one text for each language' : ''}, and each sense will show its own.` + ((r.examplesSample || []).length ? '<br>' + r.examplesSample.map(x => `<i>${impEsc(x.form)}</i>${x.translation ? ' — ' + impEsc(x.translation) : ''}`).join('<br>') : '') + '</div>'; }
+  else h += '<div class="imp-help">The examples are not imported.</div>';
+  if (rep.relations) h += `<div class="imp-note ${rep.relations.imported ? 'ok' : 'warn'}"><b>${rep.relations.imported}</b> semantic relation${rep.relations.imported === 1 ? '' : 's'} will be imported (synonyms and antonyms).</div>`;
+  else h += '<div class="imp-help">The semantic relations are not imported. The IPA that is missing is derived from your orthography table.</div>';
+  return h;
+}
+function impReady() {
+  const c = IMP.cfg;
+  if (IMP.step === 0) return !!IMP.info;
+  if (IMP.step === 1) return !!IMP.entryTag && IMP.count > 0;
+  if (IMP.step === 2) { const l = c.language || {}; return !!(c.lemma && c.lemma.path !== undefined && c.lemma.path !== '__none' && c.lemma.path) && (l.mode === 'attr' ? Object.values(l.map || {}).some(v => v) : !!l.code); }
+  if (IMP.step === IMP_LAST) return !!(IMP.review && IMP.review.report && !IMP.done);
+  if (IMP.step === 5 && IMP.useExamples) return !!(c.examples && c.examples.path && c.examples.text && (c.examples.text.path !== undefined));
+  if (IMP.step === 6 && IMP.useRelations) { const r = c.relations; return !!(r && r.path && r.type && r.target && (r.by === 'headword' || r.entryKey || r.senseKey)); }
+  return true;
+}
+function impRender() {
+  impEl('imp-progress').innerHTML = IMP_STEPS.map((n, i) => `<span class="${i < IMP.step ? 'done' : i === IMP.step ? 'cur' : ''}">${i < IMP.step ? '✓' : i === IMP.step ? '●' : '○'} ${n}</span>`).join('');
+  const body = [impStepFile, impStepEntries, impStepHeadwords, impStepGrammar, impStepSenses, impStepExamples, impStepRelations, impStepEtymology, impStepReview][IMP.step]();
+  impEl('imp-body').innerHTML = body;
+  impEl('imp-back').style.display = IMP.step > 0 && !IMP.done ? '' : 'none';
+  const nx = impEl('imp-next'); nx.textContent = IMP.step === IMP_LAST ? 'Import' : 'Next →'; nx.disabled = !impReady(); nx.style.display = IMP.done ? 'none' : '';
+  impEl('upload-cancel').textContent = IMP.done ? 'Close' : 'Cancel';
+}
+async function impGo(step) {
+  IMP.step = step; impMsg('');
+  impRender();
+  if (step === 2 && IMP.cfg.language && IMP.cfg.language.mode === 'attr') impRefreshLang();
+  if (step === 3) { if (IMP.cfg.pos) impLoadValues('pos', IMP.cfg.pos, 'posValues'); if (IMP.cfg.domain) impLoadValues('domain', IMP.cfg.domain, 'domainValues'); }
+  if (step === 5 && IMP.useExamples) impLoadExLangs();
+  if (step === 6 && IMP.useRelations && IMP.cfg.relations && IMP.cfg.relations.type) impLoadRelTypes();
+  if (step === IMP_LAST) {
+    IMP.review = null; impRender();
+    const r = await impApi('preview', { token: IMP.token, config: impConfig() });
+    IMP.review = r.ok ? r.data : { errors: r.data.errors || [r.data.error || 'The mapping could not be checked.'] }; impRender();
+  }
+}
+function impConfig() {
+  const c = JSON.parse(JSON.stringify(IMP.cfg)); c.entryTag = IMP.entryTag;
+  if (c.etymology && !(c.etymology.path)) delete c.etymology;
+  if (!IMP.useExamples || !(c.examples && c.examples.path)) delete c.examples;
+  if (!IMP.useRelations || !(c.relations && c.relations.path)) delete c.relations;
+  if (c.sense && !c.sense.path) delete c.sense;
+  if (c.language && c.language.mode === 'attr') { const m = {}; Object.entries(c.language.map || {}).forEach(([k, v]) => { if (v) m[k] = v; }); c.language.map = m; }
+  ['lemma', 'ipa', 'pos', 'domain', 'subsense', 'definition', 'gloss', 'notes'].forEach(k => { if (c[k] && !c[k].path && c[k].path !== '') delete c[k]; });
+  return c;
+}
+async function impLoadExLangs() {                  // the values of the language attribute on the sentences of the examples
+  const ex = IMP.cfg.examples, lang = IMP.cfg.language;
+  if (!ex || !ex.path || !ex.text || ex.text.path === undefined || !lang || lang.mode !== 'attr' || !lang.attr) { IMP.exLangValues = []; impRender(); return; }
+  const r = await impApi('values', { token: IMP.token, entryTag: IMP.entryTag, field: { path: impAbs(ex.path, ex.text.path), value: '@' + lang.attr } });
+  IMP.exLangValues = r.data.values || []; lang.map = lang.map || {};
+  const proj = IMP.info.project.languages;
+  IMP.exLangValues.forEach(v => { if (lang.map[v.value] === undefined) { const g = proj.find(p => p.code.toLowerCase() === v.value.toLowerCase() || p.name.toLowerCase() === v.value.toLowerCase()); if (g) lang.map[v.value] = g.code; } });
+  impRender();
+}
+async function impLoadRelTypes() {                  // the types of relation found in the file: a table says what each one is in the DBT
+  const rl = IMP.cfg.relations; if (!rl || !rl.type) { impRender(); return; }
+  const r = await impApi('values', { token: IMP.token, entryTag: IMP.entryTag, field: { path: impAbs(rl.path, rl.type.path), value: rl.type.value || '' } });
+  IMP.relTypeValues = r.data.values || []; rl.typeMap = rl.typeMap || {};
+  IMP.relTypeValues.forEach(v => { if (rl.typeMap[v.value] === undefined) rl.typeMap[v.value] = relType(v.value) || ''; });
+  impRender();
+}
+async function impRefreshLang() {
+  const l = IMP.cfg.language, f = IMP.cfg.lemma; if (!l || l.mode !== 'attr' || !f || !f.path || !l.attr) return;
+  const r = await impApi('values', { token: IMP.token, entryTag: IMP.entryTag, field: { path: f.path, value: '@' + l.attr } });
+  IMP.langValues = r.data.values || []; l.map = l.map || {};
+  const proj = IMP.info.project.languages;
+  IMP.langValues.forEach(v => { if (l.map[v.value] === undefined) { const g = proj.find(p => p.code.toLowerCase() === v.value.toLowerCase() || p.name.toLowerCase() === v.value.toLowerCase()); if (g) l.map[v.value] = g.code; } });
+  impRender();
+}
+async function impPickEntry(tag) {
+  IMP.entryTag = tag; IMP.cfg = {}; IMP.suggested = null; IMP.count = 0; IMP.paths = []; IMP.samples = [];
+  if (!tag) { impRender(); return; }
+  const r = await impApi('inspect', { token: IMP.token, entryTag: tag });
+  if (!r.ok) { impMsg(r.data.error || 'Could not read the entries.', 'error'); impRender(); return; }
+  IMP.count = r.data.count; IMP.paths = r.data.paths; IMP.samples = r.data.samples; IMP.suggested = r.data.suggestion; IMP.entryAttrs = r.data.entryAttrs || {};
+  IMP.useExamples = false; IMP.useRelations = false;
+  if (r.data.suggestion) {
+    const s = JSON.parse(JSON.stringify(r.data.suggestion)); const lang = s.langAttr; delete s.langAttr; IMP.cfg = s;
+    IMP.suggestedExamples = s.examples || null; delete s.examples;               // the examples are used only if the author says so
+    IMP.useRelations = !!s.relations;                                              // the relations are on by default when the file has them
+    if (lang) IMP.cfg.language = { mode: 'attr', attr: lang, map: {} };
+  }
+  impRender();
+}
+async function impUpload(file) {
+  impMsg('Reading the file …'); IMP.file = file;
   const form = new FormData(); form.append('file', file);
   try {
-    const r = await fetch('/api/upload/dictionary', { method:'POST', body:form });
-    const d = await r.json();
-    if (d.ok) {
-      msg.textContent = 'Upload successful — reloading dictionary…';
-      msg.className = 'dbt-modal-msg success';
-      setTimeout(async () => {
-        document.getElementById('upload-modal').classList.remove('visible');
-        await reloadDictionary();
-      }, 800);
-    } else {
-      msg.textContent = d.error || 'Upload failed.';
-      msg.className = 'dbt-modal-msg error';
-    }
-  } catch(e) {
-    msg.textContent = 'Network error.';
-    msg.className = 'dbt-modal-msg error';
+    const r = await fetch('/api/import/dictionary/parse', { method: 'POST', body: form }); const d = await r.json();
+    if (!r.ok) { impMsg(d.error || 'The file could not be read.', 'error'); IMP.info = null; impRender(); return; }
+    impMsg(''); IMP.info = d; IMP.token = d.token; IMP.entryTag = ''; IMP.cfg = {};
+    const likely = d.candidates.find(c => c.likely); impRender();
+    if (likely && !d.native) await impPickEntry(likely.tag);
+  } catch (e) { impMsg('Network error.', 'error'); }
+  impRender();
+}
+function impOpen() { impReset(); impMsg(''); impEl('upload-modal').classList.add('visible'); impRender(); }
+function impClose() { impEl('upload-modal').classList.remove('visible'); if (IMP && IMP.done) reloadDictionary(); }
+
+const dictEditTab = document.getElementById('dict-edit-tab');
+if (dictEditTab) dictEditTab.addEventListener('click', impOpen);
+impEl('upload-cancel').addEventListener('click', impClose);
+impEl('upload-modal').addEventListener('click', e => { if (e.target === e.currentTarget) impClose(); });
+impEl('imp-back').addEventListener('click', () => { if (IMP.step > 0) impGo(IMP.step - 1); });
+impEl('imp-next').addEventListener('click', async () => {
+  if (IMP.step < IMP_LAST) { if (IMP.step === 4 && !(IMP.cfg.definition || IMP.cfg.gloss)) impMsg('Tip: no definition or gloss is mapped, so the entries will have no sense.', 'error'); else impMsg(''); impGo(IMP.step + 1); return; }
+  const btn = impEl('imp-next'); btn.disabled = true; impMsg('Importing …');
+  const r = await impApi('commit', { token: IMP.token, config: impConfig(), mode: IMP.mode });
+  if (r.ok && r.data.ok) { IMP.done = true; impMsg(r.data.message + (r.data.backup ? ' The previous dictionary was saved as ' + r.data.backup + '.' : ''), 'success'); impRender(); }
+  else { impMsg((r.data.errors || [r.data.error || 'The import failed.']).join(' '), 'error'); btn.disabled = false; }
+});
+const impBody = impEl('imp-body');
+impBody.addEventListener('change', async e => {
+  const t = e.target, box = t.closest('.imp-field');
+  if (t.id === 'dict-file') { if (t.files[0]) impUpload(t.files[0]); return; }
+  if (t.id === 'imp-entry') { impPickEntry(t.value); return; }
+  if (t.id === 'imp-lcode') { IMP.cfg.language = { mode: 'fixed', code: t.value }; impRender(); return; }
+  if (t.name === 'imp-lm') { IMP.cfg.language = t.value === 'attr' ? { mode: 'attr', attr: (impPathInfo(impAbs('', IMP.cfg.lemma.path)).attrs && Object.keys(impPathInfo(impAbs('', IMP.cfg.lemma.path)).attrs)[0]) || '', map: {} } : { mode: 'fixed', code: '' }; impRender(); if (t.value === 'attr') impRefreshLang(); return; }
+  if (t.id === 'imp-lattr') { IMP.cfg.language.attr = t.value; IMP.cfg.language.map = {}; impRefreshLang(); return; }
+  if (t.classList.contains('imp-lmap')) { IMP.cfg.language.map = IMP.cfg.language.map || {}; IMP.cfg.language.map[t.dataset.value] = t.value; impRender(); return; }
+  if (t.id === 'imp-sense') { if (t.value) IMP.cfg.sense = { path: t.value }; else { delete IMP.cfg.sense; delete IMP.cfg.subsense; } ['definition', 'gloss', 'notes', 'subsense'].forEach(k => delete IMP.cfg[k]); impRender(); return; }
+  if (t.id === 'imp-ety') { if (t.value) IMP.cfg.etymology = { path: t.value }; else delete IMP.cfg.etymology; impRender(); return; }
+  if (t.name === 'imp-mode') { IMP.mode = t.value; return; }
+  if (t.name === 'imp-exuse') { IMP.useExamples = t.value === '1'; if (IMP.useExamples && !IMP.cfg.examples && IMP.suggestedExamples) IMP.cfg.examples = JSON.parse(JSON.stringify(IMP.suggestedExamples)); impRender(); if (IMP.useExamples) impLoadExLangs(); return; }
+  if (t.id === 'imp-exw') { IMP.cfg.examples = t.value ? { path: t.value } : undefined; if (!t.value) delete IMP.cfg.examples; IMP.exLangValues = []; impRender(); return; }
+  if (t.name === 'imp-rluse') { IMP.useRelations = t.value === '1'; if (IMP.useRelations && IMP.cfg.relations && IMP.cfg.relations.type) impLoadRelTypes(); else impRender(); return; }
+  if (t.id === 'imp-rlw') { IMP.cfg.relations = t.value ? { path: t.value, typeMap: {}, by: 'id' } : undefined; if (!t.value) delete IMP.cfg.relations; IMP.relTypeValues = []; impRender(); return; }
+  if (t.name === 'imp-rby') { IMP.cfg.relations.by = t.value; impRender(); return; }
+  if (t.id === 'imp-rke') { IMP.cfg.relations.entryKey = t.value; impRender(); return; }
+  if (t.id === 'imp-rks') { IMP.cfg.relations.senseKey = t.value; impRender(); return; }
+  if (t.classList.contains('imp-rmap')) { IMP.cfg.relations.typeMap = IMP.cfg.relations.typeMap || {}; IMP.cfg.relations.typeMap[t.dataset.value] = t.value; return; }
+  if (t.classList.contains('imp-map')) { const k = t.dataset.kind + 'Map'; IMP.cfg[k] = IMP.cfg[k] || {}; IMP.cfg[k][t.dataset.value] = t.value; return; }
+  if (box && box.dataset.key) {
+    const which = t.classList.contains('imp-path') ? 'path' : t.classList.contains('imp-value') ? 'value' : t.classList.contains('imp-fattr') ? 'fattr' : t.classList.contains('imp-fval') ? 'fval' : '';
+    if (which) { const key = box.dataset.key; await impOnField(key, which, t.value, box); if (key === 'lemma') impRefreshLang(); if (key === 'pos' || key === 'domain') impLoadValues(key, IMP.cfg[key], key + 'Values'); if (key === 'relations.type') impLoadRelTypes(); if (key === 'examples.text') impLoadExLangs(); }
+  }
+});
+impBody.addEventListener('click', async e => {
+  if (e.target.id === 'imp-native') {
+    impMsg('Uploading …'); const form = new FormData(); form.append('file', IMP.file);
+    try { const r = await fetch('/api/upload/dictionary', { method: 'POST', body: form }); const d = await r.json();
+      if (d.ok) { IMP.done = true; impMsg('The dictionary was replaced by your file (already in the DBT format).', 'success'); impRender(); } else impMsg(d.error || 'Upload failed.', 'error'); }
+    catch (err) { impMsg('Network error.', 'error'); }
   }
 });
 </script>
