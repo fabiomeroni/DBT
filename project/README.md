@@ -128,6 +128,52 @@ chosen: only the entries that have a form in that language are listed, with that
   of the languages *that sense applies to*, since the words that merely mean the same belong to a sense, not to the entry as a whole).
   For a project with one language there is nothing to tick.
 
+## Importing an XML dictionary (the wizard)
+
+The **⬆ Upload XML** button of the dictionary (author only) opens a wizard that takes **any XML dictionary**, not only files in the DBT's own format
+(LEXICA XML): LIFT (FLEx, WeSay, Lexique Pro), TEI, or a schema of your own. You say once which XML node is what, and the DBT converts the file. The logic is
+that of **LExport** (https://lexport-anonymous.streamlit.app/), the tool that converts lexical XML dictionaries into other formats; the wizard says *Powered by LExport*.
+
+1. **File.** Choose the file. XML namespaces (TEI) are removed so that you see plain tag names. A file that is already in the DBT's format says so and can be used
+   as it is.
+2. **Entries.** Which node wraps each entry. The likeliest one is chosen for you; the first entries are shown as XML. For LIFT and TEI files the whole mapping is
+   started for you: check each step.
+3. **Headwords.** The node that holds the headword, and what is read from it (its text, an attribute, or the text of a child, as `./text` in LIFT). The **language**
+   is a language of the project (all the headwords), or comes from an attribute (`lang`), whose values you map to the project's languages (those you leave
+   blank are ignored). Optional: the IPA (LIFT's `nme-fonipa` is the IPA of `nme`); the forms without IPA are derived from your orthography table as usual.
+4. **Grammar.** The part of speech (a node, or an attribute such as LIFT's `grammatical-info`, `value`) and a table saying how each value is written in the DBT
+   (`Noun` → `n.`); optionally the semantic domain.
+5. **Senses.** The sense node (or none: the entry is its own sense), optionally subsenses (they become senses of their own), the definition, the short gloss and
+   the notes. Each of these can be **filtered by an attribute**: *only where `lang` is `en`* (the DBT shows English definitions). Samples of what is read are shown
+   under each field.
+6. **Examples.** If the file has example sentences, you choose to **ignore** them (the default) or to **use** them. If you use them, they become a **text
+   of the Texts page**, *Examples from pre-existent dictionary* (on the model of *Examples from papers*), and each sense cites its own examples, so they appear
+   under the sense in the dictionary. You say which node is an example, where its sentence is, and where its translation is (filtered by language: only where
+   `lang` is `en`); the language of a sentence is the headwords' language, or read from an attribute and mapped (a table lists the values found on the sentences,
+   which can be languages no headword has). A text has one language, so with several languages there is one text for each, with the language in its title
+   (*Examples from pre-existent dictionary (Nume)*). You can then gloss the sentences like any other text.
+7. **Relations.** If the file says that a sense is a **synonym** or an **antonym** of another, you choose to import the relations (the default when the file has
+   them) or to ignore them. You say which node is a relation, where its type is (LIFT: the attribute `type` of the node itself) with a table saying what each type
+   is in the DBT (*Synonyms* → Synonym, *Antonyms* → Antonym; the others are not imported), where its target is (LIFT: the attribute `ref`), and how the target is
+   found: by an **identifier** (the attribute of the entries, such as LIFT's `guid`, and of the senses, such as `id`) or by its **headword**. Targets are resolved after all the entries
+   are converted, so a relation can point to an entry that comes later; one that points to nothing is skipped and reported. A relation under a sense belongs
+   to it; one under the entry belongs to its first sense.
+8. **Etymology.** Optional: the node, the form, the language (a child, or an attribute of the node itself, as LIFT's `source`) and a gloss.
+9. **Review.** How many entries will be imported (and with how many senses), which are skipped and why (for instance no headword in a language of the project),
+   a **coverage report** (how many entries lack the part of speech, the IPA …, with examples), and the first entries as the DBT will hold them. Choose to
+   **replace** the dictionary (the current one is backed up first, in `uploads/backups`) or to **add** to it (identifiers already in use are not reused).
+   Nothing is written until you press *Import*.
+
+An imported dictionary is saved as the uploaded dictionary: the file shipped with the project (`project/dictionary.xml`) is never overwritten.
+
+**Replacing and adding.** *Add* goes on in the text of examples that is already there (the new sentences are numbered after the old ones, so the glosses you made
+stay valid). *Replace* starts the text again: the old text and the glosses made on it are first backed up (in `uploads/backups`) and the glosses removed, since they
+belonged to the old sentences.
+
+**Safety.** Only the author can use the wizard. The file is read without expanding entities or fetching anything (an external entity cannot read a file of the
+server), is limited to 60 MB, and is kept for one hour under a random name until the import is made or abandoned. A path typed into the wizard can only look
+*inside* the entries.
+
 ## Captions: tables and figures, numbered through the grammar
 
 A **phonological chart** is a table and has its **caption above** it, an **image** is a figure and has its **caption below** it. The author writes
@@ -153,6 +199,21 @@ table or a figure, the numbers of the sections after it change, and the page sho
 - **LaTeX:** the charts are `table` environments with the caption above and the images are `figure` environments with the caption below, so LaTeX numbers
   them in the same order; the words and the separator are given to LaTeX (the `caption` package). The images are taken from an `images` folder next to
   the `.tex` file (copy the project's `images` folder there).
+
+## Semantic relations (synonyms and antonyms)
+
+A sense can be related to another sense as its **synonym** or its **antonym**. Relations belong to **senses**, not to entries: the word *know* has a sense that is a
+synonym of one word and another sense that is an antonym of another.
+
+- **In the entry editor** each sense has a *Semantic relations* block: choose the type, type a form or a meaning, and pick the sense you mean in the results (each result is a
+  sense: its headword, its number if the entry has several, its gloss). The ✕ removes a relation. A sense is never offered as its own relation.
+- **On the page** the relations appear under the sense (*Synonym: …  ·  Antonyms: …*, each a link to the entry). A relation is entered **once**; since both types are symmetric,
+  the page shows it on **both** senses. The reverse side is only drawn, never stored.
+- **The author's choice:** *Settings → Display → Show the semantic relations* hides them from everybody (the data stays).
+- **In the XML:** `<Sens> … <RelationSémantique><Type>synonym</Type><Cible cible="idⓢ2">headword</Cible></RelationSémantique> … </Sens>`, where `cible` is the identifier of the **target
+  sense**. Only the two types are shown and edited; a relation of any other type that an older dictionary has is left exactly as it is.
+- **When a sense or an entry is removed,** the relations that point to it are removed with it.
+- **Import:** the wizard's *Relations* step (below) brings them from LIFT, TEI or any schema.
 
 ## The LaTeX export (and the Word and PDF exports to come)
 
