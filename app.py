@@ -16,7 +16,7 @@ import json
 import unicodedata
 import html as _html
 from html import escape as _esc
-from flask import Flask, request, jsonify, session, send_from_directory, abort, Response, redirect
+from flask import Flask, request, jsonify, session, send_from_directory, send_file, abort, Response, redirect
 from lxml import etree
 import markdown as md_lib
 
@@ -27,6 +27,10 @@ import phonotable as phono
 import captions as captions_lib
 import xmlimport as xmlimport_lib
 import glossary as glossary_lib
+import backup as backup_lib
+import datetime
+import tempfile
+import threading
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -1940,6 +1944,116 @@ def glossary_create():
     with open(_glossary_path(eid), 'w', encoding='utf-8') as f:
         f.write(f'## {term}\n\n[Write the definition here…]\n')
     return jsonify({'ok': True, 'id': eid, 'term': term})
+
+# ── Backups: what the author edits lives only on the server ─────────────────────────────────────────
+# The author downloads an archive of everything (the backup that survives the loss of the server), and once a day, when the site is used and something
+# changed, the server keeps a snapshot of the same kind in uploads/backups/snapshots (the safety net against mistakes). Snapshots are never removed by
+# themselves: the author can dispose of those that are a month old (see backup.py).
+_BACKUP_LOCK = threading.Lock()
+_SNAP = {'checked': -1e9, 'running': False}
+
+def _backup_files():
+    """Everything the author edits: the files of the project (as configured), the project settings, and the data under uploads (not the backups, not
+    the files of an import in progress, not the state of the backups)."""
+    f = PROJECT['files']
+    paths = [f.get(k) for k in ('dictionary', 'fieldnotes', 'grammarDir', 'glossaryDir', 'recordingsDir', 'imagesDir', 'orthography', 'seedPhonetic', 'pagesDir', 'references')]
+    paths.append(PROJECT_PATH)
+    try:
+        for n in sorted(os.listdir(UPLOAD_FOLDER)):
+            if n in ('backups', 'import', backup_lib.STATE_NAME):
+                continue
+            paths.append(os.path.join(UPLOAD_FOLDER, n))
+    except OSError:
+        pass
+    return backup_lib.collect('.', paths)
+
+def _backup_author():
+    return None if session.get('author') else (jsonify({'error': 'Unauthorized'}), 401)
+
+def _snapshot_if_due():
+    try:
+        with _BACKUP_LOCK:
+            files = _backup_files()
+            sig, state, now = backup_lib.signature(files), backup_lib.load_state(UPLOAD_FOLDER), datetime.datetime.now()
+            if files and backup_lib.due(state, sig, now):
+                backup_lib.take_snapshot(UPLOAD_FOLDER, files, {'project': PROJECT['name']}, now)
+                state['lastSnapshotAt'], state['lastSnapshotSig'] = now.isoformat(timespec='seconds'), sig
+                backup_lib.save_state(UPLOAD_FOLDER, state)
+    except Exception as e:                                           # a snapshot that fails must never hurt the site
+        print('The daily snapshot failed:', e)
+    finally:
+        _SNAP['running'] = False
+
+@app.before_request
+def _daily_snapshot_hook():
+    """When the site is used, look (at most every ten minutes) whether the daily snapshot is due; it is made in the background."""
+    if SETUP_MODE or os.environ.get('DBT_SNAPSHOT_DISABLE') == '1' or not request.path.startswith('/api/') or _SNAP['running']:
+        return None
+    try:
+        gap = float(os.environ.get('DBT_SNAPSHOT_CHECK_SECONDS', '600'))
+    except ValueError:
+        gap = 600.0
+    if time.monotonic() - _SNAP['checked'] < gap:
+        return None
+    _SNAP['checked'], _SNAP['running'] = time.monotonic(), True
+    threading.Thread(target=_snapshot_if_due, daemon=True).start()
+    return None
+
+@app.route('/api/backup/status')
+def backup_status():
+    denied = _backup_author()
+    if denied: return denied
+    files, now = _backup_files(), datetime.datetime.now()
+    snaps = backup_lib.list_snapshots(UPLOAD_FOLDER, now)
+    old = [s for s in snaps if s['eligible']]
+    out = backup_lib.status(backup_lib.load_state(UPLOAD_FOLDER), backup_lib.signature(files), now)
+    out.update({'files': len(files), 'snapshots': {'count': len(snaps), 'bytes': sum(s['bytes'] for s in snaps), 'last': snaps[0]['date'] if snaps else None,
+                                                   'eligible': {'count': len(old), 'bytes': sum(s['bytes'] for s in old)}}})
+    return jsonify(out)
+
+@app.route('/api/backup/download')
+def backup_download():
+    denied = _backup_author()
+    if denied: return denied
+    now = datetime.datetime.now()
+    with _BACKUP_LOCK:
+        files = _backup_files()
+        sig = backup_lib.signature(files)
+        f = tempfile.TemporaryFile()
+        backup_lib.write_archive(f, files, {'project': PROJECT['name'], 'kind': 'download', 'when': now.isoformat(timespec='seconds')})
+        f.seek(0)
+        state = backup_lib.load_state(UPLOAD_FOLDER)
+        state['lastDownloadAt'], state['lastDownloadSig'] = now.isoformat(timespec='seconds'), sig          # the reminder counts from here
+        backup_lib.save_state(UPLOAD_FOLDER, state)
+    name = 'dbt-backup-%s-%s.zip' % (re.sub(r'[^A-Za-z0-9_-]+', '-', str(PROJECT.get('id') or PROJECT['name'])).strip('-')[:40] or 'project', now.strftime('%Y%m%d-%H%M%S'))
+    return send_file(f, mimetype='application/zip', as_attachment=True, download_name=name)
+
+@app.route('/api/backup/snapshots')
+def backup_snapshots():
+    denied = _backup_author()
+    if denied: return denied
+    return jsonify({'snapshots': backup_lib.list_snapshots(UPLOAD_FOLDER, datetime.datetime.now()), 'disposeAfterDays': backup_lib.DISPOSE_AFTER_DAYS})
+
+@app.route('/api/backup/snapshots/<name>')
+def backup_snapshot_download(name):
+    denied = _backup_author()
+    if denied: return denied
+    if not backup_lib.SNAPSHOT_RE.fullmatch(name) or not os.path.isfile(os.path.join(backup_lib.snapshot_dir(UPLOAD_FOLDER), name)):
+        return jsonify({'error': 'No such snapshot.'}), 404
+    return send_from_directory(backup_lib.snapshot_dir(UPLOAD_FOLDER), name, as_attachment=True)
+
+@app.route('/api/backup/snapshots/dispose', methods=['POST'])
+def backup_dispose():
+    """Dispose of snapshots: those named, or, with {"eligible": true}, all that are a month old. The age is judged here (backup.dispose)."""
+    denied = _backup_author()
+    if denied: return denied
+    body, now = request.get_json(silent=True) or {}, datetime.datetime.now()
+    names = body.get('names') if isinstance(body.get('names'), list) else []
+    if body.get('eligible') is True:
+        names = [s['name'] for s in backup_lib.list_snapshots(UPLOAD_FOLDER, now) if s['eligible']]
+    with _BACKUP_LOCK:
+        removed, refused = backup_lib.dispose(UPLOAD_FOLDER, names[:500], now)
+    return jsonify({'ok': True, 'removed': removed, 'refused': refused, 'freed': sum(r['bytes'] for r in removed)})
 
 @app.route('/api/captions')
 def captions_list():
