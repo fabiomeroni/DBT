@@ -583,3 +583,14 @@ a.xref:hover { color: var(--ink); border-bottom-style: solid; }
 .em-rel-results button { text-align: left; background: #fffefb; border: 1px solid var(--border); border-radius: 3px; padding: 0.2rem 0.5rem; cursor: pointer; font: inherit; font-size: 0.9rem; }
 .em-rel-results button:hover { background: #f6e6b8; }
 .em-rel-results small { color: var(--ink-light); }
+
+
+/* ── the Glossary: {{glossary: id}} links, and the entries ── */
+a.gloss-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--gold); cursor: help; }
+a.gloss-link:hover { color: var(--gold); border-bottom-style: solid; }
+.glossary-entry { scroll-margin-top: 4.5rem; }
+.glossary-entry.gloss-flash { background: #fbf1cf; transition: background 1.2s; }
+.glossary-entry h2 { margin-top: 0; }
+.grammar-section img.glossary-logo, img.glossary-logo { display: inline-block; height: 1.6em; width: auto; margin: 0 0 0 0.45rem; vertical-align: middle; box-shadow: none; border-radius: 0; }
+.gloss-code { display: none; margin-top: 0.4rem; font-family: 'Source Code Pro', monospace; font-size: 0.74rem; color: var(--ink-light); user-select: all; }
+.gloss-code.visible { display: block; }
