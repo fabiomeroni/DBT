@@ -6,6 +6,10 @@ Run: python app.py   (then open http://localhost:5000)
 """
 
 import os
+import copy
+import secrets
+import time
+import shutil
 import re
 import sys
 import json
@@ -21,6 +25,7 @@ import references as refs_lib
 import concordance as conc
 import phonotable as phono
 import captions as captions_lib
+import xmlimport as xmlimport_lib
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -1414,6 +1419,247 @@ def upload_dictionary():
     return _handle_upload('dictionary.xml')
 
 
+# ── Importing any XML dictionary: the wizard (the logic of LExport: https://lexport-anonymous.streamlit.app/) ──
+# The author uploads a file in any schema; the server keeps it under a random token for an hour while the wizard asks which node is what, then
+# converts it into the DBT's own format. Nothing is written to the dictionary until the author confirms, and the dictionary is backed up first.
+_IMPORT_DIR = os.path.join(UPLOAD_FOLDER, 'import')
+_IMPORT_TTL = 3600
+_IMPORT_CACHE = {}                                  # token -> (time, root, filename): parsing a large file again at each step would be slow
+
+def _import_forget_old():
+    now = time.time()
+    try:
+        for n in os.listdir(_IMPORT_DIR):
+            p = os.path.join(_IMPORT_DIR, n)
+            if now - os.path.getmtime(p) > _IMPORT_TTL:
+                os.remove(p)
+    except OSError:
+        pass
+    for t in [t for t, v in _IMPORT_CACHE.items() if now - v[0] > _IMPORT_TTL]:
+        _IMPORT_CACHE.pop(t, None)
+
+def _import_load(token):
+    """(root, filename) of an uploaded file, or None if the token is not one of ours or has expired."""
+    if not isinstance(token, str) or not re.fullmatch(r'[0-9a-f]{32}', token):
+        return None
+    hit = _IMPORT_CACHE.get(token)
+    if hit:
+        return hit[1], hit[2]
+    p = os.path.join(_IMPORT_DIR, token + '.xml')
+    try:
+        with open(p, 'rb') as f:
+            data = f.read()
+        with open(p + '.name', encoding='utf-8') as f:
+            name = f.read()
+        root, _ns = xmlimport_lib.parse(data)
+    except (OSError, ValueError):
+        return None
+    if len(_IMPORT_CACHE) >= 3:
+        _IMPORT_CACHE.pop(min(_IMPORT_CACHE, key=lambda t: _IMPORT_CACHE[t][0]), None)
+    _IMPORT_CACHE[token] = (time.time(), root, name)
+    return root, name
+
+def _import_guard():
+    """(root, filename, body) for a request of the wizard, or (None, None, response) if it is not allowed or the file is gone."""
+    if not session.get('author'):
+        return None, None, (jsonify({'error': 'Unauthorized'}), 401)
+    body = request.get_json(silent=True) or {}
+    loaded = _import_load(body.get('token'))
+    if not loaded:
+        return None, None, (jsonify({'error': 'This upload has expired: choose the file again.'}), 410)
+    return loaded[0], loaded[1], body
+
+@app.route('/api/import/dictionary/parse', methods=['POST'])
+def import_parse():
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'No file provided'}), 400
+    data = f.read(xmlimport_lib.MAX_BYTES + 1)
+    try:
+        root, had_ns = xmlimport_lib.parse(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    _import_forget_old()
+    os.makedirs(_IMPORT_DIR, exist_ok=True)
+    token = secrets.token_hex(16)
+    with open(os.path.join(_IMPORT_DIR, token + '.xml'), 'wb') as out:
+        out.write(data)
+    name = os.path.basename(f.filename or 'dictionary.xml')[:120]
+    with open(os.path.join(_IMPORT_DIR, token + '.xml.name'), 'w', encoding='utf-8') as out:
+        out.write(name)
+    _IMPORT_CACHE[token] = (time.time(), root, name)
+    return jsonify({'ok': True, 'token': token, 'filename': name, 'bytes': len(data), 'namespaces': had_ns, 'native': xmlimport_lib.is_native(root),
+                    'rootTag': root.tag, 'candidates': xmlimport_lib.entry_candidates(root)[:60],
+                    'project': {'languages': [{'code': l['code'], 'name': l['name']} for l in _LANGS]}})
+
+@app.route('/api/import/dictionary/inspect', methods=['POST'])
+def import_inspect():
+    root, name, body = _import_guard()
+    if root is None:
+        return body
+    tag = body.get('entryTag')
+    ents = xmlimport_lib.entries(root, tag) if isinstance(tag, str) and tag else []
+    if not ents:
+        return jsonify({'error': 'No entry found with that node.'}), 400
+    paths, sampled = xmlimport_lib.describe_paths(root, tag)
+    return jsonify({'ok': True, 'count': len(ents), 'sampled': sampled, 'paths': paths, 'samples': xmlimport_lib.sample_xml(root, tag), 'entryAttrs': xmlimport_lib.entry_attrs(root, tag),
+                    'suggestion': xmlimport_lib.suggest(root, tag, paths)})
+
+@app.route('/api/import/dictionary/values', methods=['POST'])
+def import_values():
+    root, name, body = _import_guard()
+    if root is None:
+        return body
+    field = body.get('field') if isinstance(body.get('field'), dict) else {}
+    try:
+        vals = xmlimport_lib.unique_values(root, body.get('entryTag'), field)
+    except (ValueError, SyntaxError) as e:
+        return jsonify({'error': f'Not a valid path: {e}'}), 400
+    return jsonify({'ok': True, 'values': [{'value': v, 'count': n} for v, n in vals]})
+
+def _import_convert(root, body, limit=None, existing_ids=None, example_start=None):
+    cfg = body.get('config')
+    errors = xmlimport_lib.validate_config(root, cfg, LANG_CODES)
+    if errors:
+        return None, None, errors
+    try:
+        els, rep = xmlimport_lib.convert(root, cfg, LANG_CODES, existing_ids, limit, example_start)
+    except (ValueError, SyntaxError) as e:
+        return None, None, [str(e)]
+    return cfg, (els, rep), []
+
+@app.route('/api/import/dictionary/preview', methods=['POST'])
+def import_preview():
+    root, name, body = _import_guard()
+    if root is None:
+        return body
+    cfg, done, errors = _import_convert(root, body)
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 400
+    els, rep = done
+    texts = rep.pop('_texts', {})                                   # the sentences are for the commit; the preview shows a few
+    sample = [{'language': c, 'form': i['form'], 'translation': i['transl']} for c, v in texts.items() for i in v[:3]][:6]
+    return jsonify({'ok': True, 'report': rep, 'coverage': xmlimport_lib.output_coverage(els, cfg), 'examplesSample': sample,
+                    'xml': [etree.tostring(e, encoding='unicode', pretty_print=True)[:2500] for e in els[:5]]})
+
+def _example_text_start(code):
+    """How many sentences the text of imported examples in this language already has (the numbering goes on from there when entries are added)."""
+    path = os.path.join(TRANSCRIPTIONS_FOLDER, xmlimport_lib.examples_filename(code))
+    try:
+        ids = [s.get('id', '') for s in etree.parse(path, _XML_PARSER).getroot().findall('S')]
+    except (OSError, etree.XMLSyntaxError):
+        return 0
+    return max([int(i[2:]) for i in ids if re.fullmatch(r'ex\d+', i)] or [0])
+
+def _write_example_texts(texts, mode, text_lang):
+    """The examples of an imported dictionary become a text of the Texts page: Examples from pre-existent dictionary (one text for each language: a
+    text has one language, so with several the language is added to the title). Adding goes on in the text that is there; replacing starts
+    again, after a backup of the old text and of the glosses that were made on it (they belong to its sentences)."""
+    written = []
+    for code, items in texts.items():
+        fn = xmlimport_lib.examples_filename(code)
+        path = os.path.join(TRANSCRIPTIONS_FOLDER, fn)
+        name = next((l['name'] for l in _LANGS if l['code'] == code), code)
+        title = xmlimport_lib.EXAMPLES_TITLE + (f' ({name})' if len(texts) > 1 else '')
+        new = xmlimport_lib.build_examples_text(code, items, title, text_lang)
+        if mode == 'add' and os.path.exists(path):
+            root = etree.parse(path, _XML_PARSER).getroot()
+            for s in new.findall('S'):
+                root.append(s)
+        else:
+            if os.path.exists(path):
+                bdir = os.path.join(UPLOAD_FOLDER, 'backups'); os.makedirs(bdir, exist_ok=True)
+                stamp = time.strftime('%Y%m%d-%H%M%S')
+                shutil_copy = shutil.copyfile
+                shutil_copy(path, os.path.join(bdir, f'{fn[:-4]}-{stamp}.xml'))
+                gp = _gloss_path(fn)
+                if os.path.exists(gp):
+                    shutil_copy(gp, os.path.join(bdir, f'{fn[:-4]}-{stamp}-glosses.json')); os.remove(gp)
+            root = new
+        os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
+        tmp = path + '.tmp'
+        etree.ElementTree(root).write(tmp, pretty_print=True, encoding='UTF-8', xml_declaration=True)
+        os.replace(tmp, path)
+        written.append({'file': fn, 'title': title, 'language': code, 'count': len(items)})
+    return written
+
+def _import_header(filename):
+    """The <InformationsGlobales> of a dictionary made by an import: that of the current dictionary if there is one, else a new one."""
+    try:
+        old = _read_dict().getroot().find('InformationsGlobales')
+        if old is not None:
+            return old
+    except (OSError, etree.XMLSyntaxError):
+        pass
+    h = etree.Element('InformationsGlobales')
+    etree.SubElement(h, 'Titre').text = os.path.splitext(filename)[0][:120] or 'Dictionary'
+    langs = etree.SubElement(h, 'Langues')
+    for l in _LANGS:
+        etree.SubElement(langs, 'Langue', **{'rôle': 'source', 'code': l['code']}).text = l['name']
+    etree.SubElement(langs, 'Langue', **{'rôle': 'cible', 'code': 'eng'}).text = 'English'
+    return h
+
+@app.route('/api/import/dictionary/commit', methods=['POST'])
+def import_commit():
+    root, name, body = _import_guard()
+    if root is None:
+        return body
+    mode = body.get('mode')
+    if mode not in ('replace', 'add'):
+        return jsonify({'ok': False, 'errors': ['Choose whether to replace the dictionary or to add to it.']}), 400
+    existing, current = set(), None
+    if mode == 'add':
+        try:
+            current = _read_dict()
+            existing = {e.get('identifiant') for e in current.getroot().iter('EntréeLexicale')}
+        except (OSError, etree.XMLSyntaxError):
+            current = None
+    start = {c: _example_text_start(c) for c in LANG_CODES} if mode == 'add' else {}
+    cfg, done, errors = _import_convert(root, body, existing_ids=existing, example_start=start)
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 400
+    els, rep = done
+    texts = rep.pop('_texts', {})
+    if not els:
+        return jsonify({'ok': False, 'errors': ['No entry could be imported with this mapping: nothing was changed.']}), 400
+    backup = None
+    if os.path.exists(_dict_path()):
+        backup = _backup_dictionary('-before-import')
+    if mode == 'add' and current is not None:
+        tree = current
+        holder = tree.getroot().find('Dictionnaire')
+        if holder is None:
+            holder = etree.SubElement(tree.getroot(), 'Dictionnaire')
+    else:
+        header = _import_header(name)
+        new_root = etree.Element('RessourceLexicale')
+        new_root.append(copy.deepcopy(header))
+        holder = etree.SubElement(new_root, 'Dictionnaire')
+        tree = etree.ElementTree(new_root)
+    for el in els:
+        holder.append(el)
+    dest = os.path.join(UPLOAD_FOLDER, 'dictionary.xml')          # an imported dictionary is an uploaded one: the shipped file is never overwritten
+    tmp = dest + '.tmp'
+    tree.write(tmp, pretty_print=True, encoding='UTF-8', xml_declaration=True)
+    os.replace(tmp, dest)
+    tl = ((cfg.get('examples') or {}).get('translation') or {}).get('filterValue') or 'en'
+    text_files = _write_example_texts(texts, mode, {'eng': 'en', 'fra': 'fr', 'fre': 'fr'}.get(tl, tl)[:8]) if texts else []
+    _auto_orthography(); _auto_ipa()
+    token = body.get('token')
+    for suffix in ('.xml', '.xml.name'):
+        try: os.remove(os.path.join(_IMPORT_DIR, token + suffix))
+        except OSError: pass
+    _IMPORT_CACHE.pop(token, None)
+    msg = f"{rep['imported']} entries imported" + (f" ({rep['senses']} senses)." if rep['senses'] else '.')
+    if text_files:
+        msg += ' ' + ' '.join(f"{f['count']} example{'s' if f['count'] != 1 else ''} went into the text “{f['title']}” (Texts page)." for f in text_files)
+    if rep.get('relations', {}).get('imported'):
+        msg += f" {rep['relations']['imported']} semantic relation{'s' if rep['relations']['imported'] != 1 else ''}."
+    return jsonify({'ok': True, 'report': rep, 'backup': os.path.basename(backup) if backup else None, 'mode': mode, 'texts': text_files, 'message': msg})
+
+
 @app.route('/api/upload/fieldnotes', methods=['POST'])
 def upload_fieldnotes():
     return _handle_upload('fieldnotes.xml')
@@ -2100,6 +2346,89 @@ def _fill_sense(node, sd, existing):
     # the languages the sense applies to (sent whole by the editor; an unchanged choice rewrites nothing)
     if isinstance(sd.get('langs'), list):
         _set_langs_attr(node, sd['langs'])
+    # synonyms and antonyms (validated by the route: only existing target senses, no repeats)
+    if isinstance(sd.get('relations'), list):
+        _set_relations(node, sd['relations'])
+
+# ── Semantic relations: synonymy and antonymy, from a sense to another sense ──────────────────────────────
+# <Sens> … <RelationSémantique><Type>synonym</Type><Cible cible="idⓢ2">nir</Cible></RelationSémantique> … </Sens>
+# `cible` is the identifier of the target SENSE (the identifiant of a <Sens>); the text is only the target's headword, for people reading the XML.
+# A relation is written once, on the sense where the author entered it; the page also shows it on the other sense (both types are symmetric).
+# Relations of other types (an older dictionary's own) are left exactly as they are: never shown, never rewritten.
+_REL_ALIASES = {'synonym': 'synonym', 'synonyme': 'synonym', 'synonymie': 'synonym', 'synonymy': 'synonym', 'synonyms': 'synonym', 'syn': 'synonym',
+                'antonym': 'antonym', 'antonyme': 'antonym', 'antonymie': 'antonym', 'antonymy': 'antonym', 'antonyms': 'antonym', 'ant': 'antonym'}
+_REL_TYPES = ('synonym', 'antonym')
+_REL_MAX = 50
+
+def _rel_type(text):
+    """'synonym' or 'antonym' for what a dictionary may call them (Synonyms, synonymie, syn …); None for any other relation."""
+    return _REL_ALIASES.get(re.sub(r'[\s.]+', '', (text or '').strip().lower()))
+
+def _sense_relations(sn):
+    out = []
+    for r in sn.findall('RelationSémantique'):
+        t, c = _rel_type(r.findtext('Type')), r.find('Cible')
+        if t and c is not None and c.get('cible'):
+            out.append({'type': t, 'target': c.get('cible')})
+    return out
+
+def _sense_index(root):
+    """{sense identifiant: (entry element, sense element)} for the whole dictionary."""
+    return {s.get('identifiant'): (e, s) for e in root.iter('EntréeLexicale') for s in e.findall('Sens') if s.get('identifiant')}
+
+def _entry_label(e):
+    forms = {n.get('langue', ''): (n.text or '').strip() for n in e.findall('Lemme/ReprésentationDeForme')}
+    return next((forms[c] for c in _ID_ORDER if forms.get(c)), e.get('identifiant', ''))
+
+def _prepare_relations(root, data, entry_el=None):
+    """Check the relations the editor sends before they are written: a known type, an existing target sense (not the sense itself), no repeats.
+    Senses that send no `relations` keep theirs as they are."""
+    if not isinstance(data.get('senses'), list):
+        return
+    ids = _sense_index(root)
+    existing = entry_el.findall('Sens') if entry_el is not None else []
+    for sd in data['senses']:
+        if not isinstance(sd, dict):
+            continue
+        rels = sd.get('relations')
+        if not isinstance(rels, list):
+            sd.pop('relations', None); continue
+        ref = sd.get('ref')
+        own = existing[ref].get('identifiant') if isinstance(ref, int) and 0 <= ref < len(existing) else None
+        clean, seen = [], set()
+        for r in rels[:_REL_MAX]:
+            t, c = (r.get('type') if isinstance(r, dict) else None), (r.get('target') if isinstance(r, dict) else None)
+            if t in _REL_TYPES and isinstance(c, str) and c in ids and c != own and (t, c) not in seen:
+                seen.add((t, c)); clean.append({'type': t, 'target': c, 'label': _entry_label(ids[c][0])})
+        sd['relations'] = clean
+
+def _set_relations(node, rels):
+    """Make the sense's relations of the two known types exactly `rels`; relations of any other type are not touched."""
+    want = [(r['type'], r['target'], r.get('label') or r['target']) for r in rels]
+    keep = {(t, c) for t, c, _ in want}
+    have = set()
+    for r in list(node.findall('RelationSémantique')):
+        t, c = _rel_type(r.findtext('Type')), r.find('Cible')
+        if not t or c is None or not c.get('cible'):
+            continue
+        if (t, c.get('cible')) in keep: have.add((t, c.get('cible')))
+        else: node.remove(r)
+    for t, c, label in want:
+        if (t, c) not in have:
+            r = etree.SubElement(node, 'RelationSémantique')
+            etree.SubElement(r, 'Type').text = t
+            etree.SubElement(r, 'Cible', cible=c).text = label
+
+def _drop_relations_to(root, gone):
+    """When senses (or an entry) disappear, the relations that point to them go too."""
+    if not gone:
+        return 0
+    n = 0
+    for r in list(root.iter('RelationSémantique')):
+        c = r.find('Cible')
+        if c is not None and c.get('cible') in gone:
+            r.getparent().remove(r); n += 1
+    return n
 
 def _apply_senses(el, eid, payload):
     existing = el.findall('Sens')
@@ -2636,6 +2965,21 @@ def colors_js():
           f"(function(){{var s=document.createElement('style');s.textContent={json.dumps(css)};document.head.appendChild(s);}})();")
     return Response(js, mimetype='application/javascript', headers={'Cache-Control': 'no-cache'})
 
+_DISPLAY_DEFAULT = {'relations': True}
+
+def _display_current():
+    """How the dictionary is shown (the author's choices, read by everyone): whether the semantic relations appear under the senses."""
+    try:
+        with open(_SETTINGS_PATH, encoding='utf-8') as f:
+            d = json.load(f).get('display')
+    except (OSError, ValueError, AttributeError):
+        d = None
+    return {'relations': bool(d.get('relations', True)) if isinstance(d, dict) else True}
+
+@app.route('/api/dictionary/display')
+def dictionary_display():
+    return jsonify(_display_current())
+
 @app.route('/api/dictionary/settings', methods=['GET', 'POST'])
 def dictionary_settings():
     """The orthography <-> IPA correspondence table of the dictionary (author only)."""
@@ -2643,7 +2987,7 @@ def dictionary_settings():
         return jsonify({'error': 'Unauthorized'}), 401
     if request.method == 'GET':
         cfg, custom = _cfg_current()
-        return jsonify({'correspondences': cfg, 'defaults': _DEFAULT_CORR, 'custom': custom,
+        return jsonify({'correspondences': cfg, 'defaults': _DEFAULT_CORR, 'custom': custom, 'display': _display_current(),
                         'colors': _colors_current(), 'default_colors': _DEFAULT_COLORS, 'color_names': _COLOR_NAMES})
     data = request.get_json(silent=True) or {}
     cfg, err = _clean_corr(data.get('correspondences'))
@@ -2656,7 +3000,9 @@ def dictionary_settings():
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
         tmp = _SETTINGS_PATH + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump({'correspondences': cfg, 'colors': cols}, f, ensure_ascii=False, indent=2)
+            json.dump({'correspondences': cfg, 'colors': cols,
+                       'display': {'relations': bool((data['display'] or {}).get('relations', True))} if isinstance(data.get('display'), dict) else _display_current()},
+                      f, ensure_ascii=False, indent=2)
         os.replace(tmp, _SETTINGS_PATH)
         _corr_cache['compiled'] = None
         rederived = 0
@@ -2786,6 +3132,7 @@ def add_dict_entry():
         dictionnaire = root.find('Dictionnaire')
         if dictionnaire is None:
             return jsonify({'error': 'No <Dictionnaire> element'}), 500
+        _prepare_relations(root, data)
         el, eid = _build_entry_el(data, existing_ids=existing)
         dictionnaire.append(el)
         _number_homonyms(root, el)
@@ -2805,7 +3152,10 @@ def update_dict_entry(entry_id):
         old  = root.find(f'.//EntréeLexicale[@identifiant="{entry_id}"]')
         if old is None:
             return jsonify({'error': 'Entry not found'}), 404
+        _prepare_relations(root, data, old)
+        before = {s.get('identifiant') for s in old.findall('Sens')}
         _apply_entry_data(old, entry_id, data)      # in place: nothing else in the entry is lost
+        _drop_relations_to(root, before - {s.get('identifiant') for s in old.findall('Sens')})     # a sense the author removed: no relation points to it any more
         _number_homonyms(root, old)
         _write_dict(tree)
         return jsonify({'ok': True})
@@ -2822,7 +3172,9 @@ def delete_dict_entry(entry_id):
         el   = root.find(f'.//EntréeLexicale[@identifiant="{entry_id}"]')
         if el is None:
             return jsonify({'error': 'Entry not found'}), 404
+        gone = {s.get('identifiant') for s in el.findall('Sens')} | {entry_id}
         el.getparent().remove(el)
+        _drop_relations_to(root, gone)
         _write_dict(tree)
         return jsonify({'ok': True})
     except Exception as e:
