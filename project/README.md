@@ -200,6 +200,35 @@ table or a figure, the numbers of the sections after it change, and the page sho
   them in the same order; the words and the separator are given to LaTeX (the `caption` package). The images are taken from an `images` folder next to
   the `.tex` file (copy the project's `images` folder there).
 
+## The Glossary
+
+The **Glossary** tab (after *References* in the navigation) holds the **concepts** that the grammar and the dictionary refer to: *predicate*, *omnipredicative*, … An entry has a
+**term**, a **definition** and, if you wish, a link to a reference site (for instance the Grammaticon).
+
+- **An entry is a text file** in `project/glossary/`, written with **the markup of the grammar**: the same Markdown, the same editor (toolbar, 📷 images, 🔗 references, the
+  *Phonological table* tab) and **every shortcode of the grammar** (`{{source: …}}`, `{{cite: …}}`, `{{example: …}}`, `{{entry: …}}`, `{{ref: …}}`, tables, figures). The file name (without
+  `.md`) is the entry's **id** and its first heading is its **term**: `predicate.md` begins `## Predicate`. For example the entry *predicate*:
+
+  ```
+  ## Predicate
+
+  The predicate makes a statement … can act as a predicate.
+
+  [see in the Grammaticon](https://grammaticon.clld.org/concepts/25) ![Grammaticon](grammaticon_logo.png){.glossary-logo}
+  ```
+
+  (`{.glossary-logo}` makes the logo a line high, after the link; a picture of your own can go in `project/images` or next to the pages, as for the grammar.)
+- **Adding, editing, deleting** (author only): *＋ Add entry* asks for the term and makes the id from it (`Case marking` → `case_marking`); *✏ Edit* opens the editor; *🗑 Delete*.
+  Under each entry the author sees the shortcode to copy. Entries are listed alphabetically (accents and case ignored) and the sidebar lists the terms.
+- **Referring to an entry: `{{glossary: id}}`** in the grammar, in the dictionary (a definition or a note), or in another entry. It becomes a link that reads as the **term**, with the
+  beginning of the definition as a tooltip, to `glossary.html#id` (the entry is shown). `{{glossary: id | the words shown}}` shows your own words. An unknown id is shown as a visible
+  error; inside a code block or `inline code` the shortcode is left as written. The **📖 Glossary** button of the editors lists the entries and inserts the shortcode.
+- **In the LaTeX export** the shortcode is plain text (the term, or the words shown): the Glossary is a page of the site.
+- **Settings** (`project.json`): `nav.glossary` is the label at the right of the navigation bar (default *Glossary*); `files.glossaryDir` is the folder (default `project/glossary`).
+- **Numbers.** Tables and figures inside an entry are numbered within the glossary (*Table 1* in each entry's own series), not after those of the grammar; `{{ref: label}}` in an
+  entry refers to the grammar's tables and figures and goes to the Grammar page.
+- **For developers.** The editor is shared by the Grammar and Glossary pages (`editor.js`, and `grammar.css` for the look of the texts), so that both always accept the same markup.
+
 ## Semantic relations (synonyms and antonyms)
 
 A sense can be related to another sense as its **synonym** or its **antonym**. Relations belong to **senses**, not to entries: the word *know* has a sense that is a
