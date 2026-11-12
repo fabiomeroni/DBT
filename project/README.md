@@ -200,6 +200,26 @@ table or a figure, the numbers of the sections after it change, and the page sho
   them in the same order; the words and the separator are given to LaTeX (the `caption` package). The images are taken from an `images` folder next to
   the `.tex` file (copy the project's `images` folder there).
 
+## Backups (author only)
+
+Everything you edit in the browser (the dictionary, the grammar, the glossary, the references, the texts and their glosses, the images, the settings) lives **only on the server**. Two things keep it safe:
+
+- **The 💾 Backup button**, in the top bar of every page where you are logged in as author (beside *Logout*), downloads **one zip** with everything: the folder `project` (the dictionary,
+  the grammar and the glossary sections, the references, the texts and their glosses, the images, the pages, `project.json`, whatever folders your `project.json` configures) and the data
+  under `uploads` (the dictionary you uploaded or imported, its settings). Inside, `BACKUP-README.txt` says what it is and **how to restore** (copy the `project` and `uploads` folders of the
+  archive over the server's, then restart; or copy back just one file), and `manifest.json` lists each file with its SHA-256. **Keep these zips on your own computer**: it is what protects you if the server is lost.
+- **The reminder beside the button** says *last backup: 3 days ago*, counting from the last time you pressed it. It stays quiet while nothing has been edited since; with edits since it turns **amber
+  after a week** and **red after a month** (the button gets a dot too, so the warning is visible on a narrow screen where the words give way). *no backup yet* is red.
+- **Daily snapshots**, kept by the server in `uploads/backups/snapshots/` (`daily-2026-11-13.zip`, the same kind of archive). Once a day, **when the site is used and something has changed since the last
+  snapshot**, the server makes one by itself (in the background; a day with no edit is skipped). A snapshot brings back what a **mistake** destroyed (an entry deleted, a bad import); it does **not**
+  survive the loss of the server, which only your downloaded zip does.
+- **Disposing of snapshots.** Snapshots are **never removed by themselves**. Click the reminder to open the panel: it lists them (day, age, size, a download link) and offers the 🗑 for each snapshot
+  that is **30 days old or more**, and *Dispose of them* for all of those at once (it tells how much space is freed). A younger snapshot cannot be disposed of; the server refuses it whatever is sent.
+  Disposing asks for confirmation and cannot be undone.
+- **Settings** (environment variables, for the person who runs the server): `DBT_SNAPSHOT_DISABLE=1` turns the daily snapshots off; `DBT_SNAPSHOT_CHECK_SECONDS` (default 600) is how often the server looks
+  whether one is due. The About page has no author login, so it has no Backup button.
+- **To restore a snapshot or a downloaded zip**, unzip it and copy the folders over the server's, as its readme says. Nothing is restored by a button yet (it is in `TODO.md`).
+
 ## The Glossary
 
 The **Glossary** tab (after *References* in the navigation) holds the **concepts** that the grammar and the dictionary refer to: *predicate*, *omnipredicative*, … An entry has a
