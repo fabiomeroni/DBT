@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glossary — {{project.titleSuffix}}</title>
+<script src="/project.js"></script>
+<script src="/colors.js"></script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="grammar.css">
+</head>
+<body>
+
+<!-- ── New entry modal ── -->
+<div class="dbt-modal-backdrop" id="new-entry-modal">
+  <div class="dbt-modal">
+    <h3>Add glossary entry</h3>
+    <p class="modal-desc">Enter the term. Its identifier (used to refer to it with <code>{{glossary: id}}</code>) is made from it automatically.</p>
+    <input type="text" id="new-entry-term" placeholder="e.g. predicate"
+           style="width:100%;font-family:'Crimson Pro',serif;font-size:1rem;
+                  padding:6px 10px;border:1px solid var(--border);border-radius:3px;
+                  outline:none;box-sizing:border-box;margin-bottom:0.75rem;">
+    <div class="dbt-modal-msg" id="new-entry-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="new-entry-cancel">Cancel</button>
+      <button class="modal-btn primary" id="new-entry-submit">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Login modal ── -->
+<div class="dbt-modal-backdrop" id="login-modal">
+  <div class="dbt-modal">
+    <h3>Author login</h3>
+    <input type="password" id="login-pw" placeholder="Password" autocomplete="current-password">
+    <div class="dbt-modal-msg" id="login-msg"></div>
+    <div class="dbt-modal-row">
+      <button class="modal-btn" id="login-cancel">Cancel</button>
+      <button class="modal-btn primary" id="login-submit">Log in</button>
+    </div>
+  </div>
+</div>
+
+<nav class="topnav">
+  <a class="topnav-brand" href="index.html">◬ {{project.name}}</a>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="grammar.html">Grammar</a></li>
+    <li><a href="texts.html">Texts</a></li>
+    <li><a href="dictionary.html">Dictionary</a></li>
+    <li><a href="references.html">References</a></li>
+    <li><a href="glossary.html" class="active">Glossary</a></li>
+  </ul>
+  <div class="topnav-auth">
+    <button class="auth-btn login-btn" title="Author login">🔒 Author</button>
+    <button class="auth-btn logout-btn" style="display:none;">Logout</button>
+  </div>
+  <div class="topnav-right">{{project.nav.glossary}}</div>
+</nav>
+
+<div class="grammar-shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="grammar-sidebar">
+    <span class="sidebar-section-label">Terms</span>
+    <ul class="toc-list" id="toc-list"></ul>
+    <button class="sidebar-add-btn" id="add-entry-btn">＋ Add entry</button>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="grammar-main">
+    <div id="sections-container"></div>
+    <p id="glossary-empty" class="section-loading" style="display:none;">The glossary has no entry yet.</p>
+  </main>
+
+</div>
+
+<script src="auth.js"></script>
+<script src="phonotable.js"></script>
+<script src="editor.js"></script>
+<script>
+'use strict';
+// The Glossary: concepts that the grammar and the dictionary refer to with {{glossary: id}}. An entry is a text written with the markup of the grammar
+// (the same editor, the same shortcodes). Its id is the name of its file; its term is its first heading.
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const eid = id => 'glossary-' + id;                    // the id of an entry in the editor (a hyphen: no section of the grammar can have it)
+
+function onAuthChange(loggedIn) {
+  const addBtn = document.getElementById('add-entry-btn');
+  if (addBtn) addBtn.classList.toggle('visible', loggedIn);
+  document.querySelectorAll('.delete-tab, .edit-tab, .gloss-code').forEach(b => b.classList.toggle('visible', loggedIn));
+}
+
+async function loadEntry(entry) {
+  const id = entry.id, container = document.getElementById('sections-container');
+  const wrap = document.createElement('div');
+  wrap.className = 'grammar-section glossary-entry';
+  wrap.id = 'gloss-' + id;
+  wrap.dataset.term = entry.term;
+  wrap.innerHTML = `
+    <button class="delete-tab${isLoggedIn ? ' visible' : ''}" onclick="deleteEntry('${id}')" title="Delete this entry">🗑 Delete</button>
+    <button class="edit-tab section-edit${isLoggedIn ? ' visible' : ''}" onclick="enterEditMode('${id}')" title="Edit this entry">✏ Edit</button>
+    <div class="section-content" id="content-${eid(id)}"><p class="section-loading">Loading…</p></div>
+    <div class="gloss-code${isLoggedIn ? ' visible' : ''}" title="Write this in the grammar or in the dictionary to refer to this entry">{{glossary: ${id}}}</div>
+    ${mdEditorHTML(eid(id), { onCancel: 'cancelEdit', onSave: 'saveEntry', saveLabel: 'Save &amp; render', id })}`;
+  container.appendChild(wrap);
+  PhonoEditor.tabs(eid(id));
+  PhonoEditor.mount(eid(id));
+  try {
+    const r = await fetch('/api/glossary/' + id);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    document.getElementById('content-' + eid(id)).innerHTML = (await r.json()).html;
+  } catch (e) {
+    document.getElementById('content-' + eid(id)).innerHTML = '<p class="section-error">Could not load the entry ' + esc(id) + ': ' + esc(e.message) + '</p>';
+  }
+}
+
+function buildTOC() {
+  const list = document.getElementById('toc-list');
+  list.innerHTML = [...document.querySelectorAll('.glossary-entry')].map(w => `<li><a href="#${esc(w.id.slice(6))}" data-id="${esc(w.id.slice(6))}">${esc(w.dataset.term)}</a></li>`).join('');
+  document.getElementById('glossary-empty').style.display = list.children.length ? 'none' : '';
+}
+
+async function loadAll(keepScroll) {
+  const container = document.getElementById('sections-container');
+  container.innerHTML = '';
+  let entries = [];
+  try { entries = (await (await fetch('/api/glossary')).json()).entries || []; } catch (e) { /* the empty message says so */ }
+  for (const e of entries) await loadEntry(e);
+  buildTOC();
+  if (!keepScroll) scrollToEntry();
+}
+
+// glossary.html#predicate goes to the entry, which is shown for a moment
+function scrollToEntry() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h) return;
+  const el = document.getElementById('gloss-' + h) || document.getElementById(h);
+  if (!el) return;
+  el.scrollIntoView({ block: 'start' });
+  el.classList.add('gloss-flash'); setTimeout(() => el.classList.remove('gloss-flash'), 1800);
+}
+window.addEventListener('hashchange', scrollToEntry);
+
+async function enterEditMode(id) {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  try {
+    const resp = await fetch('/api/glossary/' + id + '/source');
+    if (resp.status === 401) { showLoginModal(); return; }
+    const data = await resp.json();
+    document.getElementById('textarea-' + eid(id)).value = data.source;
+    PhonoEditor.showText(eid(id));
+    document.getElementById('content-' + eid(id)).style.display = 'none';
+    document.getElementById('editor-' + eid(id)).classList.add('visible');
+  } catch (e) { alert('Could not load the entry: ' + e.message); }
+}
+
+// the functions the shared editor calls get the editor id (glossary-<id>)
+function cancelEdit(editorId) {
+  document.getElementById('content-' + editorId).style.display = '';
+  document.getElementById('editor-' + editorId).classList.remove('visible');
+}
+async function saveEntry(editorId) {
+  const id = editorId.slice('glossary-'.length), source = document.getElementById('textarea-' + editorId).value;
+  try {
+    const resp = await fetch('/api/glossary/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('content-' + editorId).innerHTML = data.html;
+      document.getElementById('gloss-' + id).dataset.term = data.term;
+      cancelEdit(editorId);
+      loadAll(true).then(() => { const el = document.getElementById('gloss-' + id); if (el) el.scrollIntoView({ block: 'start' }); });   // the order (by term) may have changed
+    } else alert('Save failed: ' + (data.error || 'unknown error'));
+  } catch (e) { alert('Save failed: ' + e.message); }
+}
+
+async function deleteEntry(id) {
+  if (!isLoggedIn) { showLoginModal(); return; }
+  const term = document.getElementById('gloss-' + id)?.dataset.term || id;
+  if (!confirm(`Delete the entry "${term}"?\n\nThe places that refer to it with {{glossary: ${id}}} will show an error.\nThis cannot be undone.`)) return;
+  try {
+    const resp = await fetch('/api/glossary/' + id, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    document.getElementById('gloss-' + id)?.remove(); buildTOC();
+  } catch (e) { alert('Delete failed: ' + e.message); }
+}
+
+function bindAddEntry() {
+  const btn = document.getElementById('add-entry-btn'), modal = document.getElementById('new-entry-modal');
+  const input = document.getElementById('new-entry-term'), msg = document.getElementById('new-entry-msg');
+  btn.addEventListener('click', () => { if (!isLoggedIn) { showLoginModal(); return; } input.value = ''; msg.textContent = ''; modal.classList.add('visible'); setTimeout(() => input.focus(), 60); });
+  document.getElementById('new-entry-cancel').addEventListener('click', () => modal.classList.remove('visible'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
+  async function doCreate() {
+    const term = input.value.trim();
+    if (!term) { msg.textContent = 'Please enter the term.'; msg.className = 'dbt-modal-msg error'; return; }
+    msg.textContent = ''; msg.className = 'dbt-modal-msg';
+    try {
+      const r = await fetch('/api/glossary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ term }) });
+      const d = await r.json();
+      if (d.ok) { modal.classList.remove('visible'); await loadAll(true); const el = document.getElementById('gloss-' + d.id); if (el) el.scrollIntoView({ block: 'start' }); enterEditMode(d.id); }
+      else { msg.textContent = d.error || 'Failed to create the entry.'; msg.className = 'dbt-modal-msg error'; }
+    } catch (e) { msg.textContent = 'Error: ' + e.message; msg.className = 'dbt-modal-msg error'; }
+  }
+  document.getElementById('new-entry-submit').addEventListener('click', doCreate);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
+}
+
+bindAddEntry();
+(async () => { await checkAuth(); await loadAll(false); })();          // who is the author first, so that the entries are made with their buttons
+</script>
+</body>
+</html>
