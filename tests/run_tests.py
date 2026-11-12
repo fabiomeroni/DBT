@@ -4019,12 +4019,129 @@ def suite_backup(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 23. glossing: the gloss field without “+ New”, columns inserted anywhere, words dragged to another place ─────────────────────────
+def _py_move(row, frm, to):
+    """The rule of the drop, written again here (not taken from the page): returns (the new row, a column was added)."""
+    e = lambda v: v is None or str(v).strip() in ("", "—")
+    row = list(row)
+    if frm == to or e(row[frm]): return row, False
+    w = row[frm]; row[frm] = ""
+    if e(row[to]): row[to] = w; return row, False
+    k = to
+    while k < len(row) and not e(row[k]): k += 1
+    made = k == len(row)
+    if made: row.append("")
+    for m in range(k, to, -1): row[m] = row[m - 1]
+    row[to] = w
+    return row, made
+
+def suite_glossing(browser, args):
+    S = "glossing"
+    section("glossing: the gloss field, inserting columns, dragging words")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_alignment.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the rules of the editing pass their own direct tests (run by node): insert a column anywhere, delete one, move a word and shift the words that follow", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site()
+    try:
+        sid = "d01.Road:09"; url = "transcription.html?fieldnotes=1&index=0&title=D01"
+        gl = lambda: site.json("project/texts/glosses/fieldnotes_0.json").get(sid, {})
+        vis = new_context(browser, site, 1280); pv = vis.new_page(); errs = []; watch(pv, errs)
+        open_page(pv, site, url, ".tx-phrase", 2200); pv.wait_for_timeout(600)
+        check(S, "a visitor sees the glosses as text: no field, no list, no “+ New”", pv.locator(f'[id="{sid}"] .fn-col-gloss').count() == 0 and pv.locator(f'[id="{sid}"] .fn-combo-btn').count() == 0 and "+ New" not in pv.content(), "")
+        au = new_context(browser, site, 1280, author=True); pa = au.new_page(); watch(pa, errs)
+        open_page(pa, site, url, ".tx-phrase", 2200); pa.wait_for_timeout(900)
+        ph = pa.locator(f'[id="{sid}"]')
+        check(S, "the author’s gloss of a column is one text field: there is no dropdown any more and “+ New” is nowhere on the page", ph.locator("select").count() == 0 and "+ New" not in pa.content() and "__new__" not in pa.content() and ph.locator(".fn-gloss-control input.fn-col-gloss").count() == ph.locator(".fn-gloss-control").count() >= 8, "")
+        ctrls = ph.locator(".fn-gloss-control"); n_ctrl = ctrls.count()
+        with_btn = [i for i in range(n_ctrl) if ctrls.nth(i).locator(".fn-combo-btn:not([hidden])").count()]
+        no_btn = [i for i in range(n_ctrl) if i not in with_btn]
+        check(S, "a ▾ is shown only for the columns that have suggestions (and the field is the same for the others)", len(with_btn) >= 1 and len(no_btn) >= 1, f"{with_btn} {no_btn}")
+        # a decision that has no precedent: just typed
+        c = ctrls.nth(no_btn[0]); inp = c.locator("input.fn-col-gloss"); col = inp.evaluate("e => [...e.closest('tr').children].indexOf(e.closest('td')) - 1")
+        inp.fill("zzz-unprecedented"); inp.press("Tab"); pa.wait_for_timeout(1100)
+        check(S, "a gloss that has no precedent is simply typed: it is saved in its column and the field keeps showing it (not a tag, not a second field)", (gl().get("glosses") or [""] * 99)[col] == "zzz-unprecedented" and inp.input_value() == "zzz-unprecedented" and c.locator("select, .fn-gloss-new-input").count() == 0, str(gl().get("glosses")))
+        pa.reload(wait_until="domcontentloaded"); pa.wait_for_selector(".tx-phrase", timeout=10000); pa.wait_for_timeout(1500)
+        check(S, "after a reload the field shows that gloss", pa.locator(f'[id="{sid}"] .fn-gloss-control').nth(no_btn[0]).locator("input.fn-col-gloss").input_value() == "zzz-unprecedented" and "+ New" not in pa.content(), "")
+        # the list of suggestions
+        ph = pa.locator(f'[id="{sid}"]'); c = ph.locator(".fn-gloss-control").nth(with_btn[0]); inp = c.locator("input.fn-col-gloss"); lst = c.locator(".fn-combo-list")
+        col2 = inp.evaluate("e => [...e.closest('tr').children].indexOf(e.closest('td')) - 1")
+        check(S, "the list is closed at first; the ▾ opens it, in groups with their labels (Previous glosses, Dictionary, Texts), with the ~ of a partial match", lst.is_hidden() and (c.locator(".fn-combo-btn").dispatch_event("mousedown") or True) and lst.is_visible() and lst.locator(".fn-combo-opt").count() >= 1 and all(g_.inner_text().strip() in ("PREVIOUS GLOSSES", "Previous glosses", "📖 DICTIONARY", "📖 Dictionary", "📖 DICTIONARY (PARTIAL MATCH)", "📖 Dictionary (partial match)", "📜 TEXTS", "📜 Texts", "📜 TEXTS (PARTIAL)", "📜 Texts (partial)") for g_ in lst.locator(".fn-combo-group").all()), lst.inner_text()[:120])
+        opts = [o.get_attribute("data-value") for o in lst.locator(".fn-combo-opt").all()]
+        choice = opts[0]; lst.locator(".fn-combo-opt").first.dispatch_event("mousedown"); pa.wait_for_timeout(1100)
+        check(S, "choosing a suggestion puts it in the field, saves it in its column and closes the list", inp.input_value() == choice and (gl().get("glosses") or [""] * 99)[col2] == choice and lst.is_hidden(), f"{choice!r} {gl().get('glosses')}")
+        inp.click(); inp.fill(""); inp.type(choice[:1]); pa.wait_for_timeout(250)
+        shown = [o.get_attribute("data-value") for o in lst.locator(".fn-combo-opt").all()]
+        check(S, "typing narrows the list to the suggestions that contain what is typed", len(shown) >= 1 and all(choice[:1].lower() in v.lower() for v in shown), str(shown))
+        inp.fill("qqqqqq"); pa.wait_for_timeout(200)
+        check(S, "when nothing matches, the list closes: what is typed is the author’s own decision", lst.is_hidden(), "")
+        inp.fill(""); inp.type(choice[:1]); pa.wait_for_timeout(250); inp.press("ArrowDown"); inp.press("ArrowDown"); inp.press("Enter"); pa.wait_for_timeout(1100)
+        check(S, "from the keyboard: the arrows move in the list, Enter chooses (the second suggestion here), and the gloss is saved", lst.is_hidden() and inp.input_value() == shown[min(1, len(shown) - 1)] and (gl().get("glosses") or [""] * 99)[col2] == inp.input_value(), f"{inp.input_value()!r} {shown}")
+        inp.click(); inp.fill(""); pa.wait_for_timeout(100); inp.press("ArrowDown"); pa.wait_for_timeout(150); opened = lst.is_visible(); inp.press("Escape")
+        check(S, "ArrowDown opens the list and Escape closes it", opened and lst.is_hidden(), "")
+        c.locator(".fn-combo-btn").dispatch_event("mousedown"); pa.wait_for_timeout(150); pa.locator(".tx-header").first.click(); pa.wait_for_timeout(250)
+        check(S, "a click elsewhere closes the list", lst.is_hidden(), "")
+        # ── the alignment editor ──
+        ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(500); ed = ph.locator(".fn-editor")
+        cells = lambda lang: [i.input_value() for i in ed.locator(f"input.fn-cell-input[data-lang='{lang}']").all()]
+        glossrow = lambda: [i.input_value() for i in ed.locator("input.fn-cell-input:not([data-lang])").all()]
+        langs = ["num", "drg", "kro", "olr", "lkn"]; orig = {l: cells(l) for l in langs}; orig_gl = glossrow(); n0 = len(orig["num"])
+        check(S, "the editor has, above every column, a + that inserts a column before it and a ×, and, in every non-empty place of a language row, a handle to drag the word", ed.locator(".fn-col-ins").count() == n0 and ed.locator(".fn-col-del").count() == n0 and all(len(orig[l]) == n0 for l in langs) and ed.locator(".fn-drag:not(.off)").count() == sum(1 for l in langs for v in orig[l] if v.strip()), str((n0, ed.locator(".fn-drag:not(.off)").count())))
+        for at in (0, 3, n0):
+            ed.locator(".fn-col-ins").nth(at).click() if at < n0 else ed.locator(".fn-col-add").click(); pa.wait_for_timeout(250)
+            now = {l: cells(l) for l in langs}; ng = glossrow()
+            check(S, f"a column inserted {'before the first' if at == 0 else 'before the fourth' if at == 3 else 'at the end (+ Column)'}: an empty place in every language and in the glosses, everything else where it was ({n0 + 1} columns)" if at == 0 else f"inserting at column {at if at < n0 else 'end'}: an empty place in every language and in the glosses, the rest shifted", all(now[l] == orig[l][:at] + [""] + orig[l][at:] for l in langs) and ng == orig_gl[:at] + [""] + orig_gl[at:] and ed.locator("td.fn-cell[data-lang='num']").count() == n0 + 1, str(now["num"]))
+            ed.locator(".fn-col-del").nth(at).click(); pa.wait_for_timeout(250)
+        check(S, "× deletes a column again: back to the original (the last column cannot be deleted)", {l: cells(l) for l in langs} == orig and glossrow() == orig_gl, "")
+        # a word dragged into a column that was inserted (an empty place)
+        ed.locator(".fn-col-ins").nth(2).click(); pa.wait_for_timeout(250)
+        ed.locator("td.fn-cell[data-lang='num'][data-col='0'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='num'][data-col='2']")); pa.wait_for_timeout(300)
+        exp, made = _py_move([""] * 0 + orig["num"][:2] + [""] + orig["num"][2:], 0, 2)
+        check(S, "a word dragged into the empty place of an inserted column goes there; its old place is empty; the other languages and the glosses do not move", cells("num") == exp and not made and all(cells(l) == orig[l][:2] + [""] + orig[l][2:] for l in langs[1:]) and glossrow() == orig_gl[:2] + [""] + orig_gl[2:], str(cells("num")))
+        ed.locator(".modal-btn", has_text="Cancel").click(); pa.wait_for_timeout(300); ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(400)
+        check(S, "Cancel throws all of it away: the editor opens again on the original alignment", {l: cells(l) for l in langs} == orig and glossrow() == orig_gl, "")
+        # a word dropped on an occupied place of a full row (the num row has a word in every place): what follows goes right, a column is created
+        ed.locator("td.fn-cell[data-lang='num'][data-col='0'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='num'][data-col='2']")); pa.wait_for_timeout(300)
+        exp, made = _py_move(orig["num"], 0, 2)
+        check(S, "a word dropped on an occupied place: it takes the place, what was there and what follows goes one place right, and as the row is full a column is created at the end (for all the languages and the glosses)", cells("num") == exp and made and ed.locator("td.fn-cell[data-lang='num']").count() == n0 + 1 and all(cells(l) == orig[l] + [""] for l in langs if l != "num") and glossrow() == orig_gl + [""], f"{cells('num')} vs {exp}")
+        check(S, "the editor says what the drop did", "Moved" in ed.locator(".fn-editor-note").inner_text() and "pushed one place right" in ed.locator(".fn-editor-note").inner_text() and "column was added" in ed.locator(".fn-editor-note").inner_text(), ed.locator(".fn-editor-note").inner_text())
+        ed.locator(".modal-btn", has_text="Cancel").click(); pa.wait_for_timeout(300); ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(400)
+        # the shift stops at the first empty place
+        gap = [i for i, v in enumerate(orig["num"]) if i > 3][0]
+        ed.locator(f"input.fn-cell-input[data-lang='num'][data-col='{gap}']").fill(""); pa.wait_for_timeout(100)
+        base = cells("num"); ed.locator("td.fn-cell[data-lang='num'][data-col='0'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='num'][data-col='2']")); pa.wait_for_timeout(300)
+        exp, made = _py_move(base, 0, 2)
+        check(S, f"when there is an empty place further on (column {gap + 1}), the shift stops there: it takes up the shift, what is after it does not move, and no column is created", cells("num") == exp and not made and ed.locator("td.fn-cell[data-lang='num']").count() == n0, f"{cells('num')} vs {exp}")
+        # across languages: refused
+        before = {l: cells(l) for l in langs}
+        ed.locator("td.fn-cell[data-lang='num'][data-col='1'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='drg'][data-col='4']")); pa.wait_for_timeout(300)
+        check(S, "a word cannot be dropped in another language’s row: nothing changes", {l: cells(l) for l in langs} == before, "")
+        # an empty place has no handle, until a word is typed in it
+        ed.locator(f"input.fn-cell-input[data-lang='kro'][data-col='1']").fill(""); pa.wait_for_timeout(100)
+        h = ed.locator("td.fn-cell[data-lang='kro'][data-col='1'] .fn-drag"); off = "off" in (h.get_attribute("class") or "")
+        ed.locator(f"input.fn-cell-input[data-lang='kro'][data-col='1']").fill("typed"); pa.wait_for_timeout(100)
+        check(S, "an empty place has no handle (hidden), and gets one as soon as a word is typed in it", off and "off" not in (h.get_attribute("class") or "") and h.is_visible(), "")
+        # saved, and kept
+        ed.locator(".modal-btn", has_text="Cancel").click(); pa.wait_for_timeout(300); ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(400)
+        ed.locator("td.fn-cell[data-lang='olr'][data-col='1'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='olr'][data-col='5']")); pa.wait_for_timeout(300)
+        want = {l: cells(l) for l in langs}; want_gl = glossrow()
+        ed.locator(".fn-editor-actions .primary").click(); pa.wait_for_timeout(1500)
+        g = gl()
+        check(S, "Save keeps the new alignment on the server: every language, and the glosses, have the same number of columns, and the words are where they were dropped", all(g["tokens"][l] == want[l] for l in langs) and g["glosses"] == want_gl and len({len(g["tokens"][l]) for l in langs} | {len(g["glosses"])}) == 1, str(g["tokens"]["olr"]))
+        pa.reload(wait_until="domcontentloaded"); pa.wait_for_selector(".tx-phrase", timeout=10000); pa.wait_for_timeout(1500)
+        shown_forms = [c_.get_attribute("data-form") for c_ in pa.locator(f'[id="{sid}"] .fn-form-cell[data-lang="olr"]').all()]
+        check(S, "after a reload the sentence is shown with that alignment (the dash for an empty place)", shown_forms == [v if v.strip() else "—" for v in want["olr"]], str(shown_forms))
+        check(S, "no JavaScript or loading error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -4057,6 +4174,7 @@ def main():
             if args.only in (None, "relations"): suite_relations(browser, args)
             if args.only in (None, "glossary"): suite_glossary(browser, args)
             if args.only in (None, "backup"): suite_backup(browser, args)
+            if args.only in (None, "glossing"): suite_glossing(browser, args)
             browser.close()
     finally:
         site.stop()
