@@ -276,24 +276,17 @@
 .gloss-badge:hover::after { opacity: 1; }
 .gloss-badge-empty { display: inline-block; width: 16px; height: 16px; min-width: 16px; margin-right: 7px; }
 
-/* ── Gloss concordance dropdown ── */
-.fn-gloss-control { display: inline-flex; align-items: center; gap: 3px; }
-.fn-gloss-select {
-  font-family: 'Source Code Pro', monospace; font-size: 0.74rem;
-  border: 1px solid var(--border); border-radius: 2px;
-  padding: 1px 4px; background: white; color: var(--ink);
-  outline: none; cursor: pointer; max-width: 13ch;
-  transition: border-color 0.12s;
-}
-.fn-gloss-select:focus { border-color: var(--gold); }
-.fn-gloss-new-input {
-  font-family: 'Source Code Pro', monospace; font-size: 0.74rem;
-  border: none; border-bottom: 1.5px dashed var(--border);
-  background: transparent; outline: none;
-  padding: 1px 0; width: 9ch;
-  transition: border-color 0.15s;
-}
-.fn-gloss-new-input:focus { border-bottom-color: var(--gold); }
+/* ── The gloss of a column: a text field, with the glosses already used (here, in the dictionary, in the texts) to choose from ── */
+.fn-gloss-control { position: relative; display: inline-flex; align-items: center; gap: 1px; max-width: 100%; }
+.fn-combo-btn { font-size: 0.6rem; line-height: 1; color: var(--ink-light); background: none; border: none; cursor: pointer; padding: 2px; }
+.fn-combo-btn:hover { color: var(--gold); }
+.fn-combo-btn[hidden], .fn-combo-list[hidden] { display: none; }
+.fn-combo-list { position: absolute; top: 100%; left: 0; z-index: 70; min-width: 12ch; max-width: 28ch; max-height: 15rem; overflow-y: auto; background: #fffefb;
+  border: 1px solid var(--border); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,0.16); padding: 2px; text-align: left; }
+.fn-combo-group { font-family: 'Crimson Pro', serif; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); padding: 4px 6px 1px; }
+.fn-combo-opt { display: block; width: 100%; text-align: left; font-family: 'Source Code Pro', monospace; font-size: 0.74rem; background: none; border: none; padding: 2px 6px; cursor: pointer; color: var(--ink); border-radius: 2px; }
+.fn-combo-opt:hover, .fn-combo-opt.active { background: #f6e6b8; }
+.fn-combo-opt.current { font-weight: 700; }
 
 /* Per-column gloss input */
 .fn-col-gloss {
@@ -328,6 +321,16 @@
 .fn-col-del:hover { color: #922810; }
 .fn-col-add { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--gold); background: none; border: 1px dashed var(--gold); border-radius: 3px; padding: 2px 8px; cursor: pointer; margin-left: 6px; }
 .fn-col-add:hover { background: #f5edd8; }
+.fn-col-ins { font-size: 0.75rem; line-height: 1; color: var(--gold); background: none; border: 1px solid transparent; border-radius: 2px; cursor: pointer; padding: 0 4px; }
+.fn-col-ins:hover { border-color: var(--gold); background: #f5edd8; }
+.fn-cell-box { display: flex; align-items: center; gap: 1px; }
+.fn-drag { cursor: grab; color: var(--ink-light); font-size: 0.8rem; line-height: 1; padding: 0 1px; user-select: none; opacity: 0.55; }
+.fn-drag:hover { opacity: 1; color: var(--gold); }
+.fn-drag.off { visibility: hidden; }
+.fn-cell.fn-dragging .fn-cell-input { opacity: 0.4; }
+.fn-cell.fn-drop-ok .fn-cell-input { outline: 2px solid #6aa36a; }
+.fn-cell.fn-drop-shift .fn-cell-input { outline: 2px dashed var(--gold); background: #fbf1cf; }
+.fn-editor-note { margin-right: auto; align-self: center; font-family: 'Crimson Pro', serif; font-size: 0.86rem; color: var(--ink-light); }
 .fn-editor-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; justify-content: flex-end; }
 .fn-edit-btn { font-family: 'Crimson Pro', serif; font-size: 0.75rem; color: var(--ink-light); background: none; border: 1px solid var(--border); border-radius: 3px; padding: 2px 9px 3px; cursor: pointer; position: absolute; top: 0; right: 0; transition: border-color 0.12s, color 0.12s; }
 .fn-edit-btn:hover { color: var(--gold); border-color: var(--gold); }
@@ -446,6 +449,7 @@
 
 <script src="auth.js"></script>
 <script src="ttr.js"></script>
+<script src="alignment.js"></script>
 <script>
 'use strict';
 
@@ -729,26 +733,30 @@ function showAlignmentEditor(sid, btn) {
   if (!s) return;
   const {tokens, colGlosses, nCols} = buildAlignment(s.words, stored);
 
-  // Work on a mutable copy
-  const editTokens    = {};
+  // Work on a mutable copy (alignment.js has the rules of the editing: insert a column anywhere, move a word and shift the words that follow)
+  const editTokens = {};
   FN_CODES.forEach(c => { editTokens[c] = [...(tokens[c] || [])]; });
-  let editGlosses = [...colGlosses];
-  let editNCols   = nCols;
+  const st = { tokens: editTokens, glosses: [...colGlosses], n: nCols };
+  const editGlosses = st.glosses;
+  Alignment.pad(st);
+  let note = '';                                      // what the last drop did
+  let drag = null;                                    // the word being dragged: { lang, col }
 
   function renderEditor() {
-    const colHeaders = Array.from({length: editNCols}, (_, i) =>
-      `<td style="text-align:center;padding:0 4px 2px;">
-        <button class="fn-col-del" onclick="delCol(${i})">×</button>
+    const colHeaders = Array.from({length: st.n}, (_, i) =>
+      `<td style="text-align:center;padding:0 4px 2px;white-space:nowrap;">
+        <button class="fn-col-ins" onclick="insCol(${i})" title="Insert an empty column before this one">+</button><button class="fn-col-del" onclick="delCol(${i})" title="Delete this column">×</button>
       </td>`
     ).join('');
 
     const langRows2 = s.words.map(w => {
       const col = CODE_COLORS[w.lang] || 'var(--gold)';
-      const cells = Array.from({length: editNCols}, (_, i) => {
-        const val = (editTokens[w.lang]?.[i] || '').replace(/"/g, '&quot;');
-        return `<td><input class="fn-cell-input" data-lang="${w.lang}" data-col="${i}"
-                       value="${val}" spellcheck="false"
-                       style="color:${col};"></td>`;
+      const cells = Array.from({length: st.n}, (_, i) => {
+        const raw = editTokens[w.lang]?.[i] || '';
+        const val = raw.replace(/"/g, '&quot;');
+        return `<td class="fn-cell" data-lang="${w.lang}" data-col="${i}"><div class="fn-cell-box"><span class="fn-drag${Alignment.isEmpty(raw) ? ' off' : ''}" draggable="true"
+                       data-lang="${w.lang}" data-col="${i}" title="Drag this word to another place of the row">⠿</span><input class="fn-cell-input" data-lang="${w.lang}" data-col="${i}"
+                       value="${val}" spellcheck="false" style="color:${col};"></div></td>`;
       }).join('');
       return `<tr>
         <td class="fn-editor-abbr" style="color:${col};">${FN_ABBRS[w.lang]}</td>
@@ -757,7 +765,7 @@ function showAlignmentEditor(sid, btn) {
       </tr>`;
     }).join('');
 
-    const glossCells2 = Array.from({length: editNCols}, (_, i) => {
+    const glossCells2 = Array.from({length: st.n}, (_, i) => {
       const val = (editGlosses[i] || '').replace(/"/g, '&quot;');
       return `<td><input class="fn-cell-input" data-col="${i}"
                      value="${val}" placeholder="gloss" spellcheck="false"
@@ -772,7 +780,8 @@ function showAlignmentEditor(sid, btn) {
         <tr><td style="font-size:0.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-light);padding-right:8px;">gloss</td>${glossCells2}<td></td></tr>
       </table>
       <div class="fn-editor-actions">
-        <button class="fn-col-add" onclick="addCol()">+ Column</button>
+        <span class="fn-editor-note">${note || '+ inserts a column before it; ⠿ moves a word to another place of its row.'}</span>
+        <button class="fn-col-add" onclick="addCol()" title="Add a column at the end">+ Column</button>
         <button class="modal-btn" onclick="cancelEdit('${sid}')">Cancel</button>
         <button class="modal-btn primary" onclick="saveAlignment('${sid}')">Save</button>
       </div>
@@ -784,6 +793,7 @@ function showAlignmentEditor(sid, btn) {
         const lang = inp.dataset.lang;
         const col  = parseInt(inp.dataset.col);
         editTokens[lang][col] = inp.value;
+        inp.closest('td').querySelector('.fn-drag').classList.toggle('off', Alignment.isEmpty(inp.value));     // a word can be dragged once it is typed
       });
     });
     editorDiv.querySelectorAll('input:not([data-lang])').forEach(inp => {
@@ -793,24 +803,51 @@ function showAlignmentEditor(sid, btn) {
         });
       }
     });
+
+    // Drag and drop of one word of one language: a place of the same row. An empty place takes it; an occupied place pushes the word that is there,
+    // and the words that follow it, one place to the right (a column is added at the end if there is no room).
+    const clearMarks = () => editorDiv.querySelectorAll('.fn-dragging, .fn-drop-ok, .fn-drop-shift').forEach(x => x.classList.remove('fn-dragging', 'fn-drop-ok', 'fn-drop-shift'));
+    editorDiv.querySelectorAll('.fn-drag').forEach(h => {
+      h.addEventListener('dragstart', e => {
+        const lang = h.dataset.lang, col = parseInt(h.dataset.col);
+        if (Alignment.isEmpty(editTokens[lang]?.[col])) { e.preventDefault(); return; }
+        drag = { lang, col };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', editTokens[lang][col]);
+        h.closest('td').classList.add('fn-dragging');
+      });
+      h.addEventListener('dragend', () => { drag = null; clearMarks(); });
+    });
+    editorDiv.querySelectorAll('td.fn-cell').forEach(td => {
+      const ok = () => drag && td.dataset.lang === drag.lang && Alignment.canMove(st, drag.lang, drag.col, parseInt(td.dataset.col));
+      td.addEventListener('dragover', e => {
+        if (!ok()) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        td.classList.toggle('fn-drop-shift', !Alignment.isEmpty(editTokens[drag.lang][parseInt(td.dataset.col)]));
+        td.classList.toggle('fn-drop-ok', Alignment.isEmpty(editTokens[drag.lang][parseInt(td.dataset.col)]));
+      });
+      td.addEventListener('dragleave', () => td.classList.remove('fn-drop-ok', 'fn-drop-shift'));
+      td.addEventListener('drop', e => {
+        if (!ok()) return;
+        e.preventDefault();
+        const word = editTokens[drag.lang][drag.col];
+        const r = Alignment.moveToken(st, drag.lang, drag.col, parseInt(td.dataset.col));
+        drag = null;
+        if (r.moved) {
+          note = `Moved “${word}”.` + (r.shifted ? ` ${r.shifted} word${r.shifted === 1 ? '' : 's'} pushed one place right` + (r.created ? ', and a column was added.' : '.') : '');
+          renderEditor();
+        }
+      });
+    });
   }
 
-  function addCol() {
-    editNCols++;
-    FN_CODES.forEach(c => { editTokens[c] = editTokens[c] || []; editTokens[c].push(''); });
-    editGlosses.push('');
-    renderEditor();
-  }
-  function delCol(i) {
-    if (editNCols <= 1) return;
-    editNCols--;
-    FN_CODES.forEach(c => { editTokens[c].splice(i, 1); });
-    editGlosses.splice(i, 1);
-    renderEditor();
-  }
+  function addCol()   { Alignment.insertColumn(st, st.n); note = ''; renderEditor(); }      // at the end
+  function insCol(i)  { Alignment.insertColumn(st, i);    note = ''; renderEditor(); }      // before column i
+  function delCol(i)  { if (Alignment.deleteColumn(st, i)) { note = ''; renderEditor(); } }
 
   // Make helpers accessible to onclick
   window.addCol  = addCol;
+  window.insCol  = insCol;
   window.delCol  = delCol;
   window.cancelEdit = (s) => {
     document.getElementById('fn-editor-' + s).style.display = 'none';
@@ -835,7 +872,7 @@ function showAlignmentEditor(sid, btn) {
     const display = document.getElementById('fn-display-' + s);
     display.innerHTML = renderAlignedTable(
       sentences.find(x => x.id === s).words,
-      editTokens, editGlosses, editNCols, s, true
+      editTokens, editGlosses, st.n, s, true
     );
     buildConcordanceFromGlosses();
     bindColGlossFull();
@@ -1048,31 +1085,17 @@ async function saveToTextsConcordance(sid) {
 }
 
 function addTextsOptionToDropdowns(key, newGloss) {
-  // Add gloss to any currently-rendered dropdown whose column key matches
+  // A gloss from the texts is known now: the columns that have this key can offer it (their lists are made when opened), so they show their ▾
   document.querySelectorAll('.fn-gloss-control').forEach(ctrl => {
     const sid = ctrl.dataset.sid;
     const col = parseInt(ctrl.dataset.col);
     const s   = sentences.find(x => x.id === sid);
     if (!s) return;
     const stored2 = glosses[sid];
-    const {tokens: t2} = buildAlignment(s.words,
-      stored2 && typeof stored2 === 'object' ? stored2 : null);
-    const ctrlKey = slotKey(t2, col);
-    if (ctrlKey !== key) return;
-    const sel = ctrl.querySelector('.fn-gloss-select');
-    if (!sel || [...sel.options].some(o => o.value === newGloss)) return;
-    const plusOpt = [...sel.options].find(o => o.value === '__new__');
-    // Add under a 'Texts' optgroup if one exists, else create it
-    let tGroup = [...sel.querySelectorAll('optgroup')]
-      .find(g2 => g2.label === '📜 Texts');
-    if (!tGroup) {
-      tGroup = document.createElement('optgroup');
-      tGroup.label = '📜 Texts';
-      sel.insertBefore(tGroup, plusOpt || null);
-    }
-    const opt = document.createElement('option');
-    opt.value = newGloss; opt.textContent = newGloss;
-    tGroup.appendChild(opt);
+    const {tokens: t2} = buildAlignment(s.words, stored2 && typeof stored2 === 'object' ? stored2 : null);
+    if (slotKey(t2, col) !== key) return;
+    const btn = ctrl.querySelector('.fn-combo-btn');
+    if (btn) btn.hidden = false;
   });
 }
 
@@ -1239,13 +1262,11 @@ function showFormTooltip(el) {
 function showGlossTooltip(el) {
   // Read current gloss from whatever control is in the cell
   let g = '';
-  const sel  = el.querySelector('.fn-gloss-select');
   const inp  = el.querySelector('.fn-col-gloss');
   const span = el.querySelector('.tx-gloss-text:not(.empty)');
-  if      (sel  && sel.value && sel.value !== '__new__') g = sel.value;
-  else if (inp)                                          g = inp.value;
-  else if (span)                                         g = span.textContent;
-  else                                                   g = el.dataset.gloss || '';
+  if      (inp)  g = inp.value;
+  else if (span) g = span.textContent;
+  else           g = el.dataset.gloss || '';
   g = g.replace(/^~/, '').trim();
   if (!g || g === '—') return;
 
@@ -1383,20 +1404,14 @@ function buildConcordanceFromGlosses() {
   });
 }
 
-function renderColGlossControl(words, tokens, sid, colIdx, currentGloss, editable) {
-  const g        = currentGloss || '';
-  const statusId = `gstatus-${sid}-${colIdx}`;
-
-  if (!editable) {
-    return `<span class="${g ? 'tx-gloss-text' : 'tx-gloss-text empty'}">${g || '—'}</span>`;
-  }
-
+// The suggestions for the gloss of a column, in groups: [{label, items: [{value, text}]}] (text is what the list shows: ~ marks a partial match)
+function glossGroups(words, tokens, colIdx) {
   const key         = getColKey(words, tokens, colIdx);
   const concordSugg = concordance[key] ? [...concordance[key]] : [];
   const dictSugg    = getDictionaryGlosses(words, tokens, colIdx);
   const textsSugg   = getTextsGlosses(tokens, colIdx);
 
-  // Filter to avoid duplicating across optgroups
+  // Filter to avoid duplicating across groups
   const dictFull    = dictSugg.full.filter(x => !concordSugg.includes(x));
   const dictPartial = dictSugg.partial.filter(x =>
     !concordSugg.includes(x) && !dictSugg.full.includes(x));
@@ -1405,64 +1420,30 @@ function renderColGlossControl(words, tokens, sid, colIdx, currentGloss, editabl
   const textsPartial = textsSugg.partial.filter(x =>
     !concordSugg.includes(x) && !dictFull.includes(x) && !dictPartial.includes(x) && !textsFull.includes(x));
 
-  const hasSuggestions = concordSugg.length || dictFull.length || dictPartial.length || textsFull.length || textsPartial.length;
+  const groups = [];
+  const add = (label, list, mark) => { if (list.length) groups.push({ label, items: list.map(s => ({ value: s, text: (mark || '') + s })) }); };
+  add('Previous glosses', concordSugg);
+  add('📖 Dictionary', dictFull);
+  add('📖 Dictionary (partial match)', dictPartial, '~');
+  add('📜 Texts', textsFull);
+  add('📜 Texts (partial)', textsPartial, '~');
+  return groups;
+}
 
-  if (!hasSuggestions) {
-    // No suggestions — plain input
-    return `<input class="fn-col-gloss" data-sid="${sid}" data-col="${colIdx}"
-                   value="${g.replace(/"/g,'&quot;')}" placeholder="…" spellcheck="false">
-            <span class="tx-gloss-save-status" id="${statusId}"></span>`;
+// The gloss of a column is one text field, whatever is known: a new gloss is just what is typed. If the dictionary, the texts or the earlier glosses
+// have suggestions for the word, a ▾ opens them (and the list narrows as one types).
+function renderColGlossControl(words, tokens, sid, colIdx, currentGloss, editable) {
+  const g        = currentGloss || '';
+  const statusId = `gstatus-${sid}-${colIdx}`;
+
+  if (!editable) {
+    return `<span class="${g ? 'tx-gloss-text' : 'tx-gloss-text empty'}">${g || '—'}</span>`;
   }
-
-  const allKnown = [...concordSugg, ...dictFull, ...dictPartial, ...textsFull, ...textsPartial];
-  const hasMatch = allKnown.includes(g);
-  const emptyOpt = `<option value=""${!g ? ' selected':''}>—</option>`;
-
-  let groupsHTML = '';
-
-  if (concordSugg.length) {
-    const opts = concordSugg.map(s =>
-      `<option value="${s.replace(/"/g,'&quot;')}"${s===g?' selected':''}>${s}</option>`
-    ).join('');
-    groupsHTML += `<optgroup label="Previous glosses">${opts}</optgroup>`;
-  }
-
-  if (dictFull.length) {
-    const opts = dictFull.map(s =>
-      `<option value="${s.replace(/"/g,'&quot;')}"${s===g?' selected':''}>${s}</option>`
-    ).join('');
-    groupsHTML += `<optgroup label="📖 Dictionary">${opts}</optgroup>`;
-  }
-
-  if (dictPartial.length) {
-    const opts = dictPartial.map(s =>
-      `<option value="${s.replace(/"/g,'&quot;')}"${s===g?' selected':''}>~${s}</option>`
-    ).join('');
-    groupsHTML += `<optgroup label="📖 Dictionary (partial match)">${opts}</optgroup>`;
-  }
-
-  if (textsFull.length) {
-    const opts = textsFull.map(s =>
-      `<option value="${s.replace(/"/g,'&quot;')}"${s===g?' selected':''}>${s}</option>`
-    ).join('');
-    groupsHTML += `<optgroup label="📜 Texts">${opts}</optgroup>`;
-  }
-
-  if (textsPartial.length) {
-    const opts = textsPartial.map(s =>
-      `<option value="${s.replace(/"/g,'&quot;')}"${s===g?' selected':''}>~${s}</option>`
-    ).join('');
-    groupsHTML += `<optgroup label="📜 Texts (partial)">${opts}</optgroup>`;
-  }
-
-  const newOpt    = `<option value="__new__"${g && !hasMatch ? ' selected' : ''}>+ New</option>`;
-  const newHidden = g && !hasMatch ? '' : 'display:none;';
-
+  const has = glossGroups(words, tokens, colIdx).length > 0;
   return `<div class="fn-gloss-control" data-sid="${sid}" data-col="${colIdx}">
-    <select class="fn-gloss-select">${emptyOpt}${groupsHTML}${newOpt}</select>
-    <input  class="fn-gloss-new-input" style="${newHidden}"
-            value="${(g && !hasMatch ? g : '').replace(/"/g,'&quot;')}"
-            placeholder="New gloss…" spellcheck="false">
+    <input class="fn-col-gloss" data-sid="${sid}" data-col="${colIdx}" value="${g.replace(/"/g,'&quot;')}" placeholder="…" spellcheck="false" autocomplete="off">
+    <button type="button" class="fn-combo-btn" tabindex="-1" title="Glosses used before, in the dictionary and in the texts"${has ? '' : ' hidden'}>▾</button>
+    <div class="fn-combo-list" hidden></div>
     <span class="tx-gloss-save-status" id="${statusId}"></span>
   </div>`;
 }
@@ -1530,7 +1511,7 @@ async function saveColGloss(sid, colIdx, value, statusEl) {
     if (!concordance[key]) concordance[key] = new Set();
     if (!concordance[key].has(value)) {
       concordance[key].add(value);
-      addOptionToMatchingDropdowns(key, value);
+      refreshComboButtons(key);
     }
   }
 
@@ -1548,76 +1529,82 @@ async function saveColGloss(sid, colIdx, value, statusEl) {
   } catch(e) { console.error(e); }
 }
 
-function addOptionToMatchingDropdowns(key, newGloss) {
-  // Add the new gloss option to any dropdown whose column matches this key
+function refreshComboButtons(key) {
+  // The columns that have this key now have a suggestion: they show their ▾
   document.querySelectorAll('.fn-gloss-control').forEach(ctrl => {
-    const sid    = ctrl.dataset.sid;
-    const col    = parseInt(ctrl.dataset.col);
-    const s      = sentences.find(x => x.id === sid);
+    const sid = ctrl.dataset.sid, col = parseInt(ctrl.dataset.col);
+    const s = sentences.find(x => x.id === sid);
     if (!s) return;
     const stored = glosses[sid];
-    const {tokens} = buildAlignment(s.words,
-      stored && typeof stored === 'object' ? stored : null);
+    const {tokens} = buildAlignment(s.words, stored && typeof stored === 'object' ? stored : null);
     if (getColKey(s.words, tokens, col) !== key) return;
-    const sel = ctrl.querySelector('.fn-gloss-select');
-    if (!sel) return;
-    // Check if option already exists
-    if ([...sel.options].some(o => o.value === newGloss)) return;
-    const newOpt = document.createElement('option');
-    newOpt.value = newGloss;
-    newOpt.textContent = newGloss;
-    // Insert before the "+ New" option
-    const plusOpt = [...sel.options].find(o => o.value === '__new__');
-    sel.insertBefore(newOpt, plusOpt || null);
+    const btn = ctrl.querySelector('.fn-combo-btn');
+    if (btn) btn.hidden = false;
   });
 }
 
 function bindColGlossFull() {
-  // Dropdowns (concordance suggestions)
   document.querySelectorAll('.fn-gloss-control').forEach(ctrl => {
+    if (ctrl.dataset.bound) return;                              // bound once, however often the page calls this
+    ctrl.dataset.bound = '1';
     const sid    = ctrl.dataset.sid;
     const col    = parseInt(ctrl.dataset.col);
-    const sel    = ctrl.querySelector('.fn-gloss-select');
-    const inp    = ctrl.querySelector('.fn-gloss-new-input');
+    const inp    = ctrl.querySelector('.fn-col-gloss');
+    const btn    = ctrl.querySelector('.fn-combo-btn');
+    const list   = ctrl.querySelector('.fn-combo-list');
     const status = ctrl.querySelector('.tx-gloss-save-status');
+    const escH   = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    let active = -1;
 
-    sel.addEventListener('change', async () => {
-      if (sel.value === '__new__') {
-        inp.style.display = ''; inp.focus();
-      } else {
-        inp.style.display = 'none';
-        await saveColGloss(sid, col, sel.value, status);
-      }
-    });
-    const saveNew = async () => {
-      const v = inp.value.trim();
-      if (!v) return;
-      await saveColGloss(sid, col, v, status);
-      // Switch back to select showing new value
-      const opt = document.createElement('option');
-      opt.value = v; opt.textContent = v; opt.selected = true;
-      const plusOpt = [...sel.options].find(o => o.value === '__new__');
-      sel.insertBefore(opt, plusOpt || null);
-      inp.style.display = 'none';
-      sel.value = v;
+    const groups = () => {
+      const s = sentences.find(x => x.id === sid);
+      if (!s) return [];
+      const stored = glosses[sid];
+      const {tokens} = buildAlignment(s.words, stored && typeof stored === 'object' ? stored : null);
+      return glossGroups(s.words, tokens, col);
     };
-    inp.addEventListener('blur', saveNew);
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveNew(); }});
-  });
+    const close = () => { list.hidden = true; active = -1; };
+    const open  = (filter) => {                                  // the suggestions that contain what is typed (all of them for the ▾)
+      const f = (filter || '').trim().toLowerCase();
+      const gs = groups().map(gr => ({ label: gr.label, items: gr.items.filter(it => !f || it.value.toLowerCase().includes(f)) })).filter(gr => gr.items.length);
+      if (!gs.length) { close(); return; }
+      list.innerHTML = gs.map(gr => `<div class="fn-combo-group">${gr.label}</div>` +
+        gr.items.map(it => `<button type="button" class="fn-combo-opt${it.value === inp.value ? ' current' : ''}" data-value="${escH(it.value)}">${escH(it.text)}</button>`).join('')).join('');
+      list.hidden = false; active = -1;
+    };
+    const choose = async (v) => {
+      clearTimeout(saveTimers[`${sid}_c${col}`]);
+      inp.value = v; close();
+      await saveColGloss(sid, col, v, status);
+    };
 
-
-  // Plain inputs (no prior concordance entry)
-  document.querySelectorAll('.fn-col-gloss').forEach(inp => {
-    const sid = inp.dataset.sid;
-    const col = parseInt(inp.dataset.col);
-    const status = document.getElementById(`gstatus-${sid}-${col}`);
+    btn.addEventListener('mousedown', e => { e.preventDefault(); if (list.hidden) { inp.focus(); open(''); } else close(); });
+    list.addEventListener('mousedown', e => {
+      const o = e.target.closest('.fn-combo-opt'); if (!o) return;
+      e.preventDefault();                                        // the field keeps the focus
+      choose(o.dataset.value);
+    });
     inp.addEventListener('input', () => {
       clearTimeout(saveTimers[`${sid}_c${col}`]);
-      saveTimers[`${sid}_c${col}`] = setTimeout(
-        () => saveColGloss(sid, col, inp.value, status), 600
-      );
+      saveTimers[`${sid}_c${col}`] = setTimeout(() => saveColGloss(sid, col, inp.value, status), 600);
+      open(inp.value);
+    });
+    inp.addEventListener('keydown', e => {
+      const opts = [...list.querySelectorAll('.fn-combo-opt')];
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (list.hidden) { open(inp.value); return; }
+        const n = list.querySelectorAll('.fn-combo-opt').length; if (!n) return;
+        active = (active + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
+        list.querySelectorAll('.fn-combo-opt').forEach((o, i) => o.classList.toggle('active', i === active));
+        list.querySelectorAll('.fn-combo-opt')[active].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!list.hidden && active >= 0 && opts[active]) choose(opts[active].dataset.value); else { close(); inp.blur(); }
+      } else if (e.key === 'Escape') { close(); }
     });
     inp.addEventListener('blur', () => {
+      close();
       clearTimeout(saveTimers[`${sid}_c${col}`]);
       saveColGloss(sid, col, inp.value, status);
     });
