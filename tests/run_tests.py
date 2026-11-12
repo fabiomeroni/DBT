@@ -3765,12 +3765,140 @@ def suite_import_extras(browser, args):
         site.stop()
 
 
+
+# ───────────────────────── 21. the Glossary: entries written with the markup of the grammar, {{glossary: id}} ─────────────────────────
+_GL_DEF = ("The predicate makes a statement (thus 'predicates') about the subjectthe part of a sentence or clause that contains the verb and tells us what the subject is doing or experiencing in the sense of an action, "
+           "or being in the sense of a quality. In Gaua languages, definable as omnipredicative languages, members of all open word classes can act as a predicate.")
+
+def suite_glossary(browser, args):
+    S = "glossary"
+    section("the Glossary")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_glossary.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the glossary engine passes its own direct tests (id, term, tooltip, order, the shortcode in HTML and in LaTeX)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        J = {"Content-Type": "application/json"}
+        # ── the nav ──
+        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "concordance.html", "transcription.html", "glossary.html"]
+        navs = {p_: re.findall(r'<li><a href="([^"]+)"( class="active")?>([^<]+)</a></li>', re.search(r'<nav class="topnav">.*?</nav>', va.get(site.url + p_).text(), re.S).group(0)) for p_ in pages}
+        check(S, "the Glossary tab is in the navigation of every page, after the References tab, and is the active tab of the Glossary page only", all([n[0] for n in v] == ["index.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "glossary.html"] for v in navs.values()) and all(bool(v[-1][1]) == (p_ == "glossary.html") for p_, v in navs.items()) and all(not any(x[1] for x in v[:-1]) or p_ != "glossary.html" for p_, v in navs.items()), str({p_: [x[0] for x in v] for p_, v in navs.items() if len(v) != 6}))
+        check(S, "its label comes from the project like the others (nav.glossary, “Glossary” by default)", "Glossary</div>" in va.get(site.url + "glossary.html").text() and "{{project" not in va.get(site.url + "glossary.html").text(), "")
+        for f in ("editor.js", "grammar.css", "grammaticon_logo.png"):
+            check(S, f"{f} is served", va.get(site.url + f).status == 200, f)
+        # ── your entry, as given ──
+        lst = va.get(site.url + "api/glossary").json()["entries"]
+        check(S, "the glossary has the entry “predicate”: its term is Predicate, and its tooltip starts with the definition", [e["id"] for e in lst] == ["predicate"] and lst[0]["term"] == "Predicate" and lst[0]["snippet"].startswith("The predicate makes a statement (thus 'predicates') about the subject"), str(lst)[:200])
+        h = va.get(site.url + "api/glossary/predicate").json()["html"]
+        check(S, "its definition is the text it was given, word for word, in one paragraph", f"<p>{_GL_DEF}</p>" in h, h[:300])
+        check(S, "followed by the link “see in the Grammaticon” to https://grammaticon.clld.org/concepts/25 and, after it, the image grammaticon_logo.png, in the same paragraph", re.search(r'<p><a href="https://grammaticon\.clld\.org/concepts/25">see in the Grammaticon</a>\s*<img[^>]*src="grammaticon_logo\.png"[^>]*>\s*</p>', h) is not None, h[-300:])
+        # ── who may write ──
+        st = lambda r: r.status
+        check(S, "reading is public; writing is the author’s: a visitor gets 401 for the source, a save, a deletion and a new entry", [st(va.get(site.url + "api/glossary/predicate/source")), st(va.post(site.url + "api/glossary/predicate", headers=J, data="{}")), st(va.delete(site.url + "api/glossary/predicate")), st(va.post(site.url + "api/glossary", headers=J, data='{"term": "x"}'))] == [401] * 4 and va.get(site.url + "api/glossary/predicate").status == 200, "")
+        r = aa.post(site.url + "api/glossary", headers=J, data=json.dumps({"term": "Case marking"})); j = r.json()
+        r2 = aa.post(site.url + "api/glossary", headers=J, data=json.dumps({"term": "Case marking"})).json()
+        r3 = aa.post(site.url + "api/glossary", headers=J, data=json.dumps({"term": "Évidentialité"})).json()
+        check(S, "a new entry gets an id made from its term (accents dropped, made unique), and starts with its heading", j["id"] == "case_marking" and r2["id"] == "case_marking_2" and r3["id"] == "evidentialite" and (site.dir / "project" / "glossary" / "case_marking.md").read_text(encoding="utf-8").startswith("## Case marking\n"), str((j, r2, r3)))
+        check(S, "…without a term it is refused", aa.post(site.url + "api/glossary", headers=J, data='{"term": "  "}').status == 400, "")
+        check(S, "the entries are listed by term, accents and case ignored", [e["id"] for e in va.get(site.url + "api/glossary").json()["entries"]] == ["case_marking", "case_marking_2", "evidentialite", "predicate"], str([e["id"] for e in va.get(site.url + "api/glossary").json()["entries"]]))
+        bad = [aa.get(site.url + f"api/glossary/{x}").status for x in ("..%2Fapp", "%2e%2e%2fapp", "app.py", "..", "no_such")] + [aa.post(site.url + "api/glossary/nope", headers=J, data='{"source": "x"}').status]
+        check(S, "an id that is not an entry (a path, a file name, an entry that does not exist) is 404, and a save never creates a file by a typed id", all(s_ == 404 for s_ in bad) and not (site.dir / "project" / "nope.md").exists() and not (site.dir / "project" / "glossary" / "nope.md").exists(), str(bad))
+        check(S, "a save that is too long is refused", aa.post(site.url + "api/glossary/case_marking", headers=J, data=json.dumps({"source": "x" * 200_001})).status == 400, "")
+        s_ = aa.post(site.url + "api/glossary/case_marking_2", headers=J, data=json.dumps({"source": "## A different term\n\nBody."})).json()
+        check(S, "saving returns the term (the first heading) and the entry rendered", s_["ok"] and s_["term"] == "A different term" and "<p>Body.</p>" in s_["html"], str(s_)[:200])
+        aa.delete(site.url + "api/glossary/case_marking_2"); aa.delete(site.url + "api/glossary/evidentialite")
+        check(S, "an entry can be deleted", [e["id"] for e in va.get(site.url + "api/glossary").json()["entries"]] == ["case_marking", "predicate"], "")
+        # ── the same markup as the grammar, for everything ──
+        aa.post(site.url + "api/grammar/zz_g", headers=J, data=json.dumps({"source": '## G\n\n```phonotable\n{"kind":"vowels","label":"gv","caption":"A grammar chart","columns":["Front"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}}}}\n```\n'}))
+        src = ("## Case marking\n\nSee {{ref: gv}} and {{glossary: predicate}} and {{glossary: predicate | the predicates}}; {{glossary: nonesuch}}.\n\n"
+               "| a | b |\n|---|---|\n| **x** | y |\n\n```phonotable\n"
+               '{"kind":"vowels","caption":"A chart in the glossary","columns":["Front"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}}}}\n```\n\n![A figure here](images/gaua_map.png){#gm}\n\nCode: `{{glossary: predicate}}`.\n')
+        aa.post(site.url + "api/glossary/case_marking", headers=J, data=json.dumps({"source": src}))
+        e = va.get(site.url + "api/glossary/case_marking").json()["html"]
+        check(S, "an entry is written with the markup of the grammar: Markdown (a table, bold), a chart of the Phonological table tab (with its caption, numbered in the glossary: Table 1, not after the grammar’s), a figure (Figure 1), references to the grammar’s tables that go to the Grammar page", "<strong>x</strong>" in e and 'figure class="phonotable"' in e and "Table 1</span>" in e and "Figure 1</span>" in e and 'href="grammar.html#tab-gv"' in e and "{{" not in re.sub(r"<code>.*?</code>", "", e), e[:200])
+        check(S, "…and {{glossary: …}} works in an entry: a link to another entry stays on the page (#id), the words shown are the author’s, an unknown entry is a visible error, and in code it is left as written", 'href="#predicate"' in e and ">the predicates</a>" in e and "Glossary entry not found: nonesuch" in e and "<code>{{glossary: predicate}}</code>" in e, e[:300])
+        # ── the shortcode in the grammar, in LaTeX, in the dictionary ──
+        aa.post(site.url + "api/grammar/zz_h", headers=J, data=json.dumps({"source": "## H\n\nThe {{glossary: predicate}}, {{glossary: predicate | a predicate}} and {{glossary: nonesuch}}. `{{glossary: predicate}}`\n"}))
+        gh = va.get(site.url + "api/grammar/zz_h").json()["html"]
+        check(S, "in the grammar {{glossary: id}} is a link that reads as the term, with the beginning of the definition as its tooltip, to the Glossary page; with “| words” it shows them; an unknown entry is an error; in code it is as written", 'href="glossary.html#predicate"' in gh and 'title="The predicate makes a statement' in gh and ">Predicate</a>" in gh and ">a predicate</a>" in gh and "Glossary entry not found: nonesuch" in gh and "<code>{{glossary: predicate}}</code>" in gh, gh[:260])
+        tex = aa.get(site.url + "api/grammar/export/latex").text
+        tex = tex() if callable(tex) else tex
+        check(S, "in the LaTeX export it is plain text: the term, the words shown, or ?? if the entry does not exist (never the shortcode)", "The Predicate, a predicate and \\textbf{??}" in tex and "{{glossary" not in tex.replace("\\texttt{\\{\\{glossary: predicate\\}\\}}", ""), tex[tex.find("The Predicate") - 20:][:160] if "The Predicate" in tex else "")
+        aa.post(site.url + "api/dictionary/entry", headers=J, data=json.dumps({"forms": {"drg": "glosword"}, "pos": "n.", "domain": "", "senses": [{"ref": None, "definition": "a {{glossary: predicate}} word", "shortGloss": "", "langs": [], "notes": "see {{glossary: predicate | the entry}} and {{glossary: nonesuch}}"}]}))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1200)
+        ent = page.locator(".entry", has_text="glosword").first
+        check(S, "in the dictionary a definition and a note show the glossary links (the term, or the author’s words) with the tooltip, and an unknown entry as an error", ent.locator(".entry-gloss a.gloss-link").get_attribute("href") == "glossary.html#predicate" and ent.locator(".entry-gloss a.gloss-link").inner_text() == "Predicate" and ent.locator(".entry-notes a.gloss-link").inner_text() == "the entry" and "Glossary entry not found: nonesuch" in ent.locator(".entry-notes").inner_text() and (ent.locator(".entry-gloss a.gloss-link").get_attribute("title") or "").startswith("The predicate makes a statement"), ent.locator(".entry-gloss").inner_html()[:200])
+        ent.locator(".entry-gloss a.gloss-link").click(); page.wait_for_url("**/glossary.html#predicate", timeout=8000); page.wait_for_selector("#gloss-predicate .section-content p", timeout=8000); page.wait_for_timeout(700)
+        top = page.evaluate("document.getElementById('gloss-predicate').getBoundingClientRect().top")
+        check(S, "a click on it opens the Glossary page at that entry, which is in the window (a page this short cannot scroll its second entry to the very top)", 0 <= top < page.evaluate("window.innerHeight") - 40, f"top = {top}")
+        # ── the page ──
+        open_page(page, site, "glossary.html", ".glossary-entry .section-content p", 1000); page.evaluate("document.fonts.ready"); page.wait_for_timeout(500)
+        check(S, "the page lists the terms in the sidebar and shows each entry; a visitor sees no edit button, no add button, no shortcode helper", [a_.inner_text() for a_ in page.locator("#toc-list a").all()] == ["Case marking", "Predicate"] and page.locator(".edit-tab.visible, .delete-tab.visible, .gloss-code.visible, #add-entry-btn.visible").count() == 0, str([a_.inner_text() for a_ in page.locator("#toc-list a").all()]))
+        logo = page.locator("#gloss-predicate img.glossary-logo"); lb = logo.bounding_box(); lk = page.locator('#gloss-predicate a[href="https://grammaticon.clld.org/concepts/25"]').bounding_box()
+        check(S, "the Grammaticon logo is small (a line high), on the same line as the link, after it; the link opens the Grammaticon", lb is not None and lb["height"] <= 40 and abs((lb["y"] + lb["height"] / 2) - (lk["y"] + lk["height"] / 2)) < 20 and lb["x"] > lk["x"] + lk["width"] and page.locator('#gloss-predicate a[href="https://grammaticon.clld.org/concepts/25"]').inner_text() == "see in the Grammaticon", f"{lb} {lk}")
+        check(S, "the page raised no JavaScript or loading error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        # ── the author's editor: the very editor of the grammar ──
+        pa = au.new_page(); watch(pa, errs)
+        open_page(pa, site, "glossary.html", ".glossary-entry .section-content p", 1000)
+        check(S, "the author sees Add entry, Edit and Delete, and the shortcode to copy under each entry", pa.locator("#add-entry-btn.visible").count() == 1 and pa.locator(".edit-tab.visible").count() == 2 and "{{glossary: predicate}}" in pa.locator("#gloss-predicate .gloss-code").inner_text(), "")
+        pa.locator("#gloss-predicate .edit-tab").click(); pa.wait_for_selector("#editor-glossary-predicate.visible")
+        gl_btns = sorted(b_.get_attribute("title") or b_.inner_text() for b_ in pa.locator("#editor-glossary-predicate .editor-toolbar-btn").all())
+        check(S, "the textarea holds the source, written in markup: the heading, the text, the link and the image as the author types them", "## Predicate" in pa.input_value("#textarea-glossary-predicate") and "[see in the Grammaticon](https://grammaticon.clld.org/concepts/25)" in pa.input_value("#textarea-glossary-predicate") and "![Grammaticon](grammaticon_logo.png){.glossary-logo}" in pa.input_value("#textarea-glossary-predicate"), pa.input_value("#textarea-glossary-predicate")[:120])
+        pg = au.new_page(); watch(pg, errs); open_page(pg, site, "grammar.html", ".grammar-section .section-content", 1000)
+        pg.locator("#s1 .section-edit").click(); pg.wait_for_selector("#editor-s1.visible")
+        gr_btns = sorted(b_.get_attribute("title") or b_.inner_text() for b_ in pg.locator("#editor-s1 .editor-toolbar-btn").all())
+        check(S, "the editor is the grammar’s: the same toolbar (bold, italic, heading, table, 🔗 Reference, 📖 Glossary, image, {{example}}, {{entry}}, {{source}}), the same Phonological table tab, the same list of shortcodes (with {{glossary}})", gl_btns == gr_btns and "Refer to an entry of the Glossary: inserts {{glossary: id}}" in gl_btns and pa.locator('#editor-glossary-predicate .ed-tab[data-tab="phono"]').count() == 1 and "{{glossary: id}}" in pa.inner_text("#editor-glossary-predicate .shortcode-ref") and "{{cite: file.xml#sentId}}" in pa.inner_text("#editor-glossary-predicate .shortcode-ref"), str(gl_btns))
+        # the glossary menu inserts the shortcode, on both pages
+        pa.evaluate("(() => { const t = document.getElementById('textarea-glossary-predicate'); t.focus(); t.setSelectionRange(t.value.length, t.value.length); })()")
+        pa.locator("#editor-glossary-predicate .editor-toolbar-btn", has_text="Glossary").click(); pa.wait_for_selector("#gloss-menu-glossary-predicate button")
+        menu = pa.inner_text("#gloss-menu-glossary-predicate")
+        pa.locator('#gloss-menu-glossary-predicate button[data-id="case_marking"]').click()
+        check(S, "the 📖 Glossary button lists the entries (term, id, beginning of the definition) and inserts {{glossary: id}} at the cursor", "Predicate" in menu and "case_marking" in menu and pa.input_value("#textarea-glossary-predicate").rstrip().endswith("{{glossary: case_marking}}") and pa.locator("#gloss-menu-glossary-predicate").count() == 0, menu[:120])
+        pg.evaluate("(() => { const t = document.getElementById('textarea-s1'); t.focus(); t.setSelectionRange(0, 0); })()")
+        pg.locator("#editor-s1 .editor-toolbar-btn", has_text="Glossary").click(); pg.wait_for_selector("#gloss-menu-s1 button"); pg.locator('#gloss-menu-s1 button[data-id="predicate"]').click()
+        check(S, "…and in the grammar editor it inserts the same shortcode", pg.input_value("#textarea-s1").startswith("{{glossary: predicate}}"), "")
+        # editing and saving
+        pa.evaluate("document.getElementById('textarea-glossary-predicate').value = '## Predicate (edited)\\n\\nNew text with {{glossary: case_marking}}.'")
+        pa.locator("#editor-glossary-predicate .modal-btn.primary").click(); pa.wait_for_function("document.querySelector('#gloss-predicate h2') && document.querySelector('#gloss-predicate h2').textContent.includes('edited')", timeout=8000); pa.wait_for_timeout(600)
+        check(S, "saving shows the entry rendered with the new text, the shortcode as a link to another entry (on the page), and the sidebar and the order follow the new term", pa.locator('#gloss-predicate a.gloss-link[href="#case_marking"]').count() == 1 and [a_.inner_text() for a_ in pa.locator("#toc-list a").all()] == ["Case marking", "Predicate (edited)"] and (site.dir / "project" / "glossary" / "predicate.md").read_text(encoding="utf-8").startswith("## Predicate (edited)"), str([a_.inner_text() for a_ in pa.locator("#toc-list a").all()]))
+        # a chart made in the editor numbers itself in the glossary
+        pa.locator("#gloss-case_marking .edit-tab").click(); pa.wait_for_selector("#editor-glossary-case_marking.visible")
+        pa.locator('#editor-glossary-case_marking .ed-tab[data-tab="phono"]').click(); pa.locator('#pt-glossary-case_marking [data-act="new"][data-kind="vowels"]').click(); pa.wait_for_selector("#pt-glossary-case_marking .pt-grid input")
+        pa.fill("#pt-caption-glossary-case_marking", "Typed in the glossary"); pa.fill('#pt-glossary-case_marking .pt-cell[data-r="0"][data-c="0"]', "i"); pa.wait_for_function("document.querySelector('#pt-preview-glossary-case_marking figcaption') !== null", timeout=6000); pa.wait_for_timeout(500)
+        check(S, "the Phonological table tab works in an entry, and its preview numbers the chart in the glossary (the entry has one: this is Table 2, not a number that goes on from the grammar’s charts)", pa.inner_text("#pt-preview-glossary-case_marking figcaption") == "Table 2 – Typed in the glossary", pa.inner_text("#pt-preview-glossary-case_marking figcaption"))
+        pa.locator("#editor-glossary-case_marking .modal-btn", has_text="Cancel").click()
+        # adding and deleting
+        pa.click("#add-entry-btn"); pa.wait_for_selector("#new-entry-modal.visible"); pa.fill("#new-entry-term", "Subject"); pa.click("#new-entry-submit")
+        pa.wait_for_selector("#editor-glossary-subject.visible", timeout=8000)
+        check(S, "Add entry: the term is asked, the entry is created (id subject), and its editor opens with the heading and a place to write", "## Subject" in pa.input_value("#textarea-glossary-subject") and (site.dir / "project" / "glossary" / "subject.md").exists(), pa.input_value("#textarea-glossary-subject")[:60])
+        pa.locator("#editor-glossary-subject .modal-btn", has_text="Cancel").click()
+        pa.locator("#gloss-subject .delete-tab").click()               # (watch() accepts the confirmation)
+        pa.wait_for_function("!document.getElementById('gloss-subject')", timeout=6000)
+        check(S, "Delete: after the confirmation the entry is gone, from the page and from the folder", not (site.dir / "project" / "glossary" / "subject.md").exists() and pa.locator("#gloss-subject").count() == 0, f"file exists: {(site.dir / 'project' / 'glossary' / 'subject.md').exists()} | in page: {pa.locator('#gloss-subject').count()}")
+        check(S, "no JavaScript or loading error in the editors", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close()
+    finally:
+        site.stop()
+    # a project with no entry yet
+    def empty(d):
+        for f in (d / "project" / "glossary").glob("*.md"): f.unlink()
+    site = Site(prepare=empty)
+    try:
+        c = new_context(browser, site, 1280); pg = c.new_page(); open_page(pg, site, "glossary.html", "#glossary-empty", 1000)
+        check(S, "a glossary with no entry says so, and the shortcode of an entry that is not there is an error", pg.locator("#glossary-empty").is_visible() and "Glossary entry not found" in c.request.post(site.url + "api/grammar/zz", headers={"Content-Type": "application/json"}, data="{}").text() + c.request.get(site.url + "api/glossary").text() or pg.locator("#glossary-empty").is_visible(), "")
+        c.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -3801,6 +3929,7 @@ def main():
             if args.only in (None, "latex"): suite_latex(browser, args)
             if args.only in (None, "xmlimport"): suite_xmlimport(browser, args); suite_import_extras(browser, args)
             if args.only in (None, "relations"): suite_relations(browser, args)
+            if args.only in (None, "glossary"): suite_glossary(browser, args)
             browser.close()
     finally:
         site.stop()
