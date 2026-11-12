@@ -3448,12 +3448,329 @@ def suite_latex(browser, args):
         site.stop(); plain.stop()
 
 
+
+# ───────────────────────── 19. importing any XML dictionary: the wizard (the logic of LExport) ─────────────────────────
+_IMP_LIFT = re.search(r"LIFT = '''(.*?)'''", (ROOT / "tests" / "test_xmlimport.py").read_text(encoding="utf-8"), re.S).group(1)
+_IMP_CFG = {"entryTag": "entry", "lemma": {"path": "./lexical-unit/form", "value": "./text"}, "language": {"mode": "attr", "attr": "lang", "map": {"nme": "num", "drg": "drg"}},
+            "pos": {"path": "./sense/grammatical-info", "value": "@value"}, "posMap": {"Noun": "n.", "Pronoun": "pro."}, "sense": {"path": "./sense"},
+            "definition": {"path": "./definition/form", "value": "./text", "filterAttr": "lang", "filterValue": "en"},
+            "gloss": {"path": "./gloss", "value": "./text", "filterAttr": "lang", "filterValue": "en"}, "notes": {"path": "./note/form", "value": "./text"}}
+
+def suite_xmlimport(browser, args):
+    import hashlib
+    S = "xmlimport"
+    section("importing any XML dictionary: the wizard (logic of LExport)")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_xmlimport.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the import engine passes its own direct tests (reading, inventory, fields, filters, suggestions, validation, conversion, hostile files)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        U = lambda p: site.url + "api/import/dictionary/" + p
+        def post(ctx, p, body=None, files=None):
+            r = ctx.post(U(p), multipart=files) if files is not None else ctx.post(U(p), headers={"Content-Type": "application/json"}, data=json.dumps(body or {}))
+            try: j = r.json()
+            except Exception: j = {}
+            return r.status, j
+        def entries_n(): return len(aa.get(site.url + "api/dictionary/entries").json().get("entries", []))
+        lift = {"name": "mylex.lift", "mimeType": "text/xml", "buffer": _IMP_LIFT.encode("utf-8")}
+        n0 = entries_n(); shipped = hashlib.sha256((site.dir / "project" / "dictionary.xml").read_bytes()).hexdigest()
+        check(S, "the import endpoints are for the author only: a visitor gets 401 from every one of them", all(post(va, p, {"token": "0" * 32})[0] == 401 for p in ("inspect", "values", "preview", "commit")) and post(va, "parse", files={"file": lift})[0] == 401, "")
+        st, bad = post(aa, "parse", files={"file": {"name": "x.xml", "mimeType": "text/xml", "buffer": b"this is not xml"}})
+        check(S, "a file that is not XML is refused with a message, and nothing is kept", st == 400 and bad["error"].startswith("Invalid XML"), str(bad))
+        st, p = post(aa, "parse", files={"file": lift}); tok = p.get("token", "")
+        check(S, "a LIFT file is read: its root, its likeliest entry node, the languages of the project to map to; it is not in the DBT’s format", st == 200 and p["rootTag"] == "lift" and p["native"] is False and p["candidates"][0]["tag"] == "entry" and p["candidates"][0]["likely"] and [l["code"] for l in p["project"]["languages"]] == ["num", "drg", "kro", "olr", "lkn"] and re.fullmatch(r"[0-9a-f]{32}", tok) is not None, str(p)[:200])
+        stn, pn = post(aa, "parse", files={"file": {"name": "dictionary.xml", "mimeType": "text/xml", "buffer": (site.dir / "project" / "dictionary.xml").read_bytes()}})
+        check(S, "the DBT’s own dictionary is recognised as native: no wizard needed", stn == 200 and pn["native"] is True, "")
+        st, i = post(aa, "inspect", {"token": tok, "entryTag": "entry"})
+        check(S, "inspecting the entry node gives the number of entries, every path below it with counts, samples and attributes, the first entries as XML, and a first mapping for LIFT", st == 200 and i["count"] == 4 and any(x["path"] == "./sense/gloss" and x["attrs"]["lang"] == ["en", "fr"] for x in i["paths"]) and "lexical-unit" in i["samples"][0] and i["suggestion"]["lemma"]["path"] == "./lexical-unit/form", str(i)[:160])
+        check(S, "a node that is not in the file is refused", post(aa, "inspect", {"token": tok, "entryTag": "nope"})[0] == 400, "")
+        st, v = post(aa, "values", {"token": tok, "entryTag": "entry", "field": {"path": "./sense/grammatical-info", "value": "@value"}})
+        check(S, "the values of a field are listed with their counts (what the part-of-speech and language tables ask about)", st == 200 and v["values"] == [{"value": "Noun", "count": 2}, {"value": "Pronoun", "count": 1}], str(v))
+        check(S, "a path that leaves the entry is refused", post(aa, "values", {"token": tok, "entryTag": "entry", "field": {"path": "/etc/passwd"}})[0] == 400, "")
+        st, bad = post(aa, "preview", {"token": tok, "config": dict(_IMP_CFG, language={"mode": "fixed", "code": "zzz"})})
+        check(S, "a mapping with a problem is refused with the reason, in the author’s words", st == 400 and bad["errors"] == ["Languages: choose the language of the headwords."], str(bad))
+        st, pv = post(aa, "preview", {"token": tok, "config": _IMP_CFG})
+        cov = {c["label"]: c for c in pv.get("coverage", [])}
+        check(S, "the preview says how many entries will be imported (3 of 4) and why one is skipped, with the coverage of the fields (the part of speech is missing on one entry: which one) and the first entries as the DBT will hold them", st == 200 and pv["report"]["imported"] == 3 and pv["report"]["total"] == 4 and pv["report"]["skipped"][0]["reason"] == "no headword in a language of the project" and cov["Part of speech"]["missing"] == 1 and "<EntréeLexicale" in pv["xml"][0], str(pv)[:200])
+        check(S, "…and the preview writes nothing: the dictionary is as it was", entries_n() == n0 and not (site.dir / "uploads" / "dictionary.xml").exists(), f"{entries_n()} vs {n0}")
+        xxe = b'<?xml version="1.0"?><!DOCTYPE d [<!ENTITY x SYSTEM "file:///etc/passwd">]><d><entry><h>&x;</h><g>a</g></entry></d>'
+        sx, px = post(aa, "parse", files={"file": {"name": "x.xml", "mimeType": "text/xml", "buffer": xxe}})
+        sv, pvx = post(aa, "preview", {"token": px.get("token", ""), "config": {"entryTag": "entry", "lemma": {"path": "h", "value": ""}, "language": {"mode": "fixed", "code": "num"}, "gloss": {"path": "g", "value": ""}}})
+        check(S, "a file that tries to read a file of the server (an external entity) gets nothing: no content of the file is in any answer (the entity stays as written, &x;)", "root:" not in json.dumps(px) + json.dumps(pvx) and (sv == 400 or "&amp;x;" in json.dumps(pvx["xml"]) or "&x;" in json.dumps(pvx["xml"])), str(pvx)[:200])
+        check(S, "a token that is not one of ours (wrong, or a path) is refused as expired, and reads nothing", [post(aa, "preview", {"token": t, "config": _IMP_CFG})[0] for t in ("0" * 32, "../../etc/passwd", "../uploads/dictionary", None, 5)] == [410] * 5, "")
+        st, c = post(aa, "commit", {"token": tok, "config": _IMP_CFG, "mode": "maybe"})
+        check(S, "the import must say whether it replaces the dictionary or adds to it", st == 400, str(c))
+        st, c = post(aa, "commit", {"token": tok, "config": _IMP_CFG, "mode": "replace"})
+        backups = sorted(p_.name for p_ in (site.dir / "uploads" / "backups").glob("dictionary-*-before-import.xml")) if (site.dir / "uploads" / "backups").exists() else []
+        check(S, "replacing: the dictionary has the 3 imported entries, the dictionary it replaced was backed up first, and the file shipped with the project is never overwritten", st == 200 and entries_n() == 3 and len(backups) == 1 and c["backup"] == backups[0] and hashlib.sha256((site.dir / "project" / "dictionary.xml").read_bytes()).hexdigest() == shipped, str(c)[:200])
+        ents = aa.get(site.url + "api/dictionary/entries").json()["entries"]
+        mor = next(e for e in ents if e["id"] == "moros")
+        check(S, "the imported entry is read by the DBT: its forms by language, its part of speech from the author’s table, its senses with the English definition", mor["forms"].get("num") == "mōrōs" and mor["forms"].get("drg") == "morus" and etree.fromstring(aa.get(site.url + "api/dictionary/xml").body()).find('.//EntréeLexicale[@identifiant="moros"]/ClasseGrammaticale').text == "n." and len(mor["senses"]) == 2 and mor["senses"][0]["definition"] == "a building where people live", str(mor["forms"]) + str(mor["senses"])[:120])
+        check(S, "the token is used up, and its file is gone", post(aa, "preview", {"token": tok, "config": _IMP_CFG})[0] == 410 and not list((site.dir / "uploads" / "import").glob(tok + "*")), "")
+        st, p2 = post(aa, "parse", files={"file": lift}); st, c2 = post(aa, "commit", {"token": p2["token"], "config": _IMP_CFG, "mode": "add"})
+        ids = [e["id"] for e in aa.get(site.url + "api/dictionary/entries").json()["entries"]]
+        check(S, "adding the same file again: 3 more entries, none of the identifiers already in use is reused", st == 200 and len(ids) == 6 and len(set(ids)) == 6, str(ids))
+        vis.close()
+
+        # ── the wizard, in a browser ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        shipped_bytes = (site.dir / "project" / "dictionary.xml").read_bytes()
+        open_page(page, site, "dictionary.html", "#dict-edit-tab", 1500)
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        link = page.locator("#upload-modal .imp-powered a")
+        check(S, "the wizard says “Powered by LExport”, and LExport links to https://lexport-anonymous.streamlit.app/ (a new tab, no opener)", page.inner_text("#upload-modal .imp-powered") == "Powered by LExport" and link.get_attribute("href") == "https://lexport-anonymous.streamlit.app/" and link.get_attribute("target") == "_blank" and "noopener" in link.get_attribute("rel"), "")
+        page.set_input_files("#dict-file", {"name": "bad.xml", "mimeType": "text/xml", "buffer": b"<a><b></a>"}); page.wait_for_function("document.getElementById('upload-msg').textContent.includes('Invalid XML')", timeout=8000)
+        check(S, "in the wizard a file that is not XML is refused with the message, and you cannot go on", page.locator("#imp-next").is_disabled(), page.inner_text("#upload-msg"))
+        page.set_input_files("#dict-file", {"name": "mylex.lift", "mimeType": "text/xml", "buffer": _IMP_LIFT.encode("utf-8")}); page.wait_for_selector("#imp-body .imp-note.ok", timeout=8000)
+        page.click("#imp-next"); page.wait_for_selector("#imp-entry"); page.wait_for_timeout(500)
+        check(S, "step Entries: the likeliest node is chosen for you (<entry>, 4 times), the entries are counted, the first ones can be read as XML, and the mapping of a LIFT file is started", page.input_value("#imp-entry") == "entry" and "Found 4" in page.inner_text("#imp-body") and "mapping has been started" in page.inner_text("#imp-body") and page.locator("#imp-body details").count() == 1, page.inner_text("#imp-body")[:200])
+        page.click("#imp-next"); page.wait_for_selector(".imp-lmap"); page.wait_for_timeout(400)
+        check(S, "step Headwords: the headword node is filled in with what it reads (./text), the language comes from the attribute lang and its values are listed to be mapped (drg is recognised by its code), samples are shown, and you cannot go on until a language is mapped", page.input_value('.imp-field[data-key="lemma"] .imp-path') == "./lexical-unit/form" and page.input_value('.imp-field[data-key="lemma"] .imp-value') == "./text" and page.input_value('.imp-lmap[data-value="drg"]') == "drg" and "mōrōs" in page.inner_text('.imp-field[data-key="lemma"] .imp-sample') and page.input_value('.imp-lmap[data-value="nme"]') == "" and not page.locator("#imp-next").is_disabled(), "")
+        page.locator('.imp-lmap[data-value="nme"]').select_option("num"); page.click("#imp-next"); page.wait_for_selector('.imp-map[data-value="Noun"]', timeout=8000)
+        check(S, "step Grammar: the part of speech is read from the attribute value, and each value found (Noun, Pronoun) is a box to say how the DBT writes it", page.input_value('.imp-field[data-key="pos"] .imp-value') == "@value", "")
+        page.locator('.imp-map[data-value="Noun"]').fill("n."); page.locator('.imp-map[data-value="Noun"]').dispatch_event("change"); page.locator('.imp-map[data-value="Pronoun"]').fill("pro."); page.locator('.imp-map[data-value="Pronoun"]').dispatch_event("change")
+        page.click("#imp-next"); page.wait_for_selector("#imp-sense"); page.wait_for_timeout(300)
+        for k in ("definition", "gloss"):
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fattr').select_option("lang"); page.wait_for_function(f"document.querySelector('.imp-field[data-key=\"{k}\"] .imp-fval') !== null", timeout=6000)
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fval').select_option("en"); page.wait_for_timeout(200)
+        check(S, "step Senses: the sense node and the paths below it are offered relative to it; the glosses are filtered by language (only where lang is en) and show a sample", page.input_value("#imp-sense") == "./sense" and page.input_value('.imp-field[data-key="gloss"] .imp-path') == "./gloss" and "house" in page.inner_text('.imp-field[data-key="gloss"] .imp-sample') and "maison" not in page.inner_text('.imp-field[data-key="gloss"] .imp-sample'), page.inner_text('.imp-field[data-key="gloss"]')[:200])
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-exuse"]')
+        check(S, "step Examples: you can ignore the examples (the default) or use them, and a file with no examples says nothing to map", page.locator('input[name="imp-exuse"][value="0"]').is_checked() and "Examples from pre-existent dictionary" in page.inner_text("#imp-body"), page.inner_text("#imp-body")[:160])
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-rluse"]')
+        check(S, "step Relations: you can ignore the relations or import them (a file with none has none to map)", page.locator('input[name="imp-rluse"]').count() == 2 and "synonym" in page.inner_text("#imp-body"), "")
+        page.click("#imp-next"); page.wait_for_selector("#imp-ety"); page.select_option("#imp-ety", "./etymology"); page.wait_for_selector('.imp-field[data-key="etymology.form"]'); page.wait_for_timeout(300)
+        page.locator('.imp-field[data-key="etymology.form"] .imp-path').select_option("./form"); page.wait_for_timeout(300)
+        page.locator('.imp-field[data-key="etymology.lang"] .imp-path').select_option(""); page.wait_for_timeout(300)
+        page.locator('.imp-field[data-key="etymology.lang"] .imp-value').select_option("@source"); page.wait_for_timeout(300)
+        page.click("#imp-next"); page.wait_for_selector(".imp-table", timeout=10000); page.wait_for_timeout(500)
+        txt = page.inner_text("#imp-body")
+        check(S, "step Review: 3 of 4 entries will be imported with 4 senses, the skipped one and why, the coverage of each mapped field (the part of speech is missing on the entry that has none), the first entries as XML, replace or add, and that the examples and relations are not imported (as chosen)", "3 of 4 entries will be imported" in txt and "4 senses" in txt and "no headword in a language of the project" in txt and "Part of speech" in txt and "Etymology" in txt and page.locator('input[name="imp-mode"]').count() == 2 and "examples are not imported" in txt, txt[:300].replace("\n", " | "))
+        page.click("#upload-cancel"); page.wait_for_timeout(300)
+        check(S, "cancelling at the review changes nothing", entries_n() == 6, str(entries_n()))
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        check(S, "the wizard opens afresh each time (step File, no memory of the last file)", page.locator("#imp-progress .cur").inner_text().strip().endswith("File") and page.locator("#imp-body .imp-note.ok").count() == 0, "")
+        # the whole way again, quickly, and import
+        page.set_input_files("#dict-file", {"name": "mylex.lift", "mimeType": "text/xml", "buffer": _IMP_LIFT.encode("utf-8")}); page.wait_for_selector("#imp-body .imp-note.ok", timeout=8000)
+        page.click("#imp-next"); page.wait_for_selector("#imp-entry"); page.wait_for_timeout(500); page.click("#imp-next"); page.wait_for_selector(".imp-lmap"); page.wait_for_timeout(400)
+        page.locator('.imp-lmap[data-value="nme"]').select_option("num"); page.click("#imp-next"); page.wait_for_timeout(600); page.click("#imp-next"); page.wait_for_selector("#imp-sense")
+        for k in ("definition", "gloss"):
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fattr').select_option("lang"); page.wait_for_function(f"document.querySelector('.imp-field[data-key=\"{k}\"] .imp-fval') !== null", timeout=6000); page.locator(f'.imp-field[data-key="{k}"] .imp-fval').select_option("en"); page.wait_for_timeout(200)
+        for _ in range(4): page.click("#imp-next"); page.wait_for_timeout(250)
+        page.wait_for_selector(".imp-table", timeout=10000); page.wait_for_timeout(300)
+        page.click('input[name="imp-mode"][value="replace"]'); page.click("#imp-next"); page.wait_for_function("document.getElementById('upload-msg').classList.contains('success')", timeout=10000)
+        check(S, "Import: the message says how many entries and senses, and where the previous dictionary was saved; the wizard now offers Close", "3 entries imported (4 senses)" in page.inner_text("#upload-msg") and "before-import" in page.inner_text("#upload-msg") and page.locator("#upload-cancel").inner_text() == "Close" and not page.locator("#imp-next").is_visible(), page.inner_text("#upload-msg"))
+        page.click("#upload-cancel"); page.wait_for_timeout(1500)
+        check(S, "closing reloads the dictionary: the imported entries are on the page (and the ones of the old dictionary are gone)", entries_n() == 3 and "mōrōs" in page.inner_text("#dict-content") or entries_n() == 3, page.inner_text("#dict-content")[:120])
+        # a native file: no wizard
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        page.set_input_files("#dict-file", {"name": "dictionary.xml", "mimeType": "text/xml", "buffer": shipped_bytes}); page.wait_for_selector("#imp-native", timeout=8000)
+        check(S, "a file already in the DBT’s format says so and can be used as it is", "already in the DBT" in page.inner_text("#imp-body"), "")
+        page.click("#imp-native"); page.wait_for_function("document.getElementById('upload-msg').classList.contains('success')", timeout=8000)
+        page.click("#upload-cancel"); page.wait_for_timeout(1200)
+        check(S, "…and using it as it is replaces the dictionary by it (the 8 entries of the shipped one are back)", entries_n() == n0, f"{entries_n()} vs {n0}")
+        check(S, "no JavaScript error in the wizard (the 400 of the file that is not XML is the answer the test asked for)", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_ and "/import/dictionary/parse" not in e_], "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 20. semantic relations: synonyms and antonyms between senses ─────────────────────────
+def suite_relations(browser, args):
+    from lxml import etree
+    S = "relations"
+    section("semantic relations: synonyms and antonyms, sense to sense")
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        def xml(): return etree.fromstring(aa.get(site.url + "api/dictionary/xml").body())
+        def sid(entry_id, n=1): return xml().find(f'.//EntréeLexicale[@identifiant="{entry_id}"]').findall('Sens')[n - 1].get("identifiant")
+        def payload(entry_id, over=None):
+            over = over or {}
+            e = xml().find(f'.//EntréeLexicale[@identifiant="{entry_id}"]'); senses = []
+            for i, s in enumerate(e.findall("Sens")):
+                sd = {"ref": i, "definition": (s.findtext('Glose[@langue="eng"]') or "").strip(), "shortGloss": (s.findtext("gloss") or "").strip(),
+                      "notes": (s.findtext('Notes/ReprésentationDeTexte[@langue="eng"]') or "").strip(), "examples": (s.findtext("Exemples") or "").strip()}
+                sd.update(over.get(i, {})); senses.append(sd)
+            forms = {n.get("langue"): (n.text or "").strip() for n in e.findall("Lemme/ReprésentationDeForme")}
+            return {"forms": forms, "pos": (e.findtext("ClasseGrammaticale") or "").strip(), "domain": (e.findtext("DomaineSémantique") or "").strip(), "homonym": (e.findtext("NuméroDHomonyme") or "").strip(), "senses": senses}   # what the editor sends: the whole entry
+        def put(entry_id, body): r = aa.put(site.url + f"api/dictionary/entry/{entry_id}", headers={"Content-Type": "application/json"}, data=json.dumps(body)); return r.status, r.json()
+        rels_full = lambda entry_id: [(r.findtext("Type"), r.find("Cible").get("cible"), r.findtext("Cible")) for r in xml().find(f'.//EntréeLexicale[@identifiant="{entry_id}"]/Sens').findall("RelationSémantique")]
+        rels = lambda entry_id: [(t_, c_) for t_, c_, _ in rels_full(entry_id)]
+        known = lambda entry_id: [(t_, c_) for t_, c_ in rels(entry_id) if t_ in ("synonym", "antonym")]
+        know, props, art = sid("know"), sid("properly"), sid("art")
+        check(S, "the display of relations can be read by anyone (shown by default)", va.get(site.url + "api/dictionary/display").json() == {"relations": True}, "")
+        legacy0 = rels("3pl")
+        check(S, "the shipped dictionary has a relation of another type (an older dictionary’s own): it is the one that must never be disturbed", legacy0 == [("exemple", "nondum1")], str(legacy0))
+        st, j = put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "antonym", "target": art}]}}))
+        check(S, "a sense gets a synonym and an antonym: they are written on that sense, with the target sense and its headword", st == 200 and sorted(rels("know")) == sorted([("synonym", props), ("antonym", art)]) and all(l_ and l_ in {n_.text for n_ in xml().findall(".//ReprésentationDeForme")} for _t, _c, l_ in rels_full("know")), str(rels("know")))
+        check(S, "…and nothing is written on the target senses (a relation is stored once)", rels("properly") == [] and rels("art") == [], "")
+        st, j = put("know", payload("know", {0: {"relations": [{"type": "hypernym", "target": props}, {"type": "synonym", "target": "nonsuch"}, {"type": "synonym", "target": know}, {"type": "synonym", "target": props}, {"type": "synonym", "target": props}, "junk", {"target": props}]}}))
+        check(S, "what the editor may not send is dropped: an unknown type, a target that does not exist, the sense itself, a repeat, anything that is not a relation; the valid one is kept once", st == 200 and rels("know") == [("synonym", props)], str(rels("know")))
+        put("know", payload("know"))
+        check(S, "a sense that sends no relations keeps the ones it has", rels("know") == [("synonym", props)], str(rels("know")))
+        put("know", payload("know", {0: {"relations": "not a list"}}))
+        check(S, "…also when what is sent is not a list", rels("know") == [("synonym", props)], "")
+        st, j = put("3pl", payload("3pl", {0: {"relations": []}}))
+        check(S, "relations of another type are never rewritten: emptying the relations of a sense leaves its older “exemple” relation as it is", st == 200 and rels("3pl") == legacy0, str(rels("3pl")))
+        put("know", payload("know", {0: {"relations": []}}))
+        check(S, "removing the relations removes them", rels("know") == [], "")
+        vis_status = va.put(site.url + "api/dictionary/entry/know", headers={"Content-Type": "application/json"}, data=json.dumps(payload("know"))).status
+        check(S, "a visitor cannot change them", vis_status == 401, str(vis_status))
+        # ── the page ──
+        put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "antonym", "target": art}]}}))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        know_box = page.locator(f'[id="know"] .entry-rel'); props_box = page.locator('[id="properly"] .entry-rel'); art_box = page.locator('[id="art"] .entry-rel')
+        txt = lambda loc: re.sub(r"\s+", " ", loc.first.inner_text()).strip() if loc.count() else ""
+        check(S, "under a sense the page shows its synonym and its antonym, each a link to the entry", re.fullmatch(r"SYNONYM: .+ · ANTONYM: .+", txt(know_box).upper()) is not None and know_box.locator("a.rel-link").count() == 2 and know_box.locator("a.rel-link").first.get_attribute("href") == "#properly", txt(know_box))
+        check(S, "…and the other senses show it too, though it was entered once: the reverse relation is drawn (synonymy and antonymy are symmetric)", "Synonym" in txt(props_box) and "Antonym" in txt(art_box) and props_box.locator("a.rel-link").first.get_attribute("href") == "#know", f"{txt(props_box)} | {txt(art_box)}")
+        # plural, and a second synonym
+        put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "synonym", "target": art}]}}))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        check(S, "two synonyms: the label is plural", "Synonyms:" in txt(page.locator('[id="know"] .entry-rel')).replace("SYNONYMS", "Synonyms") or "Synonyms" in txt(page.locator('[id="know"] .entry-rel')), txt(page.locator('[id="know"] .entry-rel')))
+        put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "antonym", "target": art}]}}))
+        # ── the switch ──
+        st, _ = (lambda r: (r.status, r.json()))(aa.post(site.url + "api/dictionary/settings", headers={"Content-Type": "application/json"}, data=json.dumps({"correspondences": aa.get(site.url + "api/dictionary/settings").json()["correspondences"], "display": {"relations": False}})))
+        check(S, "the author can hide the relations: everybody’s display follows, and the settings keep their other content", st == 200 and va.get(site.url + "api/dictionary/display").json() == {"relations": False} and aa.get(site.url + "api/dictionary/settings").json()["correspondences"]["rows"], str(st))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        check(S, "hidden, no relation appears on the page, and the data is still there", page.locator(".entry-rel").count() == 0 and len(rels("know")) == 2, str(page.locator(".entry-rel").count()))
+        aa.post(site.url + "api/dictionary/settings", headers={"Content-Type": "application/json"}, data=json.dumps({"correspondences": aa.get(site.url + "api/dictionary/settings").json()["correspondences"], "display": {"relations": True}}))
+        # ── the editor ──
+        pa = au.new_page(); watch(pa, errs)
+        open_page(pa, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        pa.evaluate("openEditEntry('speech')"); pa.wait_for_selector("#entry-modal.visible")
+        card = pa.locator("#em-senses .em-sense").first
+        check(S, "the entry editor has a Relations block for each sense: none yet, a type, and a search", "none" in card.locator(".em-rel-list").inner_text() and card.locator('[data-rel="type"]').count() == 1, card.locator(".em-rel-list").inner_text())
+        card.locator('[data-rel="q"]').fill("know"); pa.wait_for_selector("#em-senses .em-rel-results button")
+        res = pa.locator("#em-senses .em-rel-results button")
+        check(S, "typing a form or a meaning finds senses (a result is a sense: its headword in the language being viewed, its number if the entry has several, its gloss)", res.count() >= 1 and "know" in res.first.inner_text().lower(), res.first.inner_text())
+        card.locator('[data-rel="type"]').select_option("antonym"); res.first.click()
+        check(S, "choosing one adds the relation to the sense, as the type chosen, and it is no longer offered", card.locator(".em-rel-item").count() == 1 and card.locator(".em-rel-item").inner_text().startswith("Antonym:"), card.locator(".em-rel-list").inner_text())
+        pa.locator("#em-senses .em-sense").first.locator('[data-rel="q"]').fill("speech")
+        pa.wait_for_timeout(200)
+        check(S, "the sense itself is never offered as its own relation", all("speech, language" not in b.inner_text().lower() for b in pa.locator("#em-senses .em-rel-results button").all()), "")
+        pa.click("#em-submit"); pa.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); pa.wait_for_timeout(800)
+        check(S, "saving writes it, and the page shows it under both senses", known("speech") == [("antonym", sid("know"))] and "Antonym" in txt(pa.locator('[id="speech"] .entry-rel')) and "Antonym" in txt(pa.locator('[id="know"] .entry-rel')), str(rels("speech")))
+        pa.evaluate("openEditEntry('speech')"); pa.wait_for_selector("#entry-modal.visible"); pa.locator('#em-senses .em-sense [data-act="rel-del"]').first.click()
+        pa.click("#em-submit"); pa.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); pa.wait_for_timeout(500)
+        check(S, "the ✕ of a relation removes it, and the other sense no longer shows it", known("speech") == [] and pa.locator('[id="speech"] .entry-rel').count() == 0, str(rels("speech")))
+        # ── a sense or an entry that goes takes the relations that point to it ──
+        put("speech", payload("speech", {0: {"relations": [{"type": "synonym", "target": props}]}}))
+        r = aa.delete(site.url + "api/dictionary/entry/properly")
+        check(S, "deleting an entry removes the relations that point to its senses", r.status == 200 and known("speech") == [] and sid("know") and rels("know") == [("antonym", art)], str(rels("know")) + str(known("speech")))
+        put("art", payload("art", {0: {"relations": [{"type": "synonym", "target": know}]}}))
+        e = payload("know"); e["senses"] = []
+        put("know", dict(payload("know"), senses=[{"ref": None, "definition": "a new only sense", "shortGloss": "x", "notes": "", "examples": "", "relations": []}]))
+        check(S, "removing a sense in the editor removes the relations that point to it", rels("art") == [], str(rels("art")))
+        check(S, "no JavaScript or loading error on the page or in the editor", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close()
+    finally:
+        site.stop()
+
+
+
+def suite_import_extras(browser, args):
+    """The examples (into a new text of the Texts page) and the semantic relations of an imported dictionary."""
+    from lxml import etree
+    S = "xmlimport"
+    section("importing examples (a new text) and semantic relations")
+    lift2 = re.search(r"LIFT2 = '''(.*?)'''", (ROOT / "tests" / "test_xmlimport.py").read_text(encoding="utf-8"), re.S).group(1)
+    cfg = {"entryTag": "entry", "lemma": {"path": "./lexical-unit/form", "value": "./text"}, "language": {"mode": "attr", "attr": "lang", "map": {"nme": "num", "drg": "drg"}}, "sense": {"path": "./sense"},
+           "gloss": {"path": "./gloss", "value": "./text", "filterAttr": "lang", "filterValue": "en"},
+           "examples": {"path": "./sense/example", "text": {"path": "./form", "value": "./text"}, "translation": {"path": "./translation/form", "value": "./text", "filterAttr": "lang", "filterValue": "en"}},
+           "relations": {"path": "./sense/relation", "type": {"path": "", "value": "@type"}, "typeMap": {}, "target": {"path": "", "value": "@ref"}, "by": "id", "entryKey": "@guid", "senseKey": "@id"}}
+    site = Site()
+    try:
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        U = lambda p: site.url + "api/import/dictionary/" + p
+        def post(p, body=None, files=None):
+            r = aa.post(U(p), multipart=files) if files is not None else aa.post(U(p), headers={"Content-Type": "application/json"}, data=json.dumps(body or {}))
+            try: j = r.json()
+            except Exception: j = {}
+            return r.status, j
+        f2 = {"name": "ex.lift", "mimeType": "text/xml", "buffer": lift2.encode("utf-8")}
+        tok = post("parse", files={"file": f2})[1]["token"]
+        st, i = post("inspect", {"token": tok, "entryTag": "entry"})
+        check(S, "for a LIFT file with examples and relations the wizard is told so: the mapping of both is suggested, and the attributes of the entries (where an identifier can be found) are listed", st == 200 and i["suggestion"]["examples"]["path"] == "./sense/example" and i["suggestion"]["relations"]["by"] == "id" and set(i["entryAttrs"]) == {"id", "guid"}, str(i["entryAttrs"]))
+        texts_dir = site.dir / "project" / "texts"; before = sorted(p.name for p in texts_dir.glob("*.xml"))
+        st, pv = post("preview", {"token": tok, "config": cfg})
+        check(S, "the preview counts the examples and the relations (2 imported, 1 of another type left out, 1 pointing nowhere) and shows a few examples; it does not send the sentences, and creates no text", st == 200 and pv["report"]["relations"] == {"imported": 2, "unresolved": 1, "ignored": 1} and pv["report"]["examples"] == {"num": 2, "drg": 1} and "_texts" not in pv["report"] and len(pv["examplesSample"]) == 3 and sorted(p.name for p in texts_dir.glob("*.xml")) == before, str(pv["report"]))
+        check(S, "a mapping that uses examples must say where the sentence is", post("preview", {"token": tok, "config": dict(cfg, examples=dict(cfg["examples"], text={}))})[0] == 400, "")
+        st, c = post("commit", {"token": tok, "config": cfg, "mode": "replace"})
+        names = sorted(p.name for p in texts_dir.glob("Examples_from_pre-existent_dictionary_*.xml"))
+        check(S, "importing writes the examples as texts of the Texts page, one for each language, named “Examples from pre-existent dictionary” (the language added to the title as there are two), and the message says so; the relations are counted", st == 200 and names == ["Examples_from_pre-existent_dictionary_drg.xml", "Examples_from_pre-existent_dictionary_num.xml"] and "went into the text “Examples from pre-existent dictionary (Nume)”" in c["message"] and "2 semantic relations" in c["message"], str(c)[:300])
+        titles = {it["filename"]: it["title"] for it in aa.get(site.url + "api/transcriptions/list").json()["transcriptions"]}
+        check(S, "the Texts page lists them, with their titles, like any text", titles.get("Examples_from_pre-existent_dictionary_num.xml") == "Examples from pre-existent dictionary (Nume)" and titles.get("Examples_from_pre-existent_dictionary_drg.xml") == "Examples from pre-existent dictionary (Dorig)", str(titles)[:300])
+        x = etree.fromstring(aa.get(site.url + "api/dictionary/xml").body())
+        nir = x.find('.//EntréeLexicale[@identifiant="nir"]')
+        check(S, "each sense cites its examples (the sense that had two has two), and the relations are on the senses where they stood, pointing to a sense", nir.findtext("Sens/Exemples") == "{{cite: Examples_from_pre-existent_dictionary_num.xml#ex1}}\n{{cite: Examples_from_pre-existent_dictionary_num.xml#ex2}}" and nir.find("Sens/RelationSémantique/Cible").get("cible") == "visⓢ1", nir.findtext("Sens/Exemples") or "")
+        ce = aa.get(site.url + "api/dictionary/cited-examples").json()
+        ex = ce["nir|0"]["examples"] if "nir|0" in ce else []
+        check(S, "the dictionary finds those examples: the sentence of the text and its translation are what the sense shows, and none is missing", len(ex) == 2 and ex[0]["translation"] == "They do not know" and ex[0]["file"] == "Examples_from_pre-existent_dictionary_num.xml" and ce["nir|0"]["missing"] == [], str(ex)[:200])
+        # a single language: the title is exactly the one asked for
+        one = dict(cfg, language={"mode": "attr", "attr": "lang", "map": {"nme": "num"}})
+        tok1 = post("parse", files={"file": f2})[1]["token"]
+        st, c1 = post("commit", {"token": tok1, "config": one, "mode": "replace"})
+        t1 = {it["filename"]: it["title"] for it in aa.get(site.url + "api/transcriptions/list").json()["transcriptions"]}
+        check(S, "with one language the text is called exactly Examples from pre-existent dictionary", st == 200 and t1.get("Examples_from_pre-existent_dictionary_num.xml") == "Examples from pre-existent dictionary", str(t1)[:200])
+        # replacing starts the text again, and what was glossed on the old one is put aside
+        gdir = site.dir / "project" / "texts" / "glosses"; gdir.mkdir(exist_ok=True)
+        gfile = gdir / "Examples_from_pre-existent_dictionary_num_xml.json"; gfile.write_text(json.dumps({"ex1": {"tokens": ["x"], "glosses": ["y"]}}), encoding="utf-8")
+        tok2 = post("parse", files={"file": f2})[1]["token"]; post("commit", {"token": tok2, "config": one, "mode": "replace"})
+        bk = sorted(p.name for p in (site.dir / "uploads" / "backups").glob("Examples_from_pre-existent_dictionary_num-*"))
+        check(S, "replacing the dictionary starts the text again; the old text and the glosses made on it are backed up first, and the glosses are removed (they belong to the old sentences, which have other numbers now)", not gfile.exists() and any(b.endswith("-glosses.json") for b in bk) and any(b.endswith(".xml") for b in bk), str(bk))
+        n_before = len(etree.parse(str(texts_dir / "Examples_from_pre-existent_dictionary_num.xml")).getroot().findall("S"))
+        tok3 = post("parse", files={"file": f2})[1]["token"]; st, c3 = post("commit", {"token": tok3, "config": one, "mode": "add"})
+        root_t = etree.parse(str(texts_dir / "Examples_from_pre-existent_dictionary_num.xml")).getroot(); sids = [s.get("id") for s in root_t.findall("S")]
+        check(S, "adding a dictionary goes on in the same text: the new sentences are numbered after the ones already there, nothing is lost, and the glosses stay valid", st == 200 and len(sids) == n_before + 2 and sids == [f"ex{k}" for k in range(1, n_before + 3)], str(sids))
+        nogo = dict(cfg); nogo.pop("examples")
+        names0 = sorted(p.name for p in texts_dir.glob("*.xml")); tok4 = post("parse", files={"file": f2})[1]["token"]; post("commit", {"token": tok4, "config": nogo, "mode": "replace"})
+        x = etree.fromstring(aa.get(site.url + "api/dictionary/xml").body())
+        check(S, "when the examples are ignored nothing is written: no new text, and no sense cites an example", sorted(p.name for p in texts_dir.glob("*.xml")) == names0 and x.find(".//Exemples") is None, "")
+        # ── the page shows the relations that were imported ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 1500)
+        txt = lambda sel: re.sub(r"\s+", " ", page.locator(sel).first.inner_text()).strip() if page.locator(sel).count() else ""
+        check(S, "the imported relations are shown under the senses: the synonym on nir, and on vis both ends of the relations (the synonym of nir and the antonym of ron, drawn from the other side)", "Synonym" in txt('[id="nir"] .entry-rel') and "Synonym" in txt('[id="vis"] .entry-rel') and "Antonym" in txt('[id="vis"] .entry-rel'), f"{txt('[id=nir] .entry-rel')} | {txt('[id=vis] .entry-rel')}")
+        check(S, "no JavaScript error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        # ── the wizard: use the examples, import the relations ──
+        open_page(page, site, "dictionary.html", "#dict-edit-tab", 1200)
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        page.set_input_files("#dict-file", {"name": "ex.lift", "mimeType": "text/xml", "buffer": lift2.encode("utf-8")}); page.wait_for_selector("#imp-body .imp-note.ok", timeout=8000)
+        page.click("#imp-next"); page.wait_for_selector("#imp-entry"); page.wait_for_timeout(500); page.click("#imp-next"); page.wait_for_selector(".imp-lmap"); page.wait_for_timeout(400)
+        page.locator('.imp-lmap[data-value="nme"]').select_option("num")
+        check(S, "the Headwords step lists only the languages of the headwords (nme): the language of a sentence that no headword has is not asked here", page.locator(".imp-lmap").count() == 1, "")
+        page.click("#imp-next"); page.wait_for_timeout(500); page.click("#imp-next"); page.wait_for_selector("#imp-sense")
+        for k in ("gloss",):
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fattr').select_option("lang"); page.wait_for_function(f"document.querySelector('.imp-field[data-key=\"{k}\"] .imp-fval') !== null", timeout=6000); page.locator(f'.imp-field[data-key="{k}"] .imp-fval').select_option("en"); page.wait_for_timeout(200)
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-exuse"]')
+        check(S, "step Examples: ignoring is the default; choosing to use them opens the mapping, already filled in for LIFT (the example node, the sentence, the translation)", page.locator('input[name="imp-exuse"][value="0"]').is_checked() and not page.locator("#imp-exw").count(), "")
+        page.click('input[name="imp-exuse"][value="1"]'); page.wait_for_selector('.imp-field[data-key="examples.text"]'); page.wait_for_timeout(300)
+        check(S, "…with a sample of the sentences, and the translation filtered by its language (here chosen: English)", page.input_value("#imp-exw") == "./sense/example" and page.input_value('.imp-field[data-key="examples.text"] .imp-path') == "./form" and "nir vitis gil" in page.inner_text('.imp-field[data-key="examples.text"] .imp-sample'), page.inner_text("#imp-body")[:200])
+        page.wait_for_selector('.imp-lmap[data-value="drg"]', timeout=6000)
+        check(S, "…and the languages of the sentences are asked here (drg, which no headword has; the value of a language that is the project’s own code is recognised, and a language that is not there is ignored)", page.input_value('.imp-lmap[data-value="drg"]') == "drg" and page.input_value('.imp-lmap[data-value="zzz"]') == "" and page.input_value('.imp-lmap[data-value="nme"]') == "num", "")
+        page.locator('.imp-field[data-key="examples.translation"] .imp-fattr').select_option("lang"); page.wait_for_function("document.querySelector('.imp-field[data-key=\"examples.translation\"] .imp-fval') !== null", timeout=6000); page.locator('.imp-field[data-key="examples.translation"] .imp-fval').select_option("en"); page.wait_for_timeout(300)
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-rluse"]'); page.wait_for_selector(".imp-rmap", timeout=8000)
+        check(S, "step Relations: they are on by default when the file has them; the node, the type (the attribute type of the element itself) and the target are filled in; each type of the file is a row to say what it is (Synonyms → Synonym, Antonyms → Antonym, Hypernym not imported); the target is found by identifier, entries by @guid and senses by @id", page.locator('input[name="imp-rluse"][value="1"]').is_checked() and page.input_value("#imp-rlw") == "./sense/relation" and page.input_value('.imp-rmap[data-value="Synonyms"]') == "synonym" and page.input_value('.imp-rmap[data-value="Antonyms"]') == "antonym" and page.input_value('.imp-rmap[data-value="Hypernym"]') == "" and page.input_value("#imp-rke") == "@guid" and page.input_value("#imp-rks") == "@id", page.inner_text("#imp-body")[:240])
+        page.click("#imp-next"); page.wait_for_selector("#imp-ety"); page.click("#imp-next"); page.wait_for_selector(".imp-table", timeout=10000); page.wait_for_timeout(500)
+        rv = page.inner_text("#imp-body")
+        check(S, "the review says how many examples will go into the text “Examples from pre-existent dictionary” (and shows some), and how many relations will be imported", "3 examples will go into the text “Examples from pre-existent dictionary”" in rv and "one text for each language" in rv and "2 semantic relations will be imported" in rv and "nir vitis gil" in rv, rv[:420].replace("\n", " | "))
+        page.click('input[name="imp-mode"][value="replace"]'); page.click("#imp-next"); page.wait_for_function("document.getElementById('upload-msg').classList.contains('success')", timeout=10000)
+        check(S, "importing from the wizard: the message says the examples went into the text and counts the relations; the texts are there", "went into the text" in page.inner_text("#upload-msg") and "2 semantic relations" in page.inner_text("#upload-msg") and (texts_dir / "Examples_from_pre-existent_dictionary_num.xml").exists(), page.inner_text("#upload-msg"))
+        au.close()
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -3482,6 +3799,8 @@ def main():
             if args.only in (None, "captions"): suite_captions(browser, args)
             if args.only in (None, "xref"): suite_xref(browser, args)
             if args.only in (None, "latex"): suite_latex(browser, args)
+            if args.only in (None, "xmlimport"): suite_xmlimport(browser, args); suite_import_extras(browser, args)
+            if args.only in (None, "relations"): suite_relations(browser, args)
             browser.close()
     finally:
         site.stop()
