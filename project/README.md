@@ -330,6 +330,24 @@ the **vowels** (each is a chart of its own; a section can have both) without any
   that the tab reads and rewrites: *Update in the text* changes it, *Remove this chart from the text* takes it out. Press *Save & render* to
   keep it. Nothing in the block needs to be typed by hand.
 
+## Glossing the texts (author only)
+
+In a text (the fieldnotes, the examples from papers, the imported examples, a transcribed narrative) a sentence is shown as **columns**: one word in each language row, and **one gloss under each column**.
+The author glosses it there, and edits the alignment itself with the ✏ button of the sentence.
+
+- **The gloss of a column is a text field.** Type the gloss: a gloss that has no precedent is simply what you type (it is saved as you type and when you leave the field). There is no "+ New" entry and no
+  second field. If the earlier glosses of that word, the dictionary or the other texts have suggestions, a small **▾** appears at the right of the field: it lists them in groups (*Previous glosses*,
+  *📖 Dictionary*, *📜 Texts*; `~` marks a partial match), and the list **narrows as you type**. Click a suggestion to take it, or use the keyboard: **↓ ↑** move in the list, **Enter** takes the
+  highlighted one, **Esc** closes it. Changing a gloss makes the sentence's badge go back to *?* until you confirm it.
+- **The alignment editor** (✏) shows the words of every language in a grid, the glosses under it, and these controls:
+  - **+** above a column inserts an **empty column before it**, in every language and in the glosses; **+ Column** adds one **at the end**; **×** deletes a column.
+  - **⠿**, at the left of a word, is its **handle: drag the word to another place of the same language row.** If the place is **empty**, the word goes there and leaves its old place empty. If the place is
+    **occupied**, the word takes it and **the word that was there, and the words that follow it without a gap, move one place to the right**. The first **empty place** takes up the shift (what is after it does
+    not move); only if there is no empty place before the end of the row **a column is created** at the end (empty in the other languages and in the glosses). A word can only be dropped in its own language's row.
+  - Only that word moves: **the glosses and the other languages stay where they are**. The editor says what a drop did ("Moved "Na". 7 words pushed one place right, and a column was added.").
+  - **Cancel** throws all the changes away; **Save** keeps them (and sets the sentence's badge back to *?*).
+- The rules of the editing (insert, delete, move with the shift) are in `alignment.js`, with no page in them, and have their own tests.
+
 ## Searching the texts (the concordance)
 
 The **Search the texts** tab of the Texts page searches every sentence of the corpus (the fieldnotes, the recordings and the examples
