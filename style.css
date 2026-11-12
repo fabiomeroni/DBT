@@ -594,3 +594,20 @@ a.gloss-link:hover { color: var(--gold); border-bottom-style: solid; }
 .grammar-section img.glossary-logo, img.glossary-logo { display: inline-block; height: 1.6em; width: auto; margin: 0 0 0 0.45rem; vertical-align: middle; box-shadow: none; border-radius: 0; }
 .gloss-code { display: none; margin-top: 0.4rem; font-family: 'Source Code Pro', monospace; font-size: 0.74rem; color: var(--ink-light); user-select: all; }
 .gloss-code.visible { display: block; }
+
+
+/* ── the Backup button and its reminder (the author's, in the top bar: auth.js) ── */
+.backup-box { display: flex; align-items: center; gap: 0.35rem; }
+.backup-btn { white-space: nowrap; }
+.backup-btn[data-level="due"]::after, .backup-btn[data-level="old"]::after, .backup-btn[data-level="never"]::after { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 5px; vertical-align: middle; background: #e0b040; }
+.backup-btn[data-level="old"]::after, .backup-btn[data-level="never"]::after { background: #e0705a; }
+.backup-note { background: none; border: none; padding: 0; cursor: pointer; font-family: 'Crimson Pro', serif; font-size: 0.74rem; letter-spacing: 0.03em; color: #b9a67e; text-decoration: underline dotted; white-space: nowrap; }
+.backup-note:hover { color: #fff; }
+.backup-note.due { color: #e0b040; } .backup-note.old, .backup-note.never { color: #e8826c; }
+@media (max-width: 1499px) { .topnav:has(.backup-box) .topnav-right { display: none; } }
+@media (max-width: 1000px) { .backup-note, .backup-btn-text { display: none; } }
+.backup-panel { width: min(640px, 94vw); max-height: 90vh; overflow-y: auto; }
+.bk-line { margin: 0.5rem 0; }
+.bk-table { width: 100%; }
+.bk-x { border: none; background: none; cursor: pointer; font-size: 0.95rem; }
+.bk-wait { color: var(--ink-light); font-size: 0.82rem; }
