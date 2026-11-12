@@ -26,6 +26,7 @@ import concordance as conc
 import phonotable as phono
 import captions as captions_lib
 import xmlimport as xmlimport_lib
+import glossary as glossary_lib
 
 # python app.py --set-password : store the author's password (hashed, in instance/) and stop
 if __name__ == '__main__' and '--set-password' in sys.argv:
@@ -88,7 +89,7 @@ def _load_project():
     files = {'dictionary': 'project/dictionary.xml', 'fieldnotes': 'project/fieldnotes.xml',
              'grammarDir': 'project/grammar', 'recordingsDir': 'project/texts', 'imagesDir': 'project/images',
              'orthography': 'project/orthography.json', 'seedPhonetic': 'project/seed-phonetic-forms.json',
-             'pagesDir': 'project/pages', 'references': 'project/references.json'}
+             'pagesDir': 'project/pages', 'references': 'project/references.json', 'glossaryDir': 'project/glossary'}
     files.update(p.get('files') or {})
     p['files'] = files
     return p
@@ -97,6 +98,7 @@ PROJECT = _load_project()
 
 UPLOAD_FOLDER  = 'uploads'
 GRAMMAR_FOLDER = PROJECT['files']['grammarDir']
+GLOSSARY_FOLDER = PROJECT['files']['glossaryDir']
 
 DICT_FILE             = PROJECT['files']['dictionary']
 REFERENCES_FILE       = PROJECT['files']['references']
@@ -166,6 +168,7 @@ _migrate_legacy_layout()
 
 os.makedirs(UPLOAD_FOLDER,         exist_ok=True)
 os.makedirs(GRAMMAR_FOLDER,        exist_ok=True)
+os.makedirs(GLOSSARY_FOLDER,       exist_ok=True)
 os.makedirs(IMAGES_FOLDER,         exist_ok=True)
 os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
 os.makedirs(GLOSSES_FOLDER,        exist_ok=True)
@@ -1298,7 +1301,7 @@ def _caption_offsets(section_id):
         t, f = t + len(found['tables']), f + len(found['figures'])
     return t, f
 
-def render_grammar(md_text, offsets=(0, 0)):
+def render_grammar(md_text, offsets=(0, 0), glossary_base='glossary.html', ref_base=''):
     """A section as HTML. `offsets` = the tables and figures of the sections before it, so that its captions are numbered on from them."""
     md_text, phono_blocks = phono.extract(md_text)            # the phonological charts are lifted out before Markdown can touch them
     _MD.reset()
@@ -1324,7 +1327,8 @@ def render_grammar(md_text, offsets=(0, 0)):
     )
     html = _SOURCE_RE.sub(lambda m: build_source_cite(_html.unescape(m.group(1)).strip()), html)
     html = phono.put_back(html, phono_blocks, PROJECT['languages'], 'html', offsets[0], PROJECT['captions'])
-    return captions_lib.expand_refs(html, _caption_index()[1], PROJECT['captions'])        # {{ref: label}}: Table 2, Figure 3 ... with the number they have now
+    html = captions_lib.expand_refs(html, _caption_index()[1], PROJECT['captions'], ref_base)   # {{ref: label}}: Table 2, Figure 3 ... with the number they have now
+    return glossary_lib.expand(html, glossary_lib.entry_index(GLOSSARY_FOLDER)[1], glossary_base)   # {{glossary: id}}: a link to the entry of the Glossary
 
 
 def _section_path(section_id):
@@ -1859,6 +1863,84 @@ def get_grammar_html(section_id):
     return jsonify({'html': html, 'id': section_id})
 
 
+# ── The Glossary: concepts the grammar and the dictionary refer to with {{glossary: id}} ──
+# One Markdown file for each entry (the file name is its id, the first heading its term), written with the markup of the grammar: every shortcode works.
+def _glossary_path(entry_id):
+    safe = glossary_lib.clean_id(entry_id)
+    return os.path.join(GLOSSARY_FOLDER, safe + '.md') if safe else None
+
+def _glossary_render(source):
+    """An entry as HTML: the renderer of the grammar. Its links to other entries stay on the page; its references to the grammar's tables go to the Grammar page."""
+    try:
+        return render_grammar(source, (0, 0), glossary_base='', ref_base='grammar.html')
+    except Exception as e:
+        return f'<div class="shortcode-error">Render error: {e}</div>'
+
+@app.route('/api/glossary')
+def glossary_list():
+    return jsonify({'entries': glossary_lib.entry_index(GLOSSARY_FOLDER)[0]})
+
+@app.route('/api/glossary/<entry_id>')
+def glossary_get(entry_id):
+    path = _glossary_path(entry_id)
+    if not path or not os.path.exists(path):
+        return jsonify({'error': f'Entry not found: {entry_id}'}), 404
+    with open(path, encoding='utf-8') as f:
+        source = f.read()
+    eid = glossary_lib.clean_id(entry_id)
+    return jsonify({'id': eid, 'term': glossary_lib.term_of(source, eid), 'html': _glossary_render(source)})
+
+@app.route('/api/glossary/<entry_id>/source')
+def glossary_source(entry_id):
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    path = _glossary_path(entry_id)
+    if not path or not os.path.exists(path):
+        return jsonify({'error': f'Entry not found: {entry_id}'}), 404
+    with open(path, encoding='utf-8') as f:
+        return jsonify({'source': f.read(), 'id': glossary_lib.clean_id(entry_id)})
+
+@app.route('/api/glossary/<entry_id>', methods=['POST'])
+def glossary_save(entry_id):
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    path = _glossary_path(entry_id)
+    if not path or not os.path.exists(path):
+        return jsonify({'error': f'Entry not found: {entry_id}'}), 404          # entries are made by the add button, never by a typed id
+    source = (request.get_json(silent=True) or {}).get('source', '')
+    if not isinstance(source, str) or len(source) > 200_000:
+        return jsonify({'error': 'The entry is too long.'}), 400
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(source)
+    eid = glossary_lib.clean_id(entry_id)
+    return jsonify({'ok': True, 'id': eid, 'term': glossary_lib.term_of(source, eid), 'html': _glossary_render(source)})
+
+@app.route('/api/glossary/<entry_id>', methods=['DELETE'])
+def glossary_delete(entry_id):
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    path = _glossary_path(entry_id)
+    if path and os.path.exists(path):
+        os.remove(path)
+    return jsonify({'ok': True})
+
+@app.route('/api/glossary', methods=['POST'])
+def glossary_create():
+    """A new entry, from its term: the id is made from the term (and made unique)."""
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    term = str((request.get_json(silent=True) or {}).get('term', '')).strip()[:120]
+    if not term:
+        return jsonify({'error': 'Give the term.'}), 400
+    base = glossary_lib.slug_id(term) or 'entry'
+    eid, n = base, 2
+    os.makedirs(GLOSSARY_FOLDER, exist_ok=True)
+    while os.path.exists(_glossary_path(eid)):
+        eid = f'{base}_{n}'[:glossary_lib.ID_MAX]; n += 1
+    with open(_glossary_path(eid), 'w', encoding='utf-8') as f:
+        f.write(f'## {term}\n\n[Write the definition here…]\n')
+    return jsonify({'ok': True, 'id': eid, 'term': term})
+
 @app.route('/api/captions')
 def captions_list():
     """The tables and figures of the grammar with their numbers and labels: what {{ref: label}} can refer to (the dictionary and the editor use it)."""
@@ -1886,7 +1968,8 @@ def phonotable_preview():
     except (TypeError, ValueError):
         position = 0
     section = str(data.get('section') or '')
-    number = _caption_offsets(section)[0] + position + 1       # the number it will have in the grammar
+    number = (0 if section.startswith('glossary-') else _caption_offsets(section)[0]) + position + 1       # the number it will have in the grammar (a glossary entry numbers its own)
+    section = '' if section.startswith('glossary-') else section
     taken = None
     if spec['label']:                                           # a label belongs to one item: say if another one has it already
         _items, by_label, _dup = _caption_index()
@@ -3659,13 +3742,14 @@ def _md_to_latex_body(source, cited=None):
     src = re.sub(r'\{\{\s*entry\s*:\s*([^\}]+)\}\}',
                  lambda m: _entry_latex(m.group(1).strip()), src)
     src = _SOURCE_RE.sub(lambda m: _source_latex(_html.unescape(m.group(1)).strip(), cited), src)
+    gloss_by_id = glossary_lib.entry_index(GLOSSARY_FOLDER)[1]
     by_label = _caption_index()[1]                      # {{ref: label}}: the word of the project and LaTeX's own number (not inside a code block)
     fenced, kept = False, []
     for ln in src.split('\n'):
         if ln.strip().startswith('```'):
             fenced = not fenced
         kept.append(ln if fenced or captions_lib.image_line(ln) else ''.join(                 # nor inside `inline code`
-            p if p.startswith('`') and p.endswith('`') and len(p) > 1 else captions_lib._REF.sub(lambda m: captions_lib.ref_latex(m.group(1), by_label), p)
+            p if p.startswith('`') and p.endswith('`') and len(p) > 1 else glossary_lib.latex_text(captions_lib._REF.sub(lambda m: captions_lib.ref_latex(m.group(1), by_label), p), gloss_by_id, _le)
             for p in re.split(r'(`[^`\n]*`)', ln)))
     src = '\n'.join(kept)
 
@@ -4196,6 +4280,7 @@ def _page_tokens():
     for k, v in PROJECT['nav'].items():
         t[f'project.nav.{k}'] = str(v).replace('{languages}', f"{n} Language{'s' if n != 1 else ''}").replace('{n}', str(n))
     t.setdefault('project.nav.references', 'References')
+    t.setdefault('project.nav.glossary', 'Glossary')
     ab = ABOUT or {}
     t['project.about.tabTitle'] = ab.get('tabTitle', 'About')
     return t
