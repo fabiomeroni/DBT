@@ -57,10 +57,11 @@ LA = [dict(l, abbr=a) for l, a in zip(LANGS, ('Aa', 'Bb', 'Cc'))]
 check('the tag is the abbreviation of the language (project.json), in capitals', '>AA</span>' in html({'aaa': {'Plosive': {'Bilabial': 'p b'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}, langs=LA), True)
 h3 = html({'aaa': {'Plosive': {'Bilabial': 'p t'}}, 'bbb': {'Plosive': {'Bilabial': 'p t'}}, 'ccc': {'Plosive': {'Bilabial': 'p'}}})
 check('a sound of two of three languages has the tags of both, visible (a sound of all three has them hidden)', (h3.count('data-lang="aaa" style="--tag:#2e5c8a" title="Alpha">'), h3.count('data-lang="bbb" style="--tag:#c07820" title="Beta">'), h3.count('data-lang="ccc" style="--tag:#2f7a3a" title="Gamma" hidden>')), (1, 1, 1))
-check('the cell is tinted with the colours of the languages that have a sound in it, side by side', 'style="--cell-bg:linear-gradient(90deg,#2e5c8a2e 0% 33.33%,#c078202e 33.33% 66.67%,#2f7a3a2e 66.67% 100%)"' in h3, True)
+check('a cell is tinted with the colours of the languages of the sounds that not all the languages have (here t: Alpha and Beta), side by side; the sound all three share does not count', 'style="--cell-bg:linear-gradient(90deg,#2e5c8a2e 0% 50%,#c078202e 50% 100%)"' in h3, True)
+check('a cell where every sound is found in all the languages is not tinted at all: everything in common stays plain', html({'aaa': {'Plosive': {'Bilabial': 'p b'}}, 'bbb': {'Plosive': {'Bilabial': 'p b'}}, 'ccc': {'Plosive': {'Bilabial': 'p b'}}}).count('--cell-bg'), 0)
 check('the stripes: two colours are halves', PT._stripes(['#111111', '#222222']), 'linear-gradient(90deg,#1111112e 0% 50%,#2222222e 50% 100%)')
 check('a cell has the colours of the languages that have something in it, not of the others', 'data-langs="aaa"' in html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Alveolar': 't'}}}) and '--cell-bg:linear-gradient(90deg,#2e5c8a2e 0% 100%)' in html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Alveolar': 't'}}}), True)
-check('an empty cell has no tint', html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}).count('--cell-bg'), 1)
+check('an empty cell has no tint, and a cell of one language alone is tinted with its colour', (html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}).count('--cell-bg'), html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Alveolar': 't'}}}).count('--cell-bg')), (0, 2))
 h1 = html({'aaa': {'Plosive': {'Bilabial': 'p b'}}}, langs=LANGS[:1])
 check('one language: no tags, no tints, no legend', ('ph-tag' in h1, '--cell-bg' in h1, 'phono-legend' in h1), (False, False, False))
 check('with several languages a legend says what the tags and colours mean, naming the languages that have an inventory', ('phono-legend' in h and 'Alpha' in h.split('phono-legend')[1] and 'Beta' in h.split('phono-legend')[1] and 'Gamma' not in h.split('phono-legend')[1]), True)
@@ -79,6 +80,15 @@ hc2 = html({'aaa': {'Plosive': {'Bilabial': 'p'}}, 'bbb': {'Plosive': {'Bilabial
 check('a colour that is not a hex colour is replaced by grey, so nothing can be slipped into the style; #abc becomes #aabbcc; the abbreviation is escaped', ('evil' in hc2, '#808080' in hc2, '#aabbcc' in hc2, '<script>' in hc2), (False, True, True, False))
 check('a colour that is not a hex colour never reaches the check boxes either', ('evil' in hc2, 'data-color="#808080"' in hc2, 'data-color="#aabbcc"' in hc2), (False, True, True))
 check('a language with no abbreviation is tagged with its code', '>BBB</span>' in hc2, True)
+
+# ── vowels: short on the left, long on the right, one legend ──
+VI = {'aaa': {'Close': {'Front': 'i', 'Back': 'u'}, 'Open': {'Central': 'a'}}, 'bbb': {'Close': {'Front': 'i iː', 'Back': 'u'}, 'Open': {'Central': 'a aː'}}}
+hv2 = html(VI, cols=('Front', 'Central', 'Back'), rows=('Close', 'Open'), kind='vowels')
+tabs2 = re.findall(r'<table class="phono">.*?</table>', hv2, re.S)
+check('a chart of vowels that has long vowels (a sound ending in ː) is two tables in one figure, short first (left) and long second (right), with one legend and one caption', (len(tabs2), hv2.count('<figure'), hv2.count('phono-legend"'), hv2.count('figcaption class'), 'phono-pair' in hv2, tabs2[0].count('>Short<'), tabs2[1].count('>Long<')), (2, 1, 1, 1, True, 1, 1))
+check('the short vowels are in the first table, the long ones in the second, each with its tags', ('data-seg="i"' in tabs2[0] and 'data-seg="a"' in tabs2[0] and 'ː' not in tabs2[0], 'data-seg="iː"' in tabs2[1] and 'data-seg="aː"' in tabs2[1] and 'data-seg="i"' not in tabs2[1]), (True, True))
+check('both tables have the same rows and columns', [re.findall(r'<th scope="(?:col|row)">([^<]+)</th>', x) for x in tabs2][0] == [re.findall(r'<th scope="(?:col|row)">([^<]+)</th>', x) for x in tabs2][1], True)
+check('a chart of vowels without a long vowel is one table, as before; so is a chart of consonants even with ː in it', (html({'aaa': {'Close': {'Front': 'i'}}}, cols=('Front',), rows=('Close',), kind='vowels').count('<table'), html({'aaa': {'Plosive': {'Bilabial': 'pː'}}}).count('<table')), (1, 1))
 
 # ── the sounds: description, audio, PHOIBLE ──
 INV = {'aaa': {'Plosive': {'Bilabial': 'p ᵐb'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}
