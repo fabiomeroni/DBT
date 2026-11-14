@@ -1332,7 +1332,7 @@ def render_grammar(md_text, offsets=(0, 0), glossary_base='glossary.html', ref_b
         html
     )
     html = _SOURCE_RE.sub(lambda m: build_source_cite(_html.unescape(m.group(1)).strip()), html)
-    html = phono.put_back(html, phono_blocks, PROJECT['languages'], 'html', offsets[0], PROJECT['captions'])
+    html = phono.put_back(html, phono_blocks, PROJECT['languages'], 'html', offsets[0], PROJECT['captions'], resolver=_entry_resolver() if any('lexical' in b for b in phono_blocks) else None)
     html = captions_lib.expand_refs(html, _caption_index()[1], PROJECT['captions'], ref_base)   # {{ref: label}}: Table 2, Figure 3 ... with the number they have now
     return glossary_lib.expand(html, glossary_lib.entry_index(GLOSSARY_FOLDER)[1], glossary_base)   # {{glossary: id}}: a link to the entry of the Glossary
 
@@ -2093,7 +2093,7 @@ def phonotable_preview():
         mine = it and bool(data.get('editing')) and it['kind'] == 'table' and it['section'] == section and it['kindIndex'] == position
         if it and not mine:
             taken = {'name': f"{PROJECT['captions'][it['kind']]} {it['number']}", 'section': it['section']}
-    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions'], anchors=False), 'spec': spec, 'number': number, 'labelTaken': taken,
+    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions'], anchors=False, resolver=_entry_resolver() if spec['kind'] == 'lexical' else None), 'spec': spec, 'number': number, 'labelTaken': taken,
                     'problems': phono.segment_problems((data.get('spec') or {}).get('segments'), spec)})
 
 @app.route('/api/grammar/<section_id>/source')
@@ -2116,6 +2116,7 @@ def save_grammar(section_id):
     path = _section_path(section_id)
     with open(path, 'w', encoding='utf-8') as f:
         f.write(source)
+    _propose_from_tables(source)                           # the words of a comparative table that the dictionary lacks are proposed to the author
     try:
         html = render_grammar(source, _caption_offsets(section_id))
     except Exception as e:
@@ -2324,7 +2325,8 @@ def add_proposed_to_dictionary():
     # Build new entry element (one sense: the confirmed gloss)
     el, _ = _build_entry_el(
         {'forms': {c: f for c, f in forms.items() if f and f != '\u2014'},
-         'senses': [{'ref': None, 'definition': gloss, 'shortGloss': gloss}]},
+         'senses': [{'ref': None, 'definition': gloss, 'shortGloss': gloss}],
+         **({'pos': entry['pos']} if entry.get('pos') else {})},
         force_id=entry_id)
     dictionnaire.append(el)
 
@@ -2346,7 +2348,110 @@ def dismiss_proposed_entry():
     stored  = _load_proposed_entries()
     stored.pop(col_key, None)
     _save_proposed_entries(stored)
+    if col_key.startswith(_TABLE_KEY):                     # a word of a table that was turned down is not proposed again
+        gone = _load_dismissed_tables(); gone.add(col_key); _save_dismissed_tables(gone)
     return jsonify({'ok': True})
+
+
+# ── Comparative tables of words: where each word is in the dictionary, and the words that are not there yet ────────────
+_TABLE_KEY = 'tbl_'
+_DISMISSED_TABLES_PATH = os.path.join(TRANSCRIPTIONS_FOLDER, 'proposed_dismissed.json')
+
+def _load_dismissed_tables():
+    try:
+        with open(_DISMISSED_TABLES_PATH, encoding='utf-8') as f:
+            v = json.load(f)
+        return {x for x in v if isinstance(x, str)} if isinstance(v, list) else set()
+    except (OSError, ValueError):
+        return set()
+
+def _save_dismissed_tables(keys):
+    tmp = _DISMISSED_TABLES_PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(sorted(keys), f, ensure_ascii=False, indent=1)
+    os.replace(tmp, _DISMISSED_TABLES_PATH)
+
+def _dictionary_index():
+    """({(language, cleaned form): [(id, element)]}, {id: gloss}) of the dictionary as it is now."""
+    d, index, glosses = get_dict_xml(), {}, {}
+    if d is not None:
+        for el in d.findall('.//EntréeLexicale'):
+            eid = el.get('identifiant', '')
+            glosses[eid] = (el.findtext('Sens/Glose[@langue="eng"]', '') or '').strip()
+            for code, form in _entry_forms_clean(el).items():
+                index.setdefault((code, form), []).append((eid, el))
+    return index, glosses
+
+def _with_pos(found, pos):
+    """The entries of `found` whose part of speech is `pos` (pro. is pro, pron, pronoun…: it is the beginning that counts); all of them if no pos is asked."""
+    pos = (pos or '').strip().lower().rstrip('.')
+    if not pos:
+        return found
+    return [x for x in found if (x[1].findtext('ClasseGrammaticale') or '').strip().lower().rstrip('.').startswith(pos)]
+
+def _entry_resolver():
+    """resolver(language, word, id) -> (entry id, gloss) or None, for the links of a comparative table: the entry that has the word as its form in
+    that language (when only one has it; of several, the one that is grammatical material if only one is), or the entry named by `word@ID`."""
+    index, glosses = _dictionary_index()
+    def resolve(code, word, ident='', pos=''):
+        if ident:
+            return (ident, glosses[ident]) if ident in glosses else None
+        found = _with_pos(index.get((code, _clean_form(word)), []), pos)
+        if len(found) > 1:
+            gram = [x for x in found if _entry_is_grammatical(x[1])]
+            found = gram if len(gram) == 1 else found
+        return (found[0][0], glosses.get(found[0][0], '')) if len(found) == 1 else None
+    return resolve
+
+def _slug_key(s, n=24):
+    return re.sub(r'[^a-z0-9]+', '_', unicodedata.normalize('NFKD', s.lower()).encode('ascii', 'ignore').decode()).strip('_')[:n] or 'x'
+
+def _propose_from_tables(source):
+    """The words of the comparative tables of a section that the dictionary does not have are proposed to the author, as the words of confirmed texts are
+    (dictionary page, “Proposed entries”): one proposal for each cell of a table (a row and a column: 1 exclusive, dual), with the missing words of the languages
+    that have them, and the cell as its gloss. A word is in the dictionary when an entry has it as its form in that language (or `word@ID` names an entry that exists).
+    What the author dismissed is not proposed again; a proposal whose words have been added to the dictionary since goes away. Never raises."""
+    try:
+        _md, blocks = phono.extract(source)
+        specs = phono.lexical_specs(blocks, PROJECT['languages'])
+        stored, gone = _load_proposed_entries(), _load_dismissed_tables()
+        index, glosses = _dictionary_index()
+        known = lambda code, text, ident, pos='': (ident in glosses) if ident else bool(_with_pos(index.get((code, _clean_form(text)), []), pos))
+        changed = False
+        for spec in specs:
+            name = spec['label'] or spec['caption'] or 'table'
+            cells = {}
+            for r, c, code, text, ident in phono.entries_of(spec):
+                if not known(code, text, ident, spec.get('pos', '')):
+                    cells.setdefault((r, c), {}).setdefault(code, text)
+            for (r, c), forms in cells.items():
+                key = f'{_TABLE_KEY}{_slug_key(name)}_{_slug_key(r)}_{_slug_key(c)}'
+                if key in gone:
+                    continue
+                if key in stored:                              # still waiting: it follows the table (a word that was corrected there)
+                    if (stored[key].get('forms'), stored[key].get('pos', '')) != (forms, spec.get('pos', '')):
+                        stored[key]['forms'], stored[key]['pos'] = forms, spec.get('pos', '')
+                        changed = True
+                    continue
+                stored[key] = {'gloss': f'{r} {c}'.strip(), 'forms': forms, 'pos': spec.get('pos', ''),
+                               'examples': [{'sentence_id': key, 'translation': f'Comparative table: {name}', 'title': 'Grammar'}]}
+                changed = True
+        for key in [k for k in stored if k.startswith(_TABLE_KEY)]:          # the words of a proposal that are in the dictionary by now: nothing left to propose
+            if all(known(code, text, '', stored[key].get('pos', '')) for code, text in (stored[key].get('forms') or {}).items()):
+                del stored[key]; changed = True
+        if changed:
+            _save_proposed_entries(stored)
+    except Exception as e:
+        print(f'[tables] could not propose the words of the tables: {e}')
+
+def _propose_from_all_tables():
+    try:
+        for name in sorted(os.listdir(GRAMMAR_FOLDER)):
+            if name.endswith('.md'):
+                with open(os.path.join(GRAMMAR_FOLDER, name), encoding='utf-8') as f:
+                    _propose_from_tables(f.read())
+    except OSError:
+        pass
 
 @app.route('/api/confirmed_glosses')
 def get_confirmed_glosses():
@@ -4617,6 +4722,7 @@ def api_setup():
 
 _auto_orthography()
 _auto_ipa()
+_propose_from_all_tables()                                  # the words of the comparative tables of the grammar that the dictionary lacks
 
 if not SETUP_MODE and not security.password_configured():
     print("\n  !! No author password is set, so nobody can log in as the author.\n"
