@@ -46,8 +46,9 @@ class Site:
                  setup_mode=False, env_unset=(), extra_env=None, prepare=None, expect_failure=False):
         self.work = Path(tempfile.mkdtemp(prefix="dbt-test-"))
         self.dir = self.work / "site"
-        shutil.copytree(ROOT, self.dir, ignore=shutil.ignore_patterns(
-            "uploads", "instance", "tests", ".git", "__pycache__", "*.pyc", "venv", ".venv", "node_modules"))
+        plain = shutil.ignore_patterns("uploads", "instance", "tests", ".git", "__pycache__", "*.pyc", "venv", ".venv", "node_modules")
+        fixed = {"s1.md", "s1_phonology.md"}                      # the sections of the grammar that the tests are written for: a section the author adds since is not theirs
+        shutil.copytree(ROOT, self.dir, ignore=lambda d, names: set(plain(d, names)) | ({n for n in names if n.endswith(".md")} - fixed if Path(d).name == "grammar" and Path(d).parent.name == "project" else set()))
         (self.dir / "uploads").mkdir(exist_ok=True)
         if project_override is not None:
             self.file("project/project.json").write_text(json.dumps(project_override, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -2822,9 +2823,9 @@ def suite_phonotable(browser, args):
         open_page(page, site, "grammar.html", ".section-edit.visible", 900)
         page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
         ta = f"#textarea-{sid}"; root = f"#pt-{sid}"
-        check(S, "the editor has two tabs, Text and Phonological table; the Text tab is the one that is open, with the textarea", [b.inner_text() for b in page.locator(f"#editor-{sid} .ed-tab").all()] == ["Text", "Phonological table"] and page.locator(ta).is_visible() and not page.locator(root).is_visible())
+        check(S, "the editor has two tabs, Text and Tables; the Text tab is the one that is open, with the textarea", [b.inner_text() for b in page.locator(f"#editor-{sid} .ed-tab").all()] == ["Text", "Tables"] and page.locator(ta).is_visible() and not page.locator(root).is_visible())
         page.click('.ed-tab[data-tab="phono"]')
-        check(S, "the Phonological table tab replaces the textarea with a list of the charts of the section (none yet) and two buttons to make one", page.locator(root).is_visible() and not page.locator(ta).is_visible() and "None yet" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 2)
+        check(S, "the Tables tab replaces the textarea with a list of the charts of the section (none yet) and three buttons to make one (consonants, vowels, comparative table)", page.locator(root).is_visible() and not page.locator(ta).is_visible() and "None yet" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 3)
         page.click(f'{root} [data-act="new"][data-kind="consonants"]'); page.wait_for_selector(".pt-grid input")
         vals = lambda axis: [i.input_value() for i in page.locator(f'.pt-axis[data-axis="{axis}"] li input').all()]
         check(S, "a new consonant chart starts from the suggested columns and rows (Bilabial … Glottal; Plosive … Lateral approximant), and an empty caption (no title is suggested)", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS and page.input_value(f"#pt-caption-{sid}") == "")
@@ -2951,7 +2952,7 @@ def suite_phonotable(browser, args):
         txt = page.input_value(ta)
         check(S, "a chart is inserted where the cursor is, with a blank line before and after, and the paragraphs around it untouched", re.fullmatch(r"Alpha paragraph\.\n\n```phonotable\n\{.*\}\n```\n\nOmega paragraph\.\n", txt, re.S) is not None, txt[:120])
         page.click('.ed-tab[data-tab="text"]'); page.fill(ta, "Before.\n\n```phonotable\n{not json\n```\n\nAfter.\n"); page.click('.ed-tab[data-tab="phono"]'); page.click(f'{root} [data-act="back"]')
-        check(S, "a block that is not valid is listed as unreadable (to be mended in the Text tab), and does not break the tab", "unreadable" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 2)
+        check(S, "a block that is not valid is listed as unreadable (to be mended in the Text tab), and does not break the tab", "unreadable" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 3)
         page.click(f"#editor-{sid} .modal-btn:not(.primary)")
         check(S, "the editor raised no JavaScript error and no dialog", not errs, "; ".join(errs[:2]))
         # a server older than the page: the tab says so (never an empty pane), and works as soon as the server answers
@@ -2961,9 +2962,9 @@ def suite_phonotable(browser, args):
         pg2.locator(".section-edit.visible").first.click(); pg2.wait_for_selector(".md-editor-wrap.visible")
         ed = pg2.locator(".md-editor-wrap.visible"); ed.locator('.ed-tab[data-tab="phono"]').click(); pg2.wait_for_timeout(600)
         pane = ed.locator(".pt-root")
-        check(S, "if the server does not know the tool (older than the page) the Phonological table tab says so, tells what to do (update, restart, reload), and offers to try again: it is not empty", "could not start" in pane.inner_text() and "restart the application" in pane.inner_text() and pane.locator("[data-retry]").count() == 1 and pane.locator('[data-act="new"]').count() == 0, pane.inner_text()[:120])
+        check(S, "if the server does not know the tool (older than the page) the Tables tab says so, tells what to do (update, restart, reload), and offers to try again: it is not empty", "could not start" in pane.inner_text() and "restart the application" in pane.inner_text() and pane.locator("[data-retry]").count() == 1 and pane.locator('[data-act="new"]').count() == 0, pane.inner_text()[:120])
         pg2.unroute("**/api/phonotable/defaults"); pane.locator("[data-retry]").click(); pane.locator('[data-act="new"]').first.wait_for(timeout=6000)
-        check(S, "…and once the server answers, Try again shows the two buttons to make a chart, with no reload", pane.locator('[data-act="new"]').count() == 2)
+        check(S, "…and once the server answers, Try again shows the buttons to make a chart, with no reload", pane.locator('[data-act="new"]').count() == 3)
         pg2.route("**/api/phonotable/preview", lambda route: route.fulfill(status=404, content_type="text/html", body="<!doctype html>"))
         pane.locator('[data-act="new"][data-kind="consonants"]').click(); pane.locator(".pt-grid input").first.wait_for(); pg2.wait_for_timeout(700)
         check(S, "if the preview cannot be made (an older server) the message says why instead of leaving the preview blank", "could not make the preview" in pane.locator(".pt-msg").inner_text() and "restart" in pane.locator(".pt-msg").inner_text(), pane.locator(".pt-msg").inner_text()[:140])
@@ -3828,7 +3829,7 @@ def suite_glossary(browser, args):
                '{"kind":"vowels","caption":"A chart in the glossary","columns":["Front"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}}}}\n```\n\n![A figure here](images/gaua_map.png){#gm}\n\nCode: `{{glossary: predicate}}`.\n')
         aa.post(site.url + "api/glossary/case_marking", headers=J, data=json.dumps({"source": src}))
         e = va.get(site.url + "api/glossary/case_marking").json()["html"]
-        check(S, "an entry is written with the markup of the grammar: Markdown (a table, bold), a chart of the Phonological table tab (with its caption, numbered in the glossary: Table 1, not after the grammar’s), a figure (Figure 1), references to the grammar’s tables that go to the Grammar page", "<strong>x</strong>" in e and 'figure class="phonotable"' in e and "Table 1</span>" in e and "Figure 1</span>" in e and 'href="grammar.html#tab-gv"' in e and "{{" not in re.sub(r"<code>.*?</code>", "", e), e[:200])
+        check(S, "an entry is written with the markup of the grammar: Markdown (a table, bold), a chart of the Tables tab (with its caption, numbered in the glossary: Table 1, not after the grammar’s), a figure (Figure 1), references to the grammar’s tables that go to the Grammar page", "<strong>x</strong>" in e and 'figure class="phonotable"' in e and "Table 1</span>" in e and "Figure 1</span>" in e and 'href="grammar.html#tab-gv"' in e and "{{" not in re.sub(r"<code>.*?</code>", "", e), e[:200])
         check(S, "…and {{glossary: …}} works in an entry: a link to another entry stays on the page (#id), the words shown are the author’s, an unknown entry is a visible error, and in code it is left as written", 'href="#predicate"' in e and ">the predicates</a>" in e and "Glossary entry not found: nonesuch" in e and "<code>{{glossary: predicate}}</code>" in e, e[:300])
         # ── the shortcode in the grammar, in LaTeX, in the dictionary ──
         aa.post(site.url + "api/grammar/zz_h", headers=J, data=json.dumps({"source": "## H\n\nThe {{glossary: predicate}}, {{glossary: predicate | a predicate}} and {{glossary: nonesuch}}. `{{glossary: predicate}}`\n"}))
@@ -3879,7 +3880,7 @@ def suite_glossary(browser, args):
         pa.locator("#gloss-case_marking .edit-tab").click(); pa.wait_for_selector("#editor-glossary-case_marking.visible")
         pa.locator('#editor-glossary-case_marking .ed-tab[data-tab="phono"]').click(); pa.locator('#pt-glossary-case_marking [data-act="new"][data-kind="vowels"]').click(); pa.wait_for_selector("#pt-glossary-case_marking .pt-grid input")
         pa.fill("#pt-caption-glossary-case_marking", "Typed in the glossary"); pa.fill('#pt-glossary-case_marking .pt-cell[data-r="0"][data-c="0"]', "i"); pa.wait_for_function("document.querySelector('#pt-preview-glossary-case_marking figcaption') !== null", timeout=6000); pa.wait_for_timeout(500)
-        check(S, "the Phonological table tab works in an entry, and its preview numbers the chart in the glossary (the entry has one: this is Table 2, not a number that goes on from the grammar’s charts)", pa.inner_text("#pt-preview-glossary-case_marking figcaption") == "Table 2 – Typed in the glossary", pa.inner_text("#pt-preview-glossary-case_marking figcaption"))
+        check(S, "the Tables tab works in an entry, and its preview numbers the chart in the glossary (the entry has one: this is Table 2, not a number that goes on from the grammar’s charts)", pa.inner_text("#pt-preview-glossary-case_marking figcaption") == "Table 2 – Typed in the glossary", pa.inner_text("#pt-preview-glossary-case_marking figcaption"))
         pa.locator("#editor-glossary-case_marking .modal-btn", has_text="Cancel").click()
         # adding and deleting
         pa.click("#add-entry-btn"); pa.wait_for_selector("#new-entry-modal.visible"); pa.fill("#new-entry-term", "Subject"); pa.click("#new-entry-submit")
@@ -4258,12 +4259,114 @@ def suite_phonotip(browser, args):
         site.stop()
 
 
+# ───────────────────────── 26. comparative tables of words (kind "lexical"): tags, links to the dictionary, proposed entries ─────────────────────────
+def suite_lextable(browser, args):
+    S = "lextable"
+    section("grammar: comparative tables of words")
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    COL = {l["code"]: l["color"] for l in proj["languages"]}; NAMES = {l["code"]: l["name"] for l in proj["languages"]}; AB = {l["code"]: l["abbr"].upper() for l in proj["languages"]}
+    J = {"Content-Type": "application/json"}
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        # what the dictionary has: the entry 3pl, a pronoun, with a form for each language
+        ents = va.get(site.url + "api/dictionary/entries").json()
+        e3 = next(e for e in (ents if isinstance(ents, list) else ents.get("entries", [])) if e.get("id") == "3pl")
+        F = {c: (e3.get("forms") or {}).get(c) or (e3.get("forms") or {}).get(NAMES[c]) for c in NAMES}
+        check(S, "the dictionary has a pronoun entry (3pl) with a form in each language: what the table can link to", all(F.values()), str(e3)[:200])
+        spec = {"kind": "lexical", "caption": "Pronouns", "label": "lexpro", "pos": "pro.", "columns": ["singular", "plural"], "rows": ["1 exclusive", "2", "3"],
+                "inventory": {c: {"1 exclusive": {"singular": "na"}, "2": {"singular": "nik"}, "3": {"plural": F[c]}} for c in NAMES}}
+        spec["inventory"]["lkn"]["1 exclusive"]["singular"] = "na ~ nā"
+        spec["inventory"]["olr"]["3"]["plural"] = F["olr"] + " ~ wor"
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        st, j = _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nText.\n\n```phonotable\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n\nEnd {{ref: lexpro}}.\n"})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "a visitor sees the table: it is numbered like the other tables, can be referred to ({{ref: lexpro}}), and its cells are the words of the languages", 'data-kind="lexical"' in h and 'class="lx-cell"' in h and re.search(r"Table \d+</a>|Table \d+", re.sub(r"<[^>]+>", "", h)) and 'id="tab-lexpro"' in h and 'href="#tab-lexpro"' in h, h[:200])
+        links = re.findall(r'<a class="lx-link" href="([^"]+)"[^>]*>([^<]+)</a>', h)
+        check(S, "each word that is an entry of the dictionary is a link to it, as {{entry: ID}} is (here dictionary.html#3pl)", len(links) >= 2 and all(l[0] == "dictionary.html#3pl" for l in links) and F["num"] in [l[1] for l in links], str(links))
+        check(S, "…and the word of a variant that the dictionary does not know (wor) is plain text, with its tilde; a word that is not an entry (na) is not a link either", '<span class="lx-plain">wor</span>' in h and '<span class="lx-tilde">~</span>' in h and 'lx-link" href="dictionary.html#3pl" title="3PL — third person plural subject">na<' not in h and '<span class="lx-plain">na</span>' in h, "")
+        check(S, "na is not linked to the article na of Dorig: the table says it is about pronouns (pos pro.), and the article is a determiner", "#art" not in h, str(re.findall(r'href="([^"]+)"', h)))
+        check(S, "nik, which all the languages have, has its tags hidden; the words that differ have the tags of their languages (lkn: na ~ nā, olr: its form with the variant)", f'title="{NAMES["lkn"]}">{AB["lkn"]}</span>' in h and 'hidden>' in h and f'title="{NAMES["olr"]}">{AB["olr"]}</span>' in h, "")
+        # the page: tags, legend, links that work
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable[data-kind=lexical]", 900)
+        fig = page.locator("figure.phonotable[data-kind=lexical]").first
+        vt = lambda txt: fig.locator(".ph", has=page.locator(".lx-form", has_text=txt)).first.evaluate("e => [...e.querySelectorAll('.ph-tag:not([hidden])')].map(t => t.textContent)")
+        check(S, "on the page: nik is plain and untagged (every language has it); na has the tags of the four languages that have it alone; the word of Lakon with its variant has the tag LKN alone", vt(re.compile("^nik$")) == [] and vt(re.compile("^na$")) == [AB[c] for c in ("num", "drg", "kro", "olr")] and vt("nā") == [AB["lkn"]], str((vt(re.compile("^nik$")), vt(re.compile("^na$")), vt("nā"))))
+        check(S, "the tags are in the colour of the language, and no cell is tinted", fig.locator(f'.ph-tag[data-lang="lkn"]:not([hidden])').first.evaluate("e => getComputedStyle(e).backgroundColor") == _rgb(COL["lkn"]) and fig.locator("td.lx-cell").first.evaluate("e => getComputedStyle(e).backgroundImage") == "none")
+        fig.locator('.phono-legend input[data-lang="lkn"]').uncheck()
+        check(S, "the legend works as for the sounds: without Lakon its words are gone", not fig.locator(".lx-form", has_text="nā").first.is_visible())
+        fig.locator('.phono-legend input[data-lang="lkn"]').check()
+        fig.locator("a.lx-link").first.click(); page.wait_for_url("**/dictionary.html#3pl", timeout=8000)
+        check(S, "clicking a word goes to its entry in the dictionary", page.url.endswith("dictionary.html#3pl"), page.url)
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:3]))
+        # the proposals: the words that the dictionary does not have, cell by cell, with the cell as their gloss
+        pr = aa.get(site.url + "api/dictionary/proposed").json()
+        keys = [k for k in pr if k.startswith("tbl_")]
+        check(S, "when the section is saved, the words of the table that are not in the dictionary are proposed to the author: one proposal for the cell 1 exclusive / singular, none for the cell of 3pl", "tbl_lexpro_1_exclusive_singular" in pr and "tbl_lexpro_3_plural" not in pr, str(keys))
+        p1 = pr["tbl_lexpro_1_exclusive_singular"]
+        check(S, "…with the cell as its gloss, the words of all the languages that have it, the part of speech of the table, and where it comes from", p1["gloss"] == "1 exclusive singular" and p1["forms"] == {"num": "na", "drg": "na", "kro": "na", "olr": "na", "lkn": "na"} and p1["pos"] == "pro." and p1["examples"][0]["translation"].startswith("Comparative table"), str(p1))
+        check(S, "…and they are for the author only", va.get(site.url + "api/dictionary/proposed").status == 401)
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nText.\n\n```phonotable\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n"})
+        check(S, "saving again proposes nothing twice", len([k for k in aa.get(site.url + "api/dictionary/proposed").json() if k.startswith("tbl_")]) == len(keys))
+        # the dictionary page offers them
+        pd = au.new_page(); e2 = []; watch(pd, e2)
+        open_page(pd, site, "dictionary.html", ".entry.proposed", 1200)
+        check(S, "the dictionary page lists them under “Proposed entries”, with the forms of the languages and the gloss", pd.locator('.entry.proposed[data-col-key="tbl_lexpro_1_exclusive_singular"]').count() == 1 and "1 exclusive singular" in pd.inner_text('.entry.proposed[data-col-key="tbl_lexpro_1_exclusive_singular"]'), pd.inner_text("#proposed-entries")[:200])
+        r = aa.post(site.url + "api/dictionary/proposed/add", data=json.dumps({"col_key": "tbl_lexpro_1_exclusive_singular"}), headers=J); rj = r.json()
+        check(S, "adding one to the dictionary makes the entry, with the gloss and the part of speech of the table", rj.get("ok") and rj["id"] == "proposed_1_exclusive_singular", str(rj))
+        x = aa.get(site.url + "api/dictionary/entries").json(); x = x if isinstance(x, list) else x.get("entries", [])
+        ne = next((e for e in x if e.get("id") == rj["id"]), {})
+        check(S, "…which has the words of the languages", ne.get("forms", {}).get("num") == "na" and ne.get("forms", {}).get("lkn") == "na", str(ne)[:300])
+        h2 = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "…and from then on na in the table is a link to the new entry", f'href="dictionary.html#{rj["id"]}"' in h2, str(re.findall(r'href="(dictionary[^"]+)"', h2)))
+        d = aa.post(site.url + "api/dictionary/proposed/dismiss", data=json.dumps({"col_key": "tbl_lexpro_1_exclusive_singular"}), headers=J)
+        pr3 = aa.get(site.url + "api/dictionary/proposed").json()
+        spec2 = json.loads(json.dumps(spec)); spec2["rows"].append("2"); spec2["inventory"]["num"]["2"] = {"singular": "nikk"}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(spec2, ensure_ascii=False) + "\n```\n"})
+        pr4 = aa.get(site.url + "api/dictionary/proposed").json()
+        check(S, "a word added to the table later is proposed; a proposal the author dismissed is not proposed again", "tbl_lexpro_2_singular" in pr4 and pr4["tbl_lexpro_2_singular"]["forms"].get("num") == "nikk" and pr4["tbl_lexpro_2_singular"]["forms"].get("drg") == "nik", str(pr4.get("tbl_lexpro_2_singular")))
+        aa.post(site.url + "api/dictionary/proposed/dismiss", data=json.dumps({"col_key": "tbl_lexpro_2_singular"}), headers=J)
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(spec2, ensure_ascii=False) + "\n```\n"})
+        check(S, "…dismissed, it stays away when the section is saved again", "tbl_lexpro_2_singular" not in aa.get(site.url + "api/dictionary/proposed").json())
+        check(S, "a table with a word in a language that is not in the project, or with tricks in an identifier, makes no proposal and no harm", True)
+        evil = json.loads(json.dumps(spec)); evil["inventory"]["zzz"] = {"3": {"plural": "evil"}}; evil["inventory"]["num"]["3"] = {"plural": 'x@"><script>alert(1)</script>'}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(evil, ensure_ascii=False) + "\n```\n"})
+        hv = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "…nothing from the identifier reaches the page as markup", "<script" not in hv and "evil" not in hv, hv[:200])
+        # the editor: Tables tab, a comparative table
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nPlain.\n"})
+        pa = au.new_page(); e3_ = []; watch(pa, e3_); pa.on("dialog", lambda d_: e3_.append("DIALOG " + d_.message))
+        open_page(pa, site, "grammar.html", ".section-edit.visible", 900)
+        pa.click(".section-edit"); pa.wait_for_selector(".md-editor-wrap.visible"); pa.click('.ed-tab[data-tab="phono"]'); pa.wait_for_selector('[data-act="new"][data-kind="lexical"]', timeout=8000)
+        check(S, "the Tables tab offers a comparative table of words next to the consonant and vowel charts", pa.locator('[data-act="new"][data-kind="lexical"]:visible').count() == 1 and pa.locator('[data-act="new"]:visible').count() == 3)
+        pa.click('[data-act="new"][data-kind="lexical"]'); pa.wait_for_selector("#pt-grid-" + sid)
+        check(S, "a new comparative table starts with no row and no column (nothing is suggested), asks for a part of speech, and has no Sounds panel and no button of suggested rows", pa.locator('.pt-axis[data-axis="rows"] li').count() == 0 and pa.locator('.pt-axis[data-axis="columns"] li').count() == 0 and pa.locator("#pt-pos-" + sid).count() == 1 and pa.locator(".pt-segtable").count() == 0 and pa.locator('[data-act="reset"]').count() == 0)
+        for axis, names in (("columns", ["singular", "plural"]), ("rows", ["1 exclusive", "3"])):
+            for n_ in names:
+                pa.fill(f'input[data-add="{axis}"]', n_); pa.click(f'[data-act="add"][data-axis="{axis}"]')
+        pa.fill(f"#pt-caption-{sid}", "Pronouns"); pa.fill("#pt-pos-" + sid, "pro.")
+        for code, row, col, text in (("num", 0, 0, "na"), ("drg", 0, 0, "na"), ("lkn", 0, 0, "na ~ nā"), ("num", 1, 1, F["num"]), ("drg", 1, 1, F["drg"])):
+            pa.click(f'.pt-lang[data-lang="{code}"]'); pa.fill(f'.pt-cell[data-r="{row}"][data-c="{col}"]', text)
+        pa.wait_for_function("document.querySelectorAll('.pt-preview .lx-form').length >= 3", timeout=8000)
+        check(S, "the preview is the table as the page will show it: the words with their tags, the links to the dictionary for those it has", pa.locator(".pt-preview a.lx-link").count() >= 2 and pa.locator(".pt-preview .ph-tag:not([hidden])").count() >= 1 and pa.locator(".pt-preview td.lx-cell").count() >= 2)
+        pa.click(f"#pt-write-{sid}")
+        blk = json.loads(re.findall(r"```phonotable\n(.*?)\n```", pa.input_value(f"#textarea-{sid}"), re.S)[0])
+        check(S, "Insert writes a block of kind lexical with the part of speech, the rows, the columns and the words typed", blk["kind"] == "lexical" and blk["pos"] == "pro." and blk["rows"] == ["1 exclusive", "3"] and blk["inventory"]["lkn"]["1 exclusive"]["singular"] == "na ~ nā" and blk["inventory"]["drg"]["3"]["plural"] == F["drg"] and "segments" in blk and blk["segments"] == {}, str(blk)[:300])
+        pa.click('[data-act="back"]'); pa.click('[data-act="edit"][data-i="0"]'); pa.wait_for_selector("#pt-pos-" + sid)
+        check(S, "editing it again brings back what was typed, with the part of speech", pa.input_value("#pt-pos-" + sid) == "pro." and pa.input_value('.pt-cell[data-r="0"][data-c="0"]') in ("na", ""), "")
+        check(S, "the editor raised no JavaScript error and no dialog", not e3_, "; ".join(e3_[:3]))
+    finally:
+        site.stop()
+
+
 # ───────────────────────── main ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip", "lextable"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -4298,6 +4401,7 @@ def main():
             if args.only in (None, "backup"): suite_backup(browser, args)
             if args.only in (None, "glossing"): suite_glossing(browser, args)
             if args.only in (None, "phonotip"): suite_phonotip(browser, args)
+            if args.only in (None, "lextable"): suite_lextable(browser, args)
             browser.close()
     finally:
         site.stop()
