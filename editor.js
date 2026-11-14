@@ -1,5 +1,5 @@
 /* The Markdown editor shared by the Grammar and the Glossary pages: the same toolbar, the same shortcodes, the same image upload and the same
-   Phonological table tab. A page gives the id of the text it edits (the textarea is textarea-<id>, the chart tab pt-<id>) and the names of its
+   Tables tab. A page gives the id of the text it edits (the textarea is textarea-<id>, the chart tab pt-<id>) and the names of its
    own functions that cancel and save. */
 
 function insertAtCursor(textarea, text, selectLen) {
@@ -100,7 +100,7 @@ function mdEditorHTML(id, o) {
     <div class="md-editor-wrap" id="editor-${id}">
       <div class="ed-tabs" role="tablist">
         <button type="button" class="ed-tab active" data-tab="text" role="tab">Text</button>
-        <button type="button" class="ed-tab" data-tab="phono" role="tab" title="Make a chart of the consonants or of the vowels, without writing markup">Phonological table</button>
+        <button type="button" class="ed-tab" data-tab="phono" role="tab" title="Make a chart of the consonants or of the vowels, or a comparative table of words, without writing markup">Tables</button>
       </div>
       <div class="ed-pane" data-pane="text">
       <div class="editor-toolbar">
@@ -153,7 +153,7 @@ function mdEditorHTML(id, o) {
         </ul>
         Markdown: <code>**bold**</code>, <code>*italic*</code>,
         <code>### heading</code>, <code>| col | col |</code> tables.<br>
-        Charts of the consonants and of the vowels are made in the <b>Phonological table</b> tab (they appear here as a <code>&#96;&#96;&#96;phonotable</code> block: leave it to the tab).
+        Charts of the consonants and of the vowels, and comparative tables of words (the pronouns…), are made in the <b>Tables</b> tab (they appear here as a <code>&#96;&#96;&#96;phonotable</code> block: leave it to the tab).
       </div>
       </div>
       <div class="ed-pane" data-pane="phono" hidden><div class="pt-root" id="pt-${id}"></div></div>
