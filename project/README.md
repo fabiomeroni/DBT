@@ -341,6 +341,29 @@ the **vowels** (each is a chart of its own; a section can have both) without any
   that the tab reads and rewrites: *Update in the text* changes it, *Remove this chart from the text* takes it out. Press *Save & render* to
   keep it. Nothing in the block needs to be typed by hand.
 
+## Comparative tables of words (grammar)
+
+Besides the charts of the consonants and of the vowels, the **Tables** tab of the grammar editor makes a **comparative table of words**: the
+independent personal pronouns, the numerals, the kinship terms… (*＋ Comparative table of words*). It is a table like the others: the author adds the
+rows and the columns (for the pronouns: 1 inclusive, 1 exclusive, 2, 3 and singular, dual, trial, plural; nothing is suggested), chooses a language and
+types its word in each cell, as it is written in the dictionary. The caption, the label (`{{ref: label}}`) and the number work as for the charts.
+
+- **Common and divergent.** As in the phonological charts, a word that **all the languages of the table have is plain black**; a word found in only some is followed by the
+  **tag** of those languages (NUM, DRG, KRO, OLR, LKN), in their colour. No cell is tinted. Under the table the legend lets the reader leave a language out
+  (the tags are then worked out again for the languages that remain).
+- **Variants.** A tilde separates a word from its variant: `ni ~ nē` (the entry first, then its variant; up to four parts). It is one word with one tag. Different
+  words in one cell are separated by a semicolon (`kama; gama`).
+- **Links to the dictionary.** Each part of a word is a link to its entry (dictionary.html#id), as `{{entry: ID}}` is, when an entry has that form (the form as the
+  dictionary writes it) in that language. If several entries have it, the table links only if one of them is grammatical material. `na@ID` names the entry
+  by its identifier, when the word alone is not enough. The **part of speech** field of the table (`pro.`) keeps `na`, the pronoun, from `na`, the article:
+  only the entries of that part of speech are considered.
+- **Proposed entries.** When the section is saved (and when the application starts), the words of the table that the dictionary does not have are proposed to the author in
+  the dictionary page, under *Proposed entries*, in the way the words of confirmed texts are: one proposal for each cell of the table (a row and a column), with
+  the missing words of the languages that have them, the cell as its gloss (*1 exclusive singular*) and the part of speech of the table; *Add to dictionary* makes the entry,
+  *Dismiss* turns it down for good (it is not proposed again). A proposal that has not been dealt with follows the table (a word corrected there is corrected in it); one whose
+  words have been added to the dictionary by other means goes away. The variants (the parts after the tilde) are not proposed.
+- **In the exports.** LaTeX prints, as for the sounds, one plain table for each language.
+
 ## Glossing the texts (author only)
 
 In a text (the fieldnotes, the examples from papers, the imported examples, a transcribed narrative) a sentence is shown as **columns**: one word in each language row, and **one gloss under each column**.
