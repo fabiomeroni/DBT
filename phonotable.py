@@ -14,6 +14,7 @@ Each sound is followed by a small coloured tag with the abbreviation of the lang
 each cell takes the colour(s) of the languages involved. A sound found in every language shown has no tag. Over a sound the reader sees
 a box with its description (place and manner of articulation, as the author typed it), a button that plays it and a link to PHOIBLE: they
 are in the optional "segments" of the definition ({"p": {"description": "...", "audio": "p.mp3", "phoible": "https://phoible.org/..."}}).
+A chart of vowels with long vowels (iː) is two tables, short and long, under one caption and one legend.
 In LaTeX the chart is split into one plain table for each language.
 
 Nothing here knows a language or the web framework: the languages (code, name, colour) are given.
@@ -222,6 +223,14 @@ def _hex(color):
     return '#808080'
 
 
+SHORT_LABEL, LONG_LABEL = 'Short', 'Long'                   # the corner of the two tables of a chart of vowels that has long ones
+
+
+def is_long(sound):
+    """A long vowel: written with the length mark (iː)."""
+    return sound.endswith('\u02d0')
+
+
 def _stripes(colors, alpha='2e'):
     """The background of a cell: the colours of the languages involved, side by side, light enough for the text to stay readable."""
     n = len(colors)
@@ -246,26 +255,33 @@ def render_html(spec, languages, number=None, lab=None, anchors=True):
         tags = ''.join(tag(c, shared) for c in langs) if several else ''
         attrs = f'data-seg="{e(item["p"])}" data-desc="{e(s.get("description", ""))}" data-audio="{e(audio_url(s.get("audio")))}" data-phoible="{e(s.get("phoible", ""))}"'
         return f'<span class="ph" data-langs="{e(" ".join(langs))}"><span class="ph-seg" {attrs}>{e(item["p"])}</span>{tags}</span>'
-    head = ''.join(f'<th scope="col">{e(c)}</th>' for c in spec['columns'])
-    body = ''
-    for r in spec['rows']:
-        tds = ''
-        for c in spec['columns']:
-            items = m['cells'].get(r, {}).get(c, [])
-            used = [code for code in present if any(code in i['langs'] for i in items)]
-            style = f' style="--cell-bg:{_stripes([_hex(by_code[x].get("color")) for x in used])}"' if several and used else ''
-            tds += f'<td class="ph-cell" data-langs="{e(" ".join(used))}"{style}>' + ' '.join(sound(i) for i in items) + '</td>'
-        body += f'<tr><th scope="row">{e(r)}</th>{tds}</tr>'
+    def table(label, keep):
+        """One table: `keep` says which sounds of a cell belong to it. A cell is tinted only with the languages of the sounds that NOT every
+        language has: where everything is shared there is nothing to tell apart, so the cell stays plain."""
+        head = ''.join(f'<th scope="col">{e(c)}</th>' for c in spec['columns'])
+        body = ''
+        for r in spec['rows']:
+            tds = ''
+            for c in spec['columns']:
+                items = [i for i in m['cells'].get(r, {}).get(c, []) if keep(i['p'])]
+                used = [code for code in present if any(code in i['langs'] for i in items if len(i['langs']) < len(present))]
+                style = f' style="--cell-bg:{_stripes([_hex(by_code[x].get("color")) for x in used])}"' if several and used else ''
+                tds += f'<td class="ph-cell" data-langs="{e(" ".join(used))}"{style}>' + ' '.join(sound(i) for i in items) + '</td>'
+            body += f'<tr><th scope="row">{e(r)}</th>{tds}</tr>'
+        return f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner">{e(label)}</th>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+    # a chart of vowels that has long vowels (a sound ending in the length mark) is two tables, short on the left and long on the right, with one legend
+    has_long = spec['kind'] == 'vowels' and any(is_long(i['p']) for cells in m['cells'].values() for items in cells.values() for i in items)
+    tables = (f'<div class="phono-pair">{table(SHORT_LABEL, lambda s: not is_long(s))}{table(LONG_LABEL, is_long)}</div>' if has_long else table('', lambda s: True))
     legend = ''
     if several:                                             # the legend is a set of check boxes: the reader chooses the languages to show
         boxes = ' '.join(f'<label class="lg"><input type="checkbox" checked data-lang="{e(c)}" data-color="{_hex(by_code[c].get("color"))}">'
                          f'<span class="lg-name">{e(by_code[c]["name"])}</span> <span class="lg-tag" style="--tag:{_hex(by_code[c].get("color"))}">{e(str(by_code[c].get("abbr") or c).upper())}</span></label>' for c in present)
         legend = (f'<div class="phono-legend"><span class="pl-title">Languages shown:</span> {boxes}'
-                  '<div class="pl-note">The tag after a sound says which language has it, and the background of a cell has the colours of the languages involved; '
+                  '<div class="pl-note">The tag after a sound says which language has it; a cell that holds a sound not found in all the languages shown is tinted with the colours of the languages that have it, and what all of them share stays plain; '
                   'a sound without a tag is found in all the languages shown. Untick a language to leave its sounds out. Hover over a sound to read about it.</div></div>')
     ident = f' id="{e(_cap.anchor("table", spec["label"]))}" data-label="{e(spec["label"])}"' if spec.get('label') and anchors else ''   # a preview has no anchor: the page must not have the id twice
     return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}"{ident}>{_cap.caption_html("table", number, _cap.fill_language(spec["caption"], caption_names(spec, languages), lab), lab)}'
-            f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner"></th>{head}</tr></thead><tbody>{body}</tbody></table></div>{legend}</figure>')
+            f'{tables}{legend}</figure>')
 
 
 _LATEX_SPECIAL = {'\\': r'\textbackslash{}', '&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_', '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}', '^': r'\textasciicircum{}'}
