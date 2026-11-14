@@ -90,6 +90,40 @@ check('the short vowels are in the first table, the long ones in the second, eac
 check('both tables have the same rows and columns', [re.findall(r'<th scope="(?:col|row)">([^<]+)</th>', x) for x in tabs2][0] == [re.findall(r'<th scope="(?:col|row)">([^<]+)</th>', x) for x in tabs2][1], True)
 check('a chart of vowels without a long vowel is one table, as before; so is a chart of consonants even with ː in it', (html({'aaa': {'Close': {'Front': 'i'}}}, cols=('Front',), rows=('Close',), kind='vowels').count('<table'), html({'aaa': {'Plosive': {'Bilabial': 'pː'}}}).count('<table')), (1, 1))
 
+# ── comparative tables of words (kind "lexical") ──
+check('a word is split at the tilde: the first part is the entry, the others are its variants; the identifier follows @ ; spaces are cleaned; a word keeps its letters (ō)', (PT.lex_parts('  ni~nē '), PT.lex_parts('na@pron_1sg ~ nā'), PT.lex_parts('dō\u0304tōl'), PT.lex_parts('~ ~'), PT.lex_parts('a@')), ([('ni', ''), ('nē', '')], [('na', 'pron_1sg'), ('nā', '')], [('dō\u0304tōl', '')], [], [('a', '')]))
+check('an identifier that is not one (spaces, quotes, tags) is dropped, not trusted; a word is cut at 60 characters, a word has at most 4 parts', (PT.lex_parts('x@a b'), PT.lex_parts('x@"><b>'), len(PT.lex_parts('y' * 100)[0][0]), len(PT.lex_parts('a~b~c~d~e~f'))), ([('x', '')], [('x', '')], 60, 4))
+check('the words of a cell are separated by semicolons, written in a standard way, without repeats; at most 6', (PT.lex_units('ni ~ nē; ni~nē ;  na'), len(PT.lex_units(';'.join('w%d' % i for i in range(10))))), (['ni ~ nē', 'na'], 6))
+LX = lambda inv, **kw: PT.clean(dict({'kind': 'lexical', 'caption': 'P', 'columns': ['sg', 'pl'], 'rows': ['1', '2'], 'inventory': inv}, **kw), CODES)[0]
+sl = LX({'aaa': {'1': {'sg': 'na', 'pl': 'ni ~ nē'}}, 'bbb': {'1': {'sg': 'na'}}, 'zzz': {'1': {'sg': 'x'}}, 'ccc': {'3': {'sg': 'x'}}})
+check('a lexical table is a table (rows, columns, a language of the project, no segments, no pos unless given), the words in their standard form', (sl['kind'], sl['inventory'], sl['segments'], sl['pos']), ('lexical', {'aaa': {'1': {'sg': 'na', 'pl': 'ni ~ nē'}}, 'bbb': {'1': {'sg': 'na'}}}, {}, ''))
+check('the part of speech is kept for a lexical table only (and cut at 30 characters); a chart of sounds has none', (LX({}, pos='  pro. ')['pos'], len(LX({}, pos='x' * 50)['pos']), 'pos' in spec({})), ('pro.', 30, False))
+check('a lexical table needs rows and columns like the others, and nothing is suggested for its axes', (PT.clean({'kind': 'lexical', 'columns': [], 'rows': []}, CODES)[1] is not None, PT.DEFAULT_AXES['lexical']), (True, {'columns': [], 'rows': []}))
+LL = [{'code': 'aaa', 'name': 'Alpha', 'abbr': 'Al', 'color': '#2e5c8a'}, {'code': 'bbb', 'name': 'Beta', 'abbr': 'Be', 'color': '#c07820'}, {'code': 'ccc', 'name': 'Gamma', 'abbr': 'Ga', 'color': '#2f7a3a'}]
+sx = LX({'aaa': {'1': {'sg': 'na', 'pl': 'ni ~ nē'}, '2': {'sg': 'nik'}}, 'bbb': {'1': {'sg': 'na', 'pl': 'ni'}, '2': {'sg': 'nēk'}}})
+hx = PT.render_html(sx, LL)
+check('a word that all the languages of the table have is plain and its tags are hidden; a word of some has the tags of those languages, visible', ('<span class="ph" data-langs="aaa bbb"><span class="lx-form"><span class="lx-plain">na</span></span><span class="ph-tag" data-lang="aaa" style="--tag:#2e5c8a" title="Alpha" hidden>AL</span>' in hx, '<span class="ph-tag" data-lang="bbb" style="--tag:#c07820" title="Beta">BE</span>' in hx), (True, True))
+check('a word and its variant are one word under one tag, with the tilde between them; two words that differ are two words (ni ~ nē is not ni)', ('<span class="lx-form"><span class="lx-plain">ni</span> <span class="lx-tilde">~</span> <span class="lx-plain">nē</span></span><span class="ph-tag" data-lang="aaa"' in hx, hx.count('data-langs="bbb"><span class="lx-form"><span class="lx-plain">ni</span>'), ), (True, 1))
+check('no cell of a lexical table is tinted, and the cells are not those of the sounds (the legend script leaves them alone)', ('--cell-bg' in hx, 'ph-cell' in hx, 'class="lx-cell"' in hx), (False, False, True))
+check('a lexical table has no hover box on its words (no ph-seg), a legend of the languages and a note that speaks of words', ('ph-seg' in hx, 'phono-legend' in hx, 'The tag after a word' in hx, 'sound' in hx.split('pl-note')[1]), (False, True, True, False))
+def resolver(code, word, ident, pos):
+    return {'na': ('pro_1sg', '1SG pronoun'), 'ni': ('pro_3sg', '')}.get(word) if not ident else ((ident, 'by id') if ident == 'known' else None)
+hr = PT.render_html(LX({'aaa': {'1': {'sg': 'na', 'pl': 'ni ~ nē'}, '2': {'sg': 'nik@known', 'pl': 'x@nope'}}, 'bbb': {'1': {'sg': 'na'}}}), LL, resolver=resolver)
+check('a word that is an entry of the dictionary is a link to it (dictionary.html#id), with its gloss as the title; each part of a word on its own; a word that is not is plain text', ('<a class="lx-link" href="dictionary.html#pro_1sg" title="1SG pronoun">na</a>' in hr, '<a class="lx-link" href="dictionary.html#pro_3sg">ni</a> <span class="lx-tilde">~</span> <span class="lx-plain">nē</span>' in hr), (True, True))
+check('word@id links to that entry when it exists, and is plain text when it does not; the identifier is never shown', ('href="dictionary.html#known" title="by id">nik</a>' in hr, '<span class="lx-plain">x</span>' in hr, '@' in re.sub(r'<[^>]+>', '', hr)), (True, True, False))
+seen = []
+PT.render_html(LX({'aaa': {'1': {'sg': 'na'}}}, pos='pro.'), LL, resolver=lambda c, w, i, pos: seen.append((c, w, i, pos)))
+check('the resolver is given the language, the word, the identifier and the part of speech of the table', seen, [('aaa', 'na', '', 'pro.')])
+hn = PT.render_html(sx, LL)
+check('without a resolver nothing is a link; with a link, the href is escaped', ('<a ' in hn, '"' in PT.render_html(LX({'aaa': {'1': {'sg': 'x'}}}), LL, resolver=lambda *a: ('a"><script>', 't"x')).split('href=')[1].split(' title')[0][1:-1]), (False, False))
+check('a link made by hand cannot break the page: the identifier of a link is escaped', '<script>' in PT.render_html(LX({'aaa': {'1': {'sg': 'x'}}}), LL, resolver=lambda *a: ('a"><script>', 't')), False)
+check('the entries of a table: the first part of each word (a variant is not an entry), with the identifier typed', sorted(PT.entries_of(LX({'aaa': {'1': {'sg': 'ni ~ nē', 'pl': 'na@p1'}}}))), [('1', 'pl', 'aaa', 'na', 'p1'), ('1', 'sg', 'aaa', 'ni', '')])
+tx = PT.render_latex(sx, LL)
+check('LaTeX: one plain table for each language, the words as they are read (a tilde, no identifier), no link', ('\\textasciitilde{}' in tx, '@' in tx, '\\href' in tx, tx.count('\\begin{table}')), (True, False, False, 2))
+chk = PT.list_charts(['{"kind":"lexical","label":"pron","caption":"P","columns":["a"],"rows":["b"],"inventory":{}}'], LL)
+check('a lexical table is numbered and can be referred to like the other tables', [(a, b) for a, b, _p in chk], [('pron', 'P')])
+check('lexical_specs: the lexical tables of a section, cleaned (the others are not)', [s_['kind'] for s_ in PT.lexical_specs(['{"kind":"vowels","columns":["a"],"rows":["b"],"inventory":{}}', '{"kind":"lexical","columns":["a"],"rows":["b"],"inventory":{}}', '{oops'], LL)], ['lexical'])
+
 # ── the sounds: description, audio, PHOIBLE ──
 INV = {'aaa': {'Plosive': {'Bilabial': 'p ᵐb'}}, 'bbb': {'Plosive': {'Bilabial': 'p'}}}
 def seg(segments): return PT.clean({'kind': 'consonants', 'columns': ['Bilabial'], 'rows': ['Plosive'], 'inventory': INV, 'segments': segments}, CODES)[0]['segments']
