@@ -286,7 +286,7 @@ const PhonoEditor = (() => {
  * The legend under a chart is a set of check boxes, one for each language: the reader chooses the languages to show. A sound that none of
  * the ticked languages has is left out; the tags and the background of each cell are worked out again for the ticked ones: a sound that all of
  * them have shows no tag, any other shows the tags of the ticked languages that have it, and a cell is tinted with the colours of the ticked
- * languages that have a sound in it (no tint if only one language is ticked). It works for any chart in the page, as soon as it is there.
+ * languages that have a sound in it that not all of them have (no tint where everything is shared, or if only one language is ticked). It works for any chart in the page, as soon as it is there.
  */
 (() => {
   const stripes = cols => 'linear-gradient(90deg,' + cols.map((c, i) => `${c}2e ${+(100 * i / cols.length).toFixed(2)}% ${+(100 * (i + 1) / cols.length).toFixed(2)}%`).join(',') + ')';
@@ -299,10 +299,15 @@ const PhonoEditor = (() => {
       el.classList.toggle('ph-off', !langs.length);
       el.querySelectorAll('.ph-tag').forEach(t => { t.hidden = !(langs.length && langs.length < on.length && langs.includes(t.dataset.lang)); });
     });
-    fig.querySelectorAll('td.ph-cell').forEach(td => {
-      const used = on.filter(l => [...td.querySelectorAll('.ph:not(.ph-off)')].some(el => el.dataset.langs.split(' ').includes(l)));
-      td.dataset.langs = used.join(' ');
-      if (on.length > 1 && used.length) td.style.setProperty('--cell-bg', stripes(used.map(l => color[l]))); else td.style.removeProperty('--cell-bg');
+    fig.querySelectorAll('td.ph-cell').forEach(td => {            // a cell is tinted only with the languages of the sounds that not all the ticked languages have
+      const used = new Set();
+      td.querySelectorAll('.ph:not(.ph-off)').forEach(el => {
+        const l = el.dataset.langs.split(' ').filter(x => on.includes(x));
+        if (l.length < on.length) l.forEach(x => used.add(x));
+      });
+      const order = on.filter(l => used.has(l));
+      td.dataset.langs = order.join(' ');
+      if (on.length > 1 && order.length) td.style.setProperty('--cell-bg', stripes(order.map(l => color[l]))); else td.style.removeProperty('--cell-bg');
     });
   }
   document.addEventListener('change', ev => {
