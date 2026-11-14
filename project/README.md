@@ -317,15 +317,24 @@ the **vowels** (each is a chart of its own; a section can have both) without any
   is suggested but the standard lists above); *Suggested columns and rows* puts the lists back. The suggested lists are in `phonotable.py` (`DEFAULT_AXES`).
 - **Inventories.** The author types the sounds of each language of the project in the cells (separated by spaces: `p b`); a project with
   one language has one grid. A sound is one to sixteen characters (`t͡ʃ`, `kʷ`, `ᵐb` ...).
-- **The chart.** One chart for all the languages: a sound that **all the languages that have an inventory share is black**; a sound
-  **specific to one language is in that language's colour** (`color` in `project.json`); a sound of **several, but not all, shows their
-  colours together** in the one character (it is split into as many coloured parts as there are languages). Under the chart the **legend is a set of check boxes, one for each language**: untick a language to leave its sounds
-  out and see only the inventory of the languages of interest. The colours are then worked out again for the languages that remain ticked: black
-  for what all of them share (so with a single language ticked its whole inventory is black), the language's colour for what is specific to
-  one, their colours together for what is shared by some. The rows and columns stay, so charts stay comparable. (This works in the page, in
-  the preview of the editor and for visitors; the LaTeX export prints the full chart.)
-  The preview in the tab is made by the server with the same code as the page. In the LaTeX export a sound of several languages is
-  printed once for each, in its colour (the graphicx package is loaded).
+- **The chart.** One chart for all the languages. Each sound is followed by a small **coloured tag** with the abbreviation of the language(s)
+  that have it (`abbr` in `project.json`, in capitals: NUM, DRG, KRO, OLR, LKN), in the language's colour (`color`); a sound that **all the
+  languages shown share has no tag**. The **background of each cell** takes the colour(s) of the languages that have a sound in it (side by
+  side, lightly, so the sounds stay readable). A project with one language, or a chart with the sounds of one language only, has no tags and no
+  tints. Under the chart the **legend is a set of check boxes, one for each language**: untick a language to leave its sounds out and see only the
+  inventory of the languages of interest; tags and tints are then worked out again for the languages that remain ticked (with a single language
+  ticked there is nothing to tell apart: no tag, no tint). This works in the page, in the preview of the editor and for visitors. The preview
+  in the tab is made by the server with the same code as the page. The LaTeX export prints one plain table for each language (Table 1a, 1b…).
+- **The sounds** (hover box). Under the inventory, the **Sounds** panel lists every sound of the chart once. For each one the author types
+  its **description**, place and manner of articulation, as in `prenasalised voiced bilabial plosive`; its **audio**, the name of a file of the
+  audio folder (`mb.mp3`; a subfolder is fine: `num/mb.mp3`) or an address starting with `http://` or `https://`; and its **PHOIBLE link** (an
+  address; `phoible.org/…` is completed with `https://`). Any of them may stay empty, and the panel says at once if something typed is not
+  accepted (a file that is not audio, an address that is not one). When the reader hovers over a sound (or taps it, or reaches it with Tab),
+  a box opens with the sound, its description, a button with `audio_icon.svg` that plays the recording and a button with `phoible_logo.png`
+  that opens the PHOIBLE page in a new tab. A button with nothing behind it yet is dimmed. The two images are in the main folder next to
+  `index.html`; if one is missing, a 🔊 or the word PHOIBLE stands in. The recordings go in **`project/audio/`** (the folder can be changed with
+  `files.audioDir` in `project.json`); only audio files (`.mp3 .ogg .oga .opus .wav .m4a .aac .flac .webm`) are served from it, at `/audio/…`, and the
+  folder is part of the backup. The descriptions, audio and links are kept in the block of the chart (`"segments"`), next to the inventories.
 - **In the text.** *Insert into the text* writes the chart into the section where the cursor is, as a block (`&#96;&#96;&#96;phonotable` ... `&#96;&#96;&#96;`)
   that the tab reads and rewrites: *Update in the text* changes it, *Remove this chart from the text* takes it out. Press *Save & render* to
   keep it. Nothing in the block needs to be typed by hand.
