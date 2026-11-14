@@ -319,12 +319,14 @@ the **vowels** (each is a chart of its own; a section can have both) without any
   one language has one grid. A sound is one to sixteen characters (`t͡ʃ`, `kʷ`, `ᵐb` ...).
 - **The chart.** One chart for all the languages. Each sound is followed by a small **coloured tag** with the abbreviation of the language(s)
   that have it (`abbr` in `project.json`, in capitals: NUM, DRG, KRO, OLR, LKN), in the language's colour (`color`); a sound that **all the
-  languages shown share has no tag**. The **background of each cell** takes the colour(s) of the languages that have a sound in it (side by
-  side, lightly, so the sounds stay readable). A project with one language, or a chart with the sounds of one language only, has no tags and no
-  tints. Under the chart the **legend is a set of check boxes, one for each language**: untick a language to leave its sounds out and see only the
+  languages shown share has no tag**. A cell is **tinted** with the colour(s) of the languages that have a sound in it that *not all* the languages shown have (side by side, lightly, so the sounds stay readable); where everything is shared the cell stays plain, so a table of common sounds is just black. A project with one language, or a chart with the sounds of one language only, has no tags and no tints. Under the chart the **legend is a set of check boxes, one for each language**: untick a language to leave its sounds out and see only the
   inventory of the languages of interest; tags and tints are then worked out again for the languages that remain ticked (with a single language
   ticked there is nothing to tell apart: no tag, no tint). This works in the page, in the preview of the editor and for visitors. The preview
   in the tab is made by the server with the same code as the page. The LaTeX export prints one plain table for each language (Table 1a, 1b…).
+  The columns share the width of the text, so a chart is seen whole without sliding.
+- **Long vowels.** A chart of vowels in which some sounds end with the length mark (`iː`, `aː`) is shown as **two tables, short vowels on the
+  left and long vowels on the right**, under one caption and one legend. Nothing to set: the author types all the vowels in the same grid, as
+  before, and the sounds with `ː` go to the table on the right.
 - **The sounds** (hover box). Under the inventory, the **Sounds** panel lists every sound of the chart once. For each one the author types
   its **description**, place and manner of articulation, as in `prenasalised voiced bilabial plosive`; its **audio**, the name of a file of the
   audio folder (`mb.mp3`; a subfolder is fine: `num/mb.mp3`) or an address starting with `http://` or `https://`; and its **PHOIBLE link** (an
