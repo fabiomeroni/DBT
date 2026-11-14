@@ -1,5 +1,5 @@
 /*
- * The "Phonological table" tab of the grammar editor.
+ * The "Tables" tab of the grammar editor (phonological charts of the consonants and of the vowels, and comparative tables of words).
  *
  * The author decides the columns and the rows of a chart of consonants or of vowels (starting from the suggested order, adding,
  * removing and reordering as needed), types the inventory of each language of the project, and sees the merged chart: each sound followed by
@@ -12,7 +12,7 @@ const PhonoEditor = (() => {
   let DEFAULTS = null;
   const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const BLOCK = /^[ \t]*```[ \t]*phonotable[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```[ \t]*\r?$/gm;
-  const KIND_NAME = { consonants: 'consonant', vowels: 'vowel' };
+  const KIND_NAME = { consonants: 'consonant', vowels: 'vowel', lexical: 'comparative' };
 
   async function defaults() {
     if (!DEFAULTS) {
@@ -53,18 +53,18 @@ const PhonoEditor = (() => {
     function showList(message) {
       st.spec = null; st.index = null;
       const blocks = blocksOf(ta.value);
-      root.innerHTML = `<p class="pt-help">Make a chart of the consonants or of the vowels without writing any markup: choose the rows and the columns, type the sounds of ${several ? 'each language' : 'the language'}, and insert it into the text.</p>
+      root.innerHTML = `<p class="pt-help">Make a chart of the consonants or of the vowels, or a comparative table of words, without writing any markup: choose the rows and the columns, type the sounds or the words of ${several ? 'each language' : 'the language'}, and insert it into the text.</p>
         <h4>Charts in this section</h4>
         <div class="pt-bar" id="pt-list-${id}">${blocks.length ? blocks.map((b, i) => `<button type="button" class="pt-chip" data-act="edit" data-i="${i}">${b.spec && KIND_NAME[b.spec.kind] ? esc(b.spec.caption ?? b.spec.title ?? '') + ' <small>(' + KIND_NAME[b.spec.kind] + (b.spec.caption || b.spec.title ? '' : ', no caption') + (b.spec.label ? ' · ' + esc(b.spec.label) : '') + ')</small>' : 'unreadable chart (see the Text tab)'}</button>`).join('') : '<span class="pt-help" style="margin:0;">None yet.</span>'}</div>
         <h4>Make a new one</h4>
-        <div class="pt-bar"><button type="button" class="pt-btn primary" data-act="new" data-kind="consonants">＋ Consonant chart</button><button type="button" class="pt-btn primary" data-act="new" data-kind="vowels">＋ Vowel chart</button></div>
+        <div class="pt-bar"><button type="button" class="pt-btn primary" data-act="new" data-kind="consonants">＋ Consonant chart</button><button type="button" class="pt-btn primary" data-act="new" data-kind="vowels">＋ Vowel chart</button><button type="button" class="pt-btn primary" data-act="new" data-kind="lexical" title="A table of words (the pronouns, the numerals…): the word of each language in each cell">＋ Comparative table of words</button></div>
         <div class="pt-msg" id="pt-msg-${id}">${message ? esc(message) : ''}</div>`;
     }
 
     // ── the builder ──
     function openBuilder(spec, index) {
       st.spec = spec; st.index = index; st.lang = langs[0].code;
-      const k = KIND_NAME[spec.kind];
+      const k = KIND_NAME[spec.kind], lex = spec.kind === 'lexical';
       root.innerHTML = `<div class="pt-bar" style="justify-content:space-between;"><strong>${index === null ? 'New' : 'Edit the'} ${k} chart</strong><button type="button" class="pt-btn" data-act="back">← Charts of this section</button></div>
         <h4>Caption</h4>
         <p class="pt-help">Shown above the chart as “${esc(D.captions.table)} 3${esc(D.captions.separator)}…”: you write only the text, the number is automatic and goes on through the whole grammar. Leave it empty for the number alone. Write <code>{language}</code> where the name of the language belongs: the site shows the names of the languages of the chart, and the PDF, Word and LaTeX exports print one table for each language (Table 1a, 1b…), each with its own name (without <code>{language}</code>, the name is added in parentheses).</p>
@@ -72,18 +72,21 @@ const PhonoEditor = (() => {
         <h4>Label</h4>
         <p class="pt-help">Optional. A short name (letters, digits, - and _) that lets the text refer to this table: <code>{{ref: name}}</code> becomes a link reading “${esc(D.captions.table)} 3”, always with the right number, in the grammar and in the dictionary.</p>
         <div class="pt-field"><input type="text" id="pt-label-${id}" value="${esc(spec.label || '')}" maxlength="40" aria-label="Label of the chart" autocomplete="off" spellcheck="false"></div>
+        ${lex ? `<h4>Part of speech</h4>
+        <p class="pt-help">Optional. The part of speech of the dictionary entries that the words are links to, as the dictionary writes it (<code>pro.</code> for pronouns): it tells <code>na</code>, the pronoun, from <code>na</code>, the article. The new entries proposed for the words that are not in the dictionary get it too.</p>
+        <div class="pt-field"><input type="text" id="pt-pos-${id}" value="${esc(spec.pos || '')}" maxlength="30" aria-label="Part of speech of the entries" autocomplete="off" spellcheck="false" style="max-width:12rem;"></div>` : ''}
         <h4>Columns and rows</h4>
-        <p class="pt-help">Start from the suggested order and change what you need: rename, move (↑ ↓), remove (✕), or add rows and columns of your own, with any names.</p>
+        <p class="pt-help">${lex ? 'Add the rows and the columns you need, with any names (for the personal pronouns: the rows 1 inclusive, 1 exclusive, 2, 3 and the columns singular, dual, trial, plural); rename, move (↑ ↓) or remove (✕) them as needed.' : 'Start from the suggested order and change what you need: rename, move (↑ ↓), remove (✕), or add rows and columns of your own, with any names.'}</p>
         <div class="pt-axes"><div class="pt-axis" data-axis="columns"></div><div class="pt-axis" data-axis="rows"></div></div>
-        <div class="pt-bar" style="margin-top:0.4rem;"><button type="button" class="pt-btn" data-act="reset">↺ Suggested columns and rows</button></div>
-        <h4>${several ? 'Inventory of each language' : 'Inventory'}</h4>
-        <p class="pt-help">${several ? 'Choose a language and type its sounds in the cells, separated by spaces (p b). The chart merges the languages: a sound found in only some of them is followed by a coloured <b>tag</b> with their abbreviations, and the background of each cell takes the colours of the languages involved; a sound found in all of them has no tag.' : 'Type the sounds in the cells, separated by spaces (p b).'}</p>
+        ${lex ? '' : '<div class="pt-bar" style="margin-top:0.4rem;"><button type="button" class="pt-btn" data-act="reset">↺ Suggested columns and rows</button></div>'}
+        <h4>${lex ? (several ? 'Words of each language' : 'Words') : (several ? 'Inventory of each language' : 'Inventory')}</h4>
+        <p class="pt-help">${lex ? `Choose a language and type its word in each cell, as it is written in the dictionary. A tilde separates a word from its variant (<code>ni ~ nē</code>); several different words in one cell are separated by a semicolon. Each word is a link to its entry of the dictionary, as <code>{{entry: ID}}</code> is: if the entry is not found from the word alone, add its identifier (<code>na@ID</code>). The table shows a word found in all the languages in black, and gives the others the tag of the language${several ? 's' : ''} that ha${several ? 've' : 's'} ${several ? 'them' : 'it'}. A word that the dictionary does not have is proposed to you in the dictionary page (“Proposed entries”) when you save the section.` : several ? 'Choose a language and type its sounds in the cells, separated by spaces (p b). The chart merges the languages: a sound found in only some of them is followed by a coloured <b>tag</b> with their abbreviations, and the background of each cell takes the colours of the languages involved; a sound found in all of them has no tag.' : 'Type the sounds in the cells, separated by spaces (p b).'}</p>
         ${several ? `<div class="pt-langs" id="pt-langs-${id}">${langs.map(l => `<button type="button" class="pt-lang${l.code === st.lang ? ' active' : ''}" data-lang="${esc(l.code)}"><i style="background:${esc(l.color)}"></i>${esc(l.name)}</button>`).join('')}</div>` : ''}
         <div class="pt-grid-wrap"><table class="pt-grid" id="pt-grid-${id}"></table></div>
-        <h4>Sounds</h4>
+        ${lex ? '' : `<h4>Sounds</h4>
         <p class="pt-help">For each sound of the chart: its <b>description</b> as the reader will see it when hovering over it, place and manner of articulation (for example <code>prenasalised voiced bilabial plosive</code>); the <b>audio</b>, the name of a file in the audio folder of the project (<code>p.mp3</code>) or an address; and the <b>PHOIBLE</b> link. Any of them may stay empty.</p>
         <div class="pt-segs-wrap"><table class="pt-segtable" id="pt-segs-${id}"></table></div>
-        <div class="pt-segmsg" id="pt-segmsg-${id}"></div>
+        <div class="pt-segmsg" id="pt-segmsg-${id}"></div>`}
         <h4>Preview</h4><div class="pt-preview" id="pt-preview-${id}"></div>
         <div class="pt-bar" style="margin-top:0.6rem;">
           <button type="button" class="pt-btn primary" data-act="write" id="pt-write-${id}"></button>
@@ -113,6 +116,7 @@ const PhonoEditor = (() => {
       const s = st.spec;
       $('#pt-grid-' + id).innerHTML = '<thead><tr><th></th>' + s.columns.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>' +
         s.rows.map((r, ri) => `<tr><th class="r">${esc(r)}</th>` + s.columns.map((c, ci) => `<td><input type="text" class="pt-cell" data-r="${ri}" data-c="${ci}" value="${esc(cell(st.lang, r, c))}" aria-label="${esc(r)}, ${esc(c)}" autocomplete="off" spellcheck="false"></td>`).join('') + '</tr>').join('') + '</tbody>';
+      $('#pt-grid-' + id).classList.toggle('lex', st.spec.kind === 'lexical');
     }
     function soundsOf() {                                  // the sounds typed in the inventories, once each, in the order of the chart
       const out = [], s = st.spec; if (!s) return out;
@@ -121,7 +125,7 @@ const PhonoEditor = (() => {
       return out;
     }
     function renderSegs() {
-      if (!st.spec || !$('#pt-segs-' + id)) return;                // the builder was closed meanwhile
+      if (!st.spec || st.spec.kind === 'lexical' || !$('#pt-segs-' + id)) return;                // the builder was closed meanwhile
       const sounds = soundsOf(), seg = st.spec.segments || {};
       const f = (p, k, ph) => `<input type="text" data-seg="${esc(p)}" data-field="${k}" value="${esc((seg[p] || {})[k] || '')}" placeholder="${ph}" maxlength="${k === 'description' ? 200 : 400}" autocomplete="off" spellcheck="false" aria-label="${k} of ${esc(p)}">`;
       $('#pt-segs-' + id).innerHTML = sounds.length
@@ -153,11 +157,13 @@ const PhonoEditor = (() => {
       for (const [code, byRow] of Object.entries(s.inventory)) for (const [r, byCol] of Object.entries(byRow)) for (const [c, t] of Object.entries(byCol))
         if (t.trim() && s.rows.includes(r) && s.columns.includes(c)) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t.trim();
       const used = new Set(soundsOf()), segments = {};
-      for (const [p, d] of Object.entries(s.segments || {})) if (used.has(p)) {
+      if (s.kind !== 'lexical') for (const [p, d] of Object.entries(s.segments || {})) if (used.has(p)) {
         const item = {}; for (const k of ['description', 'audio', 'phoible']) if (typeof d[k] === 'string' && d[k].trim()) item[k] = d[k].trim();
         if (Object.keys(item).length) segments[p] = item;
       }
-      return { kind: s.kind, caption: s.caption.trim(), label: (s.label || '').trim(), columns: s.columns, rows: s.rows, inventory: inv, segments };
+      const out = { kind: s.kind, caption: s.caption.trim(), label: (s.label || '').trim(), columns: s.columns, rows: s.rows, inventory: inv, segments };
+      if (s.kind === 'lexical') out.pos = (s.pos || '').trim();
+      return out;
     }
     function position() {                                // how many charts come before this one in the section (its number follows from that)
       if (st.index !== null) return st.index;
@@ -165,6 +171,11 @@ const PhonoEditor = (() => {
     }
     async function preview() {
       const my = ++st.run, box = $('#pt-preview-' + id), msg = $('#pt-msg-' + id);
+      if (!box) return;
+      if (!st.spec.rows.length || !st.spec.columns.length) {       // nothing to show yet (a comparative table starts empty): no request, a word of help
+        box.innerHTML = ''; $('#pt-write-' + id).disabled = true;
+        msg.className = 'pt-msg'; msg.dataset.hint = '1'; msg.textContent = 'Add at least one row and one column to see the table.'; return;
+      }
       try {
         const r = await fetch('/api/phonotable/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: cleanSpec(), section: id, position: position(), editing: st.index !== null }) });
         let j = null; try { j = await r.json(); } catch (e) { /* not JSON: an old server answers with a page */ }
@@ -175,7 +186,7 @@ const PhonoEditor = (() => {
         const write = $('#pt-write-' + id);
         if (j.labelTaken) {                                  // a label belongs to one table or figure: the reference would be ambiguous
           msg.className = 'pt-msg error'; msg.textContent = `The label “${st.spec.label}” is already used by ${j.labelTaken.name}: choose another one.`; write.disabled = true;
-        } else { write.disabled = false; if (msg.className.includes('error')) { msg.className = 'pt-msg'; msg.textContent = ''; } }
+        } else { write.disabled = false; if (msg.className.includes('error') || msg.dataset.hint) { msg.className = 'pt-msg'; msg.textContent = ''; delete msg.dataset.hint; } }
       } catch (e) { /* offline: keep what is there */ }
     }
     const schedule = () => { clearTimeout(st.timer); st.timer = setTimeout(() => { if (!st.spec) return; const a = document.activeElement; if (!(a && a.dataset && a.dataset.seg)) renderSegs(); preview(); }, 250); };
@@ -214,7 +225,7 @@ const PhonoEditor = (() => {
         const item = {}; for (const k of ['description', 'audio', 'phoible']) if (typeof d[k] === 'string') item[k] = d[k];
         segments[p] = item;
       }
-      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), label: String(b.spec.label || ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv, segments };
+      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), label: String(b.spec.label || ''), pos: String(b.spec.pos || ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv, segments };
     }
 
     // ── what the author does ──
@@ -222,7 +233,7 @@ const PhonoEditor = (() => {
       const t = ev.target.closest('[data-act], [data-lang]'); if (!t) return;
       if (t.dataset.lang) { st.lang = t.dataset.lang; root.querySelectorAll('.pt-lang').forEach(b => b.classList.toggle('active', b.dataset.lang === st.lang)); renderGrid(); return; }
       const act = t.dataset.act, axis = t.dataset.axis, i = +t.dataset.i;
-      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', label: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {}, segments: {} }, null); }
+      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', label: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {}, segments: {}, pos: '' }, null); }
       else if (act === 'edit') { const s = fromBlock(i); if (s) openBuilder(s, i); }
       else if (act === 'back') showList();
       else if (act === 'write') write();
@@ -242,6 +253,7 @@ const PhonoEditor = (() => {
     root.addEventListener('input', ev => {
       const t = ev.target;
       if (t.id === 'pt-caption-' + id) { st.spec.caption = t.value; schedule(); }
+      else if (t.id === 'pt-pos-' + id) { st.spec.pos = t.value; schedule(); }
       else if (t.id === 'pt-label-' + id) {                 // letters, digits, - and _ only: anything else becomes -
         const v = t.value.replace(/[^A-Za-z0-9_-]+/g, '-'); if (v !== t.value) t.value = v;
         st.spec.label = v.replace(/^[-_]+|[-_]+$/g, ''); schedule();
