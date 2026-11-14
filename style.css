@@ -442,17 +442,35 @@ figure.grammar-figure figcaption.caption { max-width: 46rem; }
 .grammar-section table.phono thead th, .grammar-section table.phono tbody th { background: #f0e8d8; font-family: 'Crimson Pro', serif; font-size: 0.86rem; font-variant: small-caps; letter-spacing: 0.04em; font-weight: 600; }
 .grammar-section table.phono tbody th { text-align: left; }
 .grammar-section table.phono td { font-size: 1.28rem; line-height: 1.5; background: #fffefb; }
-.phonotable .ph { margin: 0 0.22em; }
-.phonotable .ph-all { color: #000; }
-.ph-mix { color: var(--ph-c1); }
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .ph-mix { background-image: var(--ph-grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
-}
+.phonotable .ph { margin: 0 0.3em; white-space: nowrap; }
 .phonotable .ph-off { display: none; }
+.phonotable .ph-seg { cursor: help; border-bottom: 1px dotted transparent; }
+.phonotable .ph-seg:hover, .phonotable .ph-seg:focus { border-bottom-color: var(--ink-light); outline: none; background: #fff6d8; border-radius: 2px; }
+/* the tag after a sound: the abbreviation of the language, in its colour; the cell takes the colours of its languages as a light background */
+.ph-tag, .lg-tag { display: inline-block; font-family: 'Crimson Pro', serif; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; line-height: 1;
+  color: #fff; background: var(--tag, #808080); border-radius: 3px; padding: 2px 4px 2px; margin-left: 0.18em; vertical-align: 0.5em; font-variant: normal; }
+.ph-tag[hidden] { display: none; }
+.lg-tag { vertical-align: 0.1em; margin-left: 0.1em; }
+.grammar-section table.phono td.ph-cell { background-image: var(--cell-bg, none); }
+#phono-tip { position: absolute; z-index: 1000; max-width: 19rem; min-width: 9rem; background: #fffdf6; color: var(--ink); border: 1px solid var(--gold, #b8862b); border-radius: 5px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.18); padding: 0.4rem 0.6rem 0.5rem; font-family: 'Crimson Pro', serif; font-size: 0.95rem; line-height: 1.35; }
+#phono-tip[hidden] { display: none; }
+#phono-tip .pt-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+#phono-tip .pt-sound { font-family: var(--font-ipa); font-size: 1.5rem; }
+#phono-tip .pt-btns { display: inline-flex; align-items: center; gap: 0.55rem; }
+#phono-tip .pt-audio { background: none; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: center; }
+#phono-tip .pt-audio img { height: 1.25rem; width: 1.25rem; display: block; }
+#phono-tip .pt-phoible { display: inline-flex; align-items: center; }
+#phono-tip .pt-phoible img { height: 1.1rem; width: auto; display: block; }
+#phono-tip .off { opacity: 0.3; cursor: default; }
+#phono-tip .pt-icon-fallback { font-size: 1rem; }
+#phono-tip .pt-desc { margin-top: 0.15rem; color: var(--ink-mid); }
+#phono-tip .pt-desc.empty { color: var(--ink-light); font-style: italic; }
 .phono-legend { font-family: 'Crimson Pro', serif; font-size: 0.88rem; color: var(--ink-light); margin-top: 0.5rem; max-width: 46rem; }
 .phono-legend .pl-title { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 0.3rem; }
 .phono-legend label.lg { display: inline-flex; align-items: center; gap: 0.3rem; font-weight: 700; margin-right: 0.9rem; cursor: pointer; white-space: nowrap; }
 .phono-legend label.lg input { margin: 0; cursor: pointer; }
+.phono-legend .lg-name { color: var(--ink); }
 .phono-legend .pl-note { margin-top: 0.25rem; font-size: 0.82rem; }
 
 /* ── The editor's tabs and the phonological table builder (see phonotable.js) ── */
@@ -487,13 +505,20 @@ figure.grammar-figure figcaption.caption { max-width: 46rem; }
 .pt-lang { display: inline-flex; gap: 0.4rem; align-items: center; border: 1px solid var(--border); background: #fff; border-radius: 3px; padding: 2px 10px 3px; font-size: 0.92rem; cursor: pointer; }
 .pt-lang.active { border-color: var(--ink-light); background: #f6e6b8; font-weight: 700; }
 .pt-lang i { width: 0.7rem; height: 0.7rem; border-radius: 50%; display: inline-block; }
-.pt-grid-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--border-lt); border-radius: 3px; background: #fff; }
+.pt-grid-wrap, .pt-segs-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--border-lt); border-radius: 3px; background: #fff; }
 .pt-grid { border-collapse: collapse; }
 .pt-grid th { font-size: 0.78rem; font-variant: small-caps; letter-spacing: 0.04em; background: #f0e8d8; border: 1px solid var(--border-lt); padding: 2px 8px; white-space: nowrap; font-weight: 600; }
 .pt-grid th.r { text-align: left; }
 .pt-grid td { border: 1px solid var(--border-lt); padding: 0; }
 .pt-grid input { width: 4.6rem; border: none; padding: 0.3rem 0.35rem; font-family: var(--font-ipa); font-size: 1.1rem; text-align: center; background: transparent; }
 .pt-grid input:focus { outline: 2px solid var(--gold); background: #fffdf2; }
+.pt-segtable { border-collapse: collapse; width: 100%; }
+.pt-segtable th { font-size: 0.78rem; font-variant: small-caps; letter-spacing: 0.04em; background: #f0e8d8; border: 1px solid var(--border-lt); padding: 2px 8px; text-align: left; font-weight: 600; }
+.pt-segtable th.pt-sound { font-family: var(--font-ipa); font-size: 1.15rem; text-align: center; font-variant: normal; }
+.pt-segtable td { border: 1px solid var(--border-lt); padding: 0; }
+.pt-segtable input { width: 100%; min-width: 9rem; box-sizing: border-box; border: none; padding: 0.3rem 0.4rem; font: inherit; font-size: 0.9rem; background: transparent; }
+.pt-segtable input:focus { outline: 2px solid var(--gold); background: #fffdf2; }
+.pt-segmsg { font-size: 0.85rem; color: #922810; margin-top: 0.3rem; }
 .pt-preview { margin-top: 0.3rem; background: #fff; border: 1px solid var(--border-lt); border-radius: 3px; padding: 0.5rem 0.8rem; overflow-x: auto; }
 .pt-msg { font-size: 0.88rem; margin-top: 0.4rem; min-height: 1.1rem; color: #2f5a1f; }
 .pt-msg.error { color: #922810; }
