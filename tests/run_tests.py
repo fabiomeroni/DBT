@@ -2802,7 +2802,7 @@ def suite_phonotable(browser, args):
         check(S, "each sound says which languages have it: p, t, k... all three, b Nume and Dorig, d only Dorig", all(got.get(k) == v for k, v in want.items()), str(got))
         tags = lambda ch: re.search(r'<span class="ph" data-langs="[a-z ]+"><span class="ph-seg"[^>]*>' + ch + r'</span>(.*?)</span></td>|<span class="ph" data-langs="[a-z ]+"><span class="ph-seg"[^>]*>' + ch + r'</span>(.*?)</span> <span class="ph"', cons, re.S)
         check(S, "…a tag with the abbreviation in capitals and the colour of the language follows each of them, and none is visible for the sounds that every language has (p, t), while d has DRG and b has NUM and DRG", f'style="--tag:{COL["drg"]}" title="{NAMES["drg"]}">DRG</span>' in cons and f'style="--tag:{COL["num"]}" title="{NAMES["num"]}">NUM</span>' in cons and f'title="{NAMES["num"]}" hidden>NUM</span>' in cons, cons[:400])
-        check(S, "…the cells are tinted with the colours of their languages: a cell of the three has three stripes, a cell of Dorig alone one", f'--cell-bg:linear-gradient(90deg,{COL["num"]}2e 0% 33.33%,{COL["drg"]}2e 33.33% 66.67%,{COL["kro"]}2e 66.67% 100%)' in cons, cons[:600])
+        check(S, "…a cell is tinted with the languages of the sounds that not all share, and only those: the cell of p b (b is Nume and Dorig) has two stripes, the cell of t d (d is Dorig) one", f'--cell-bg:linear-gradient(90deg,{COL["num"]}2e 0% 50%,{COL["drg"]}2e 50% 100%)' in cons and f'--cell-bg:linear-gradient(90deg,{COL["drg"]}2e 0% 100%)' in cons and f'{COL["kro"]}2e' not in cons, cons[:700])
         check(S, "…and a legend says what the tags and colours mean, naming the three languages", "phono-legend" in cons and all(NAMES[c] in cons.split("phono-legend")[1] for c in ("num", "drg", "kro")))
         vow = h[h.index('data-kind="vowels"'):]
         check(S, "the vowel chart is a chart of its own: i is shared (no visible tag), u only Nume (NUM), ʉ only Olrat (OLR)", '<span class="ph" data-langs="num olr"><span class="ph-seg"' in vow and f'title="{NAMES["num"]}">NUM</span>' in vow and f'title="{NAMES["olr"]}">OLR</span>' in vow, vow[:300])
@@ -2913,8 +2913,12 @@ def suite_phonotable(browser, args):
         check(S, "Nume and Koro ticked: what they share has no tag, and b, which only Nume has, has the tag NUM (not DRG: Dorig is not shown)", {k for k, v in s3.items() if v[1]} == set("pbtkmn") and s3["p"][2] == "" and s3["b"][2] == TG("num") and not s3["d"][1], str({k: (v[1], v[2]) for k, v in s3.items()}))
         tick("num", False); tick("drg", True); s4 = snap()
         check(S, "Dorig and Koro ticked: p t k m n no tag; b, d and l, which only Dorig has, DRG", {k for k, v in s4.items() if v[1]} == set("pbtdkmnl") and all(s4[x][2] == "" for x in "ptkmn") and all(s4[x][2] == TG("drg") for x in "bdl"), str({k: (v[1], v[2]) for k, v in s4.items()}))
-        cellbg = lambda: fig.locator("td.ph-cell").first.evaluate("e => getComputedStyle(e).backgroundImage")
-        check(S, "the tint of a cell follows the ticked languages: with Dorig and Koro ticked it has two colours, with one language ticked none", cellbg().count("rgb") >= 2, cellbg()[:200])
+        bcell = lambda: fig.locator('td.ph-cell:has(.ph-seg:text-is("b"))').first.evaluate("e => [e.dataset.langs, e.style.getPropertyValue('--cell-bg')]")
+        bc = bcell()
+        check(S, "the tint of a cell follows the ticked languages: with Dorig and Koro ticked the cell of p b is tinted with Dorig alone (b is the only sound they do not share)", bc[0] == "drg" and COL["drg"] in bc[1] and COL["kro"] not in bc[1] and COL["num"] not in bc[1], str(bc))
+        tick("kro", False); bc = bcell()
+        check(S, "with a single language ticked there is nothing to tell apart: no tint at all", bc[0] == "" and bc[1] == "", str(bc))
+        tick("kro", True)
         tick("num", True); s5 = snap()
         check(S, "all ticked again: exactly as at the start (b with NUM DRG again)", s5 == s0, str(s5["b"]))
         for c_ in ("num", "drg", "kro"): tick(c_, False)
@@ -4169,7 +4173,7 @@ def suite_phonotip(browser, args):
                 "segments": {"ᵐb": {"description": "prenasalised voiced bilabial plosive", "audio": "mb.wav", "phoible": "https://phoible.org/parameters/1"},
                              "p": {"description": '<img src=x onerror="window.__xss=1"> voiceless bilabial plosive', "audio": "https://example.org/p.mp3"},
                              "z": {"description": "a sound that is not in the chart"}}}
-        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Phonology\n\nText.\n\n```phonotable\n" + json.dumps(spec) + "\n```\n\nEnd.\n"})
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Phonology\n\nText.\n\n```phonotable\n" + json.dumps(spec) + "\n```\n\nMiddle.\n\n```phonotable\n" + json.dumps({"kind": "vowels", "caption": "V", "columns": ["Front", "Back"], "rows": ["Close"], "inventory": {"num": {"Close": {"Front": "i", "Back": "u"}}, "olr": {"Close": {"Front": "i iː", "Back": "u"}}, "lkn": {"Close": {"Front": "i iː", "Back": "u uː"}}}}) + "\n```\n\nEnd.\n"})
         h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
         check(S, "the page has, for each sound, what the box shows (description, audio address, PHOIBLE link), and nothing for a sound that is not in the chart", 'data-seg="ᵐb" data-desc="prenasalised voiced bilabial plosive" data-audio="audio/mb.wav" data-phoible="https://phoible.org/parameters/1"' in h and 'data-seg="z"' not in h and 'data-seg="k" data-desc="" data-audio="" data-phoible=""' in h, h[h.find("data-seg"):][:300])
         st, pj = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": dict(spec, segments={"p": {"audio": "p.exe", "phoible": "javascript:alert(1)"}}), "section": sid, "position": 0})
@@ -4209,6 +4213,15 @@ def suite_phonotip(browser, args):
         check(S, "…and focusing a sound opens its box too", box.locator(".pt-sound").inner_text() == "ᵐb")
         page.keyboard.press("Escape")
         check(S, "no JavaScript or loading error on the page", not errs, "; ".join(errs[:3]))
+        vf = page.locator("figure.phonotable").nth(1)
+        check(S, "a chart of vowels with long vowels is two tables side by side, short (left) and long (right), with one legend and one caption", vf.locator("table.phono").count() == 2 and vf.locator(".phono-legend").count() == 1 and vf.locator("figcaption").count() == 1 and vf.locator("table.phono").nth(0).inner_text().count("Short") == 1 and vf.locator("table.phono").nth(1).locator('.ph-seg[data-seg="iː"]').count() == 1 and vf.locator("table.phono").nth(0).locator('.ph-seg[data-seg="iː"]').count() == 0)
+        bx = [t_.bounding_box() for t_ in vf.locator("table.phono").all()]
+        check(S, "…the long table is to the right of the short one, on the same line, and nothing needs sliding", bx[1]["x"] >= bx[0]["x"] + bx[0]["width"] - 1 and abs(bx[0]["y"] - bx[1]["y"]) < 2 and vf.locator(".phono-scroll").evaluate_all("l => l.every(e => e.scrollWidth <= e.clientWidth + 1)"), str(bx))
+        vf.locator('.phono-legend input[data-lang="lkn"]').uncheck()
+        check(S, "the one legend works on both tables: without Lakon, uː is gone from the long table", not vf.locator('.ph-seg[data-seg="uː"]').first.is_visible() and vf.locator('.ph-seg[data-seg="iː"]').first.is_visible())
+        vf.locator('.phono-legend input[data-lang="lkn"]').check()
+        cf = page.locator("figure.phonotable").first
+        check(S, "the consonant chart fits the width of the text without sliding", cf.locator(".phono-scroll").evaluate("e => e.scrollWidth <= e.clientWidth + 1"))
         # an icon that is missing is replaced by a text, never by a broken image
         p2 = vis.new_page(); e2 = []; watch(p2, e2)
         p2.route("**/audio_icon.svg", lambda rt: rt.abort()); p2.route("**/phoible_logo.png", lambda rt: rt.abort())
