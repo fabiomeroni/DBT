@@ -2,8 +2,9 @@
  * The "Phonological table" tab of the grammar editor.
  *
  * The author decides the columns and the rows of a chart of consonants or of vowels (starting from the suggested order, adding,
- * removing and reordering as needed), types the inventory of each language of the project, and sees the merged chart: black for
- * the sounds all the languages have, the colour of the language for those that are specific to it. The chart is written into the
+ * removing and reordering as needed), types the inventory of each language of the project, and sees the merged chart: each sound followed by
+ * a coloured tag with the language(s) that have it, each cell tinted with their colours. The "Sounds" panel holds, for each sound, its description
+ * ("prenasalised voiced bilabial plosive"), its audio file and its PHOIBLE link, shown in a box when the reader hovers over the sound (phonotip.js). The chart is written into the
  * section as a fenced block (```phonotable … ```) that the author never has to type. The preview is made by the server with the same
  * code as the page. See phonotable.py.
  */
@@ -76,16 +77,20 @@ const PhonoEditor = (() => {
         <div class="pt-axes"><div class="pt-axis" data-axis="columns"></div><div class="pt-axis" data-axis="rows"></div></div>
         <div class="pt-bar" style="margin-top:0.4rem;"><button type="button" class="pt-btn" data-act="reset">↺ Suggested columns and rows</button></div>
         <h4>${several ? 'Inventory of each language' : 'Inventory'}</h4>
-        <p class="pt-help">${several ? 'Choose a language and type its sounds in the cells, separated by spaces (p b). The chart merges the languages: in <b>black</b> what all the languages that have an inventory share, in the <b>colour of the language</b> what is specific to it (a sound of several, but not all, shows their colours together).' : 'Type the sounds in the cells, separated by spaces (p b).'}</p>
+        <p class="pt-help">${several ? 'Choose a language and type its sounds in the cells, separated by spaces (p b). The chart merges the languages: a sound found in only some of them is followed by a coloured <b>tag</b> with their abbreviations, and the background of each cell takes the colours of the languages involved; a sound found in all of them has no tag.' : 'Type the sounds in the cells, separated by spaces (p b).'}</p>
         ${several ? `<div class="pt-langs" id="pt-langs-${id}">${langs.map(l => `<button type="button" class="pt-lang${l.code === st.lang ? ' active' : ''}" data-lang="${esc(l.code)}"><i style="background:${esc(l.color)}"></i>${esc(l.name)}</button>`).join('')}</div>` : ''}
         <div class="pt-grid-wrap"><table class="pt-grid" id="pt-grid-${id}"></table></div>
+        <h4>Sounds</h4>
+        <p class="pt-help">For each sound of the chart: its <b>description</b> as the reader will see it when hovering over it, place and manner of articulation (for example <code>prenasalised voiced bilabial plosive</code>); the <b>audio</b>, the name of a file in the audio folder of the project (<code>p.mp3</code>) or an address; and the <b>PHOIBLE</b> link. Any of them may stay empty.</p>
+        <div class="pt-segs-wrap"><table class="pt-segtable" id="pt-segs-${id}"></table></div>
+        <div class="pt-segmsg" id="pt-segmsg-${id}"></div>
         <h4>Preview</h4><div class="pt-preview" id="pt-preview-${id}"></div>
         <div class="pt-bar" style="margin-top:0.6rem;">
           <button type="button" class="pt-btn primary" data-act="write" id="pt-write-${id}"></button>
           <button type="button" class="pt-btn danger" data-act="remove" id="pt-remove-${id}">Remove this chart from the text</button>
         </div>
         <div class="pt-msg" id="pt-msg-${id}"></div>`;
-      renderAxes(); renderGrid(); renderWrite(); preview();
+      renderAxes(); renderGrid(); renderSegs(); renderWrite(); preview();
     }
     const $ = sel => root.querySelector(sel);
     function renderWrite() {
@@ -108,6 +113,21 @@ const PhonoEditor = (() => {
       const s = st.spec;
       $('#pt-grid-' + id).innerHTML = '<thead><tr><th></th>' + s.columns.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>' +
         s.rows.map((r, ri) => `<tr><th class="r">${esc(r)}</th>` + s.columns.map((c, ci) => `<td><input type="text" class="pt-cell" data-r="${ri}" data-c="${ci}" value="${esc(cell(st.lang, r, c))}" aria-label="${esc(r)}, ${esc(c)}" autocomplete="off" spellcheck="false"></td>`).join('') + '</tr>').join('') + '</tbody>';
+    }
+    function soundsOf() {                                  // the sounds typed in the inventories, once each, in the order of the chart
+      const out = [], s = st.spec; if (!s) return out;
+      for (const l of langs) for (const r of s.rows) for (const c of s.columns)
+        for (const p of cell(l.code, r, c).split(/[\s,;]+/)) if (p && !out.includes(p)) out.push(p);
+      return out;
+    }
+    function renderSegs() {
+      if (!st.spec || !$('#pt-segs-' + id)) return;                // the builder was closed meanwhile
+      const sounds = soundsOf(), seg = st.spec.segments || {};
+      const f = (p, k, ph) => `<input type="text" data-seg="${esc(p)}" data-field="${k}" value="${esc((seg[p] || {})[k] || '')}" placeholder="${ph}" maxlength="${k === 'description' ? 200 : 400}" autocomplete="off" spellcheck="false" aria-label="${k} of ${esc(p)}">`;
+      $('#pt-segs-' + id).innerHTML = sounds.length
+        ? '<thead><tr><th>Sound</th><th>Description (place and manner)</th><th>Audio file or address</th><th>PHOIBLE link</th></tr></thead><tbody>' +
+          sounds.map(p => `<tr><th class="r pt-sound">${esc(p)}</th><td>${f(p, 'description', 'voiced bilabial plosive')}</td><td>${f(p, 'audio', 'p.mp3')}</td><td>${f(p, 'phoible', 'https://phoible.org/…')}</td></tr>`).join('') + '</tbody>'
+        : '<tbody><tr><td class="pt-help" style="padding:0.5rem;">Type some sounds in the inventory above and they will be listed here.</td></tr></tbody>';
     }
     function setCell(code, r, c, text) {
       const inv = st.spec.inventory;
@@ -132,7 +152,12 @@ const PhonoEditor = (() => {
       const s = st.spec, inv = {};
       for (const [code, byRow] of Object.entries(s.inventory)) for (const [r, byCol] of Object.entries(byRow)) for (const [c, t] of Object.entries(byCol))
         if (t.trim() && s.rows.includes(r) && s.columns.includes(c)) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t.trim();
-      return { kind: s.kind, caption: s.caption.trim(), label: (s.label || '').trim(), columns: s.columns, rows: s.rows, inventory: inv };
+      const used = new Set(soundsOf()), segments = {};
+      for (const [p, d] of Object.entries(s.segments || {})) if (used.has(p)) {
+        const item = {}; for (const k of ['description', 'audio', 'phoible']) if (typeof d[k] === 'string' && d[k].trim()) item[k] = d[k].trim();
+        if (Object.keys(item).length) segments[p] = item;
+      }
+      return { kind: s.kind, caption: s.caption.trim(), label: (s.label || '').trim(), columns: s.columns, rows: s.rows, inventory: inv, segments };
     }
     function position() {                                // how many charts come before this one in the section (its number follows from that)
       if (st.index !== null) return st.index;
@@ -146,13 +171,14 @@ const PhonoEditor = (() => {
         if (my !== st.run) return;
         if (!j || !r.ok || !j.ok) { box.innerHTML = ''; msg.className = 'pt-msg error'; msg.textContent = (j && j.error) || `The server could not make the preview (HTTP ${r.status}). ${OLD_SERVER}`; return; }
         box.innerHTML = j.html;
+        const sm = $('#pt-segmsg-' + id); if (sm) sm.innerHTML = (j.problems || []).map(x => `<div>${esc(x)}</div>`).join('');
         const write = $('#pt-write-' + id);
         if (j.labelTaken) {                                  // a label belongs to one table or figure: the reference would be ambiguous
           msg.className = 'pt-msg error'; msg.textContent = `The label “${st.spec.label}” is already used by ${j.labelTaken.name}: choose another one.`; write.disabled = true;
         } else { write.disabled = false; if (msg.className.includes('error')) { msg.className = 'pt-msg'; msg.textContent = ''; } }
       } catch (e) { /* offline: keep what is there */ }
     }
-    const schedule = () => { clearTimeout(st.timer); st.timer = setTimeout(preview, 250); };
+    const schedule = () => { clearTimeout(st.timer); st.timer = setTimeout(() => { if (!st.spec) return; const a = document.activeElement; if (!(a && a.dataset && a.dataset.seg)) renderSegs(); preview(); }, 250); };
 
     // ── writing into the text ──
     function blockText() { return '```phonotable\n' + JSON.stringify(cleanSpec()) + '\n```'; }
@@ -183,7 +209,12 @@ const PhonoEditor = (() => {
       const inv = {};
       for (const [code, byRow] of Object.entries(b.spec.inventory || {})) if (langs.some(l => l.code === code) && byRow && typeof byRow === 'object')
         for (const [r, byCol] of Object.entries(byRow)) if (byCol && typeof byCol === 'object') for (const [c, t] of Object.entries(byCol)) if (typeof t === 'string' && t.trim()) ((inv[code] = inv[code] || {})[r] = inv[code][r] || {})[c] = t;
-      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), label: String(b.spec.label || ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv };
+      const segments = {};
+      if (b.spec.segments && typeof b.spec.segments === 'object') for (const [p, d] of Object.entries(b.spec.segments)) if (d && typeof d === 'object') {
+        const item = {}; for (const k of ['description', 'audio', 'phoible']) if (typeof d[k] === 'string') item[k] = d[k];
+        segments[p] = item;
+      }
+      return { kind: b.spec.kind, caption: String(b.spec.caption ?? b.spec.title ?? ''), label: String(b.spec.label || ''), columns: arr(b.spec.columns), rows: arr(b.spec.rows), inventory: inv, segments };
     }
 
     // ── what the author does ──
@@ -191,7 +222,7 @@ const PhonoEditor = (() => {
       const t = ev.target.closest('[data-act], [data-lang]'); if (!t) return;
       if (t.dataset.lang) { st.lang = t.dataset.lang; root.querySelectorAll('.pt-lang').forEach(b => b.classList.toggle('active', b.dataset.lang === st.lang)); renderGrid(); return; }
       const act = t.dataset.act, axis = t.dataset.axis, i = +t.dataset.i;
-      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', label: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {} }, null); }
+      if (act === 'new') { const k = t.dataset.kind; openBuilder({ kind: k, caption: '', label: '', columns: [...D.axes[k].columns], rows: [...D.axes[k].rows], inventory: {}, segments: {} }, null); }
       else if (act === 'edit') { const s = fromBlock(i); if (s) openBuilder(s, i); }
       else if (act === 'back') showList();
       else if (act === 'write') write();
@@ -214,6 +245,9 @@ const PhonoEditor = (() => {
       else if (t.id === 'pt-label-' + id) {                 // letters, digits, - and _ only: anything else becomes -
         const v = t.value.replace(/[^A-Za-z0-9_-]+/g, '-'); if (v !== t.value) t.value = v;
         st.spec.label = v.replace(/^[-_]+|[-_]+$/g, ''); schedule();
+      }
+      else if (t.dataset.seg !== undefined && t.dataset.field) {
+        const seg = (st.spec.segments = st.spec.segments || {}); (seg[t.dataset.seg] = seg[t.dataset.seg] || {})[t.dataset.field] = t.value; schedule();
       }
       else if (t.classList.contains('pt-cell')) { setCell(st.lang, st.spec.rows[+t.dataset.r], st.spec.columns[+t.dataset.c], t.value); schedule(); }
       else if (t.dataset.axis && t.dataset.i !== undefined && t.tagName === 'INPUT') {
@@ -250,24 +284,25 @@ const PhonoEditor = (() => {
 
 /*
  * The legend under a chart is a set of check boxes, one for each language: the reader chooses the languages to show. A sound that none of
- * the ticked languages has is left out, and the colours are worked out again for the ticked ones: black for a sound that all of them have,
- * the language's colour for a sound of one, their colours together for a sound of some. It works for any chart in the page, as soon as it is there.
+ * the ticked languages has is left out; the tags and the background of each cell are worked out again for the ticked ones: a sound that all of
+ * them have shows no tag, any other shows the tags of the ticked languages that have it, and a cell is tinted with the colours of the ticked
+ * languages that have a sound in it (no tint if only one language is ticked). It works for any chart in the page, as soon as it is there.
  */
 (() => {
-  const gradient = cols => 'linear-gradient(90deg,' + cols.map((c, i) => `${c} ${+(100 * i / cols.length).toFixed(2)}% ${+(100 * (i + 1) / cols.length).toFixed(2)}%`).join(',') + ')';
+  const stripes = cols => 'linear-gradient(90deg,' + cols.map((c, i) => `${c}2e ${+(100 * i / cols.length).toFixed(2)}% ${+(100 * (i + 1) / cols.length).toFixed(2)}%`).join(',') + ')';
   function apply(fig) {
     const boxes = [...fig.querySelectorAll('.phono-legend input[data-lang]')];
     const on = boxes.filter(b => b.checked).map(b => b.dataset.lang);
     const color = Object.fromEntries(boxes.map(b => [b.dataset.lang, b.dataset.color]));
-    const name = Object.fromEntries(boxes.map(b => [b.dataset.lang, b.parentElement.textContent.trim()]));
     fig.querySelectorAll('.ph[data-langs]').forEach(el => {
       const langs = el.dataset.langs.split(' ').filter(l => on.includes(l));
-      el.className = 'ph'; el.removeAttribute('style'); el.removeAttribute('title');
-      if (!langs.length) { el.classList.add('ph-off'); return; }
-      if (langs.length === on.length) { el.classList.add('ph-all'); return; }
-      el.title = langs.map(l => name[l]).join(', ');
-      if (langs.length === 1) { el.classList.add('ph-one'); el.style.color = color[langs[0]]; }
-      else { el.classList.add('ph-mix'); el.style.setProperty('--ph-c1', color[langs[0]]); el.style.setProperty('--ph-grad', gradient(langs.map(l => color[l]))); }
+      el.classList.toggle('ph-off', !langs.length);
+      el.querySelectorAll('.ph-tag').forEach(t => { t.hidden = !(langs.length && langs.length < on.length && langs.includes(t.dataset.lang)); });
+    });
+    fig.querySelectorAll('td.ph-cell').forEach(td => {
+      const used = on.filter(l => [...td.querySelectorAll('.ph:not(.ph-off)')].some(el => el.dataset.langs.split(' ').includes(l)));
+      td.dataset.langs = used.join(' ');
+      if (on.length > 1 && used.length) td.style.setProperty('--cell-bg', stripes(used.map(l => color[l]))); else td.style.removeProperty('--cell-bg');
     });
   }
   document.addEventListener('change', ev => {
