@@ -93,7 +93,8 @@ def _load_project():
     files = {'dictionary': 'project/dictionary.xml', 'fieldnotes': 'project/fieldnotes.xml',
              'grammarDir': 'project/grammar', 'recordingsDir': 'project/texts', 'imagesDir': 'project/images',
              'orthography': 'project/orthography.json', 'seedPhonetic': 'project/seed-phonetic-forms.json',
-             'pagesDir': 'project/pages', 'references': 'project/references.json', 'glossaryDir': 'project/glossary'}
+             'pagesDir': 'project/pages', 'references': 'project/references.json', 'glossaryDir': 'project/glossary',
+             'audioDir': 'project/audio'}
     files.update(p.get('files') or {})
     p['files'] = files
     return p
@@ -109,6 +110,7 @@ REFERENCES_FILE       = PROJECT['files']['references']
 GRAMMATICAL_DOMAINS   = {d.strip().lower() for d in PROJECT['grammaticalDomains']}
 FIELDNOTES_FILE       = PROJECT['files']['fieldnotes']
 IMAGES_FOLDER         = PROJECT['files']['imagesDir']
+AUDIO_FOLDER          = PROJECT['files']['audioDir']             # the recordings of the sounds of the phonological charts
 TRANSCRIPTIONS_FOLDER = PROJECT['files']['recordingsDir']
 GLOSSES_FOLDER        = os.path.join(TRANSCRIPTIONS_FOLDER, 'glosses')
 TRANSCRIPTIONS_INDEX  = os.path.join(TRANSCRIPTIONS_FOLDER, 'index.json')
@@ -1956,7 +1958,7 @@ def _backup_files():
     """Everything the author edits: the files of the project (as configured), the project settings, and the data under uploads (not the backups, not
     the files of an import in progress, not the state of the backups)."""
     f = PROJECT['files']
-    paths = [f.get(k) for k in ('dictionary', 'fieldnotes', 'grammarDir', 'glossaryDir', 'recordingsDir', 'imagesDir', 'orthography', 'seedPhonetic', 'pagesDir', 'references')]
+    paths = [f.get(k) for k in ('dictionary', 'fieldnotes', 'grammarDir', 'glossaryDir', 'recordingsDir', 'imagesDir', 'orthography', 'seedPhonetic', 'pagesDir', 'references', 'audioDir')]
     paths.append(PROJECT_PATH)
     try:
         for n in sorted(os.listdir(UPLOAD_FOLDER)):
@@ -2091,7 +2093,8 @@ def phonotable_preview():
         mine = it and bool(data.get('editing')) and it['kind'] == 'table' and it['section'] == section and it['kindIndex'] == position
         if it and not mine:
             taken = {'name': f"{PROJECT['captions'][it['kind']]} {it['number']}", 'section': it['section']}
-    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions'], anchors=False), 'spec': spec, 'number': number, 'labelTaken': taken})
+    return jsonify({'ok': True, 'html': phono.render_html(spec, PROJECT['languages'], number, PROJECT['captions'], anchors=False), 'spec': spec, 'number': number, 'labelTaken': taken,
+                    'problems': phono.segment_problems((data.get('spec') or {}).get('segments'), spec)})
 
 @app.route('/api/grammar/<section_id>/source')
 def get_grammar_source(section_id):
@@ -2170,6 +2173,17 @@ def upload_image():
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     return send_from_directory(IMAGES_FOLDER, filename)
+
+
+_AUDIO_TYPES = {'.mp3', '.ogg', '.oga', '.opus', '.wav', '.m4a', '.aac', '.flac', '.webm'}
+
+@app.route('/audio/<path:name>')
+def serve_audio(name):
+    """A recording of a sound of a phonological chart: only audio files, from the audio folder of the project (no hidden part, no ..)."""
+    parts = name.split('/')
+    if any(not x or x.startswith('.') or x == '..' for x in parts) or os.path.splitext(parts[-1])[1].lower() not in _AUDIO_TYPES:
+        abort(404)
+    return send_from_directory(os.path.abspath(AUDIO_FOLDER), name)
 
 
 # ── Dictionary entries (compact JSON for client-side gloss lookup) ────────────
