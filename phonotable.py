@@ -17,6 +17,11 @@ are in the optional "segments" of the definition ({"p": {"description": "...", "
 A chart of vowels with long vowels (iː) is two tables, short and long, under one caption and one legend.
 In LaTeX the chart is split into one plain table for each language.
 
+A third kind, "lexical", is a comparative table of words (the independent personal pronouns, the numerals ...): the same rows and columns, and in each
+cell the word of each language. A word found in every language of the table is shown in black, one found in only some is followed by the tags of
+those languages, exactly as for the sounds (but no cell is tinted). A tilde separates a word from its variant (`ni ~ nē`); each part is a link to
+its entry of the dictionary, as {{entry: ID}} is (`na@ID` links to that entry when the word alone is not enough).
+
 Nothing here knows a language or the web framework: the languages (code, name, colour) are given.
 """
 import html as _html
@@ -27,7 +32,7 @@ from urllib.parse import quote as _urlquote
 
 import captions as _cap
 
-KINDS = ('consonants', 'vowels')
+KINDS = ('consonants', 'vowels', 'lexical')
 
 # What the author starts from (and may change: add, remove, reorder). The IPA order of places and manners.
 DEFAULT_AXES = {
@@ -39,9 +44,12 @@ DEFAULT_AXES = {
         'columns': ['Front', 'Central', 'Back'],
         'rows': ['Close', 'Near-close', 'Close-mid', 'Mid', 'Open-mid', 'Near-open', 'Open'],
     },
+    'lexical': {'columns': [], 'rows': []},              # the author's own: nothing is suggested
 }
 MAX_AXIS, MAX_LABEL, MAX_PHONEMES, MAX_PHONEME, MAX_BLOCK = 40, 60, 24, 16, 200_000
 MAX_SEGMENTS, MAX_DESCRIPTION, MAX_LINK = 400, 200, 400
+MAX_FORM, MAX_PARTS, MAX_UNITS = 60, 4, 6                       # a word, the parts of a word with its variants, the words of a cell (lexical tables)
+_ENTRY_ID = re.compile(r'[A-Za-z0-9_.:\-]{1,80}')
 AUDIO_BASE = 'audio/'                                       # where the page asks for an audio file (the server serves project/audio there)
 _AUDIO_FILE = re.compile(r'[^\s\\/:*?"<>|][^\s\\:*?"<>|]*\.(?:mp3|ogg|oga|opus|wav|m4a|aac|flac|webm)', re.I)
 _URL = re.compile(r'https?://[^\s<>"\']+', re.I)
@@ -75,6 +83,55 @@ def phonemes(text):
     for p in re.split(r'[\s,;]+', _nfc(text)):
         if p and len(p) <= MAX_PHONEME and p not in out and len(out) < MAX_PHONEMES:
             out.append(p)
+    return out
+
+
+def lex_parts(unit):
+    """The parts of a word of a lexical table: [(text, entry id or '')]. The first is the entry, the others its variants (`ni ~ nē`);
+    `form@ID` names the entry of the dictionary by its identifier."""
+    out = []
+    for raw in _nfc(unit).split('~'):
+        text, _at, ident = raw.partition('@')
+        text, ident = re.sub(r'\s+', ' ', text).strip()[:MAX_FORM], ident.strip()
+        if text and len(out) < MAX_PARTS:
+            out.append((text, ident if _ENTRY_ID.fullmatch(ident) else ''))
+    return out
+
+
+def lex_unit(unit):
+    """A word as it is kept: its parts, joined with ' ~ ' (the identifier, if any, after the part it belongs to)."""
+    return ' ~ '.join(t + ('@' + i if i else '') for t, i in lex_parts(unit))
+
+
+def lex_text(unit):
+    """A word as the reader reads it (no identifiers)."""
+    return ' ~ '.join(t for t, _i in lex_parts(unit))
+
+
+def lex_units(text):
+    """The words written in a cell of a lexical table: separated by semicolons, at most MAX_UNITS, no repeat."""
+    out = []
+    for u in _nfc(text).split(';'):
+        u = lex_unit(u)
+        if u and u not in out and len(out) < MAX_UNITS:
+            out.append(u)
+    return out
+
+
+def units(kind, text):
+    """What a cell holds: the sounds (consonants, vowels) or the words (lexical)."""
+    return lex_units(text) if kind == 'lexical' else phonemes(text)
+
+
+def entries_of(spec):
+    """[(row, column, language code, word, identifier)]: the ENTRY of every word of a lexical table (the first part: a variant is not an entry)."""
+    out = []
+    for code, by_row in spec.get('inventory', {}).items():
+        for r in spec['rows']:
+            for c in spec['columns']:
+                for u in lex_units(by_row.get(r, {}).get(c, '')):
+                    t, i = lex_parts(u)[0]
+                    out.append((r, c, code, t, i))
     return out
 
 
@@ -162,15 +219,18 @@ def clean(spec, language_codes=None):
                 continue
             for c, text in by_col.items():
                 c2 = cmap.get(_label(c).lower()) if isinstance(c, str) else None
-                ph = phonemes(text) if isinstance(text, str) else []
+                ph = units(kind, text) if isinstance(text, str) else []
                 if c2 is not None and ph:
-                    inv.setdefault(code, {}).setdefault(r2, {})[c2] = ' '.join(ph)
-    sounds = {p for by_row in inv.values() for by_col in by_row.values() for t in by_col.values() for p in t.split(' ')}
-    segments = clean_segments(spec.get('segments'), sounds)
+                    inv.setdefault(code, {}).setdefault(r2, {})[c2] = '; '.join(ph) if kind == 'lexical' else ' '.join(ph)
+    sounds = {p for by_row in inv.values() for by_col in by_row.values() for t in by_col.values() for p in t.split(' ')} if kind != 'lexical' else set()
+    segments = clean_segments(spec.get('segments'), sounds)          # (a lexical table has none)
     # the caption is the text shown after "Table 3 –": there is no title (an old block's title is read as its caption)
     caption = _cap.caption_text(spec['caption'] if isinstance(spec.get('caption'), str) else spec.get('title') if isinstance(spec.get('title'), str) else '')
     # the label is the short name that lets the text refer to the chart: {{ref: name}}
-    return {'kind': kind, 'caption': caption, 'label': _cap.clean_label(spec['label'] if isinstance(spec.get('label'), str) else ''), 'columns': cols, 'rows': rows, 'inventory': inv, 'segments': segments}, None
+    out = {'kind': kind, 'caption': caption, 'label': _cap.clean_label(spec['label'] if isinstance(spec.get('label'), str) else ''), 'columns': cols, 'rows': rows, 'inventory': inv, 'segments': segments}
+    if kind == 'lexical':                                   # the part of speech of the entries the words are links to (so that na, the pronoun, is not the article na)
+        out['pos'] = re.sub(r'\s+', ' ', _nfc(spec.get('pos') if isinstance(spec.get('pos'), str) else '')).strip()[:30]
+    return out, None
 
 
 def parse_block(text):
@@ -194,7 +254,7 @@ def merge(spec, languages):
         for c in spec['columns']:
             seen, found = [], {}
             for code in present:
-                for p in phonemes(inv[code].get(r, {}).get(c, '')):
+                for p in units(spec['kind'], inv[code].get(r, {}).get(c, '')):
                     if p not in found:
                         seen.append(p); found[p] = []
                     found[p].append(code)
@@ -206,7 +266,7 @@ def merge(spec, languages):
 def present_languages(spec, languages):
     """The languages (as the project lists them, in its order) that have at least one sound in the chart."""
     inv = spec.get('inventory', {})
-    return [l for l in languages if any(phonemes(cell) for row in inv.get(l['code'], {}).values() for cell in row.values())]
+    return [l for l in languages if any(units(spec['kind'], cell) for row in inv.get(l['code'], {}).values() for cell in row.values())]
 
 
 def caption_names(spec, languages):
@@ -237,9 +297,11 @@ def _stripes(colors, alpha='2e'):
     return 'linear-gradient(90deg,' + ','.join('%s%s %g%% %g%%' % (c, alpha, round(100 * i / n, 2), round(100 * (i + 1) / n, 2)) for i, c in enumerate(colors)) + ')'
 
 
-def render_html(spec, languages, number=None, lab=None, anchors=True):
+def render_html(spec, languages, number=None, lab=None, anchors=True, resolver=None):
     """The chart as HTML, with its caption above it ("Table 3 – …"; the number is given by the caller). The text of the table is escaped;
-    the colours and the tags come from the languages of the project, never from the table. With one language there are no tags and no tints."""
+    the colours and the tags come from the languages of the project, never from the table. With one language there are no tags and no tints.
+    For a lexical table `resolver(code, word, id, pos)` -> (entry id, title) or None says where a word is in the dictionary (each part of a word is a link
+    to its entry); without it nothing is a link."""
     e = _html.escape
     m = merge(spec, languages)
     present, by_code = m['languages'], {l['code']: l for l in languages}
@@ -249,7 +311,27 @@ def render_html(spec, languages, number=None, lab=None, anchors=True):
         l = by_code[code]
         abbr = str(l.get('abbr') or l['code']).upper()
         return (f'<span class="ph-tag" data-lang="{e(code)}" style="--tag:{_hex(l.get("color"))}" title="{e(l["name"])}"{" hidden" if hidden else ""}>{e(abbr)}</span>')
+    lexical = spec['kind'] == 'lexical'
+    def word(item):
+        """A word of a lexical table: its parts (a link where the dictionary has the entry), separated by a tilde, then the tags."""
+        langs = item['langs']
+        shared = len(langs) == len(present)
+        shown = []
+        for k, (text, ident) in enumerate(lex_parts(item['p'])):
+            hit = None
+            for code in langs:                                     # a word shared by several languages: the first in which it is an entry
+                hit = resolver(code, text, ident, spec.get('pos', '')) if resolver else None
+                if hit:
+                    break
+            if hit:
+                shown.append(f'<a class="lx-link" href="dictionary.html#{e(hit[0])}"' + (f' title="{e(hit[1])}"' if hit[1] else '') + f'>{e(text)}</a>')
+            else:
+                shown.append(f'<span class="lx-plain">{e(text)}</span>')
+        tags = ''.join(tag(c, shared) for c in langs) if several else ''
+        return f'<span class="ph" data-langs="{e(" ".join(langs))}"><span class="lx-form">{' <span class="lx-tilde">~</span> '.join(shown)}</span>{tags}</span>'
     def sound(item):
+        if lexical:
+            return word(item)
         langs, s = item['langs'], seg.get(item['p'], {})
         shared = len(langs) == len(present)                     # a sound of every language needs no tag
         tags = ''.join(tag(c, shared) for c in langs) if several else ''
@@ -265,15 +347,21 @@ def render_html(spec, languages, number=None, lab=None, anchors=True):
             for c in spec['columns']:
                 items = [i for i in m['cells'].get(r, {}).get(c, []) if keep(i['p'])]
                 used = [code for code in present if any(code in i['langs'] for i in items if len(i['langs']) < len(present))]
-                style = f' style="--cell-bg:{_stripes([_hex(by_code[x].get("color")) for x in used])}"' if several and used else ''
-                tds += f'<td class="ph-cell" data-langs="{e(" ".join(used))}"{style}>' + ' '.join(sound(i) for i in items) + '</td>'
+                style = f' style="--cell-bg:{_stripes([_hex(by_code[x].get("color")) for x in used])}"' if several and used and not lexical else ''
+                tds += f'<td class="{"lx-cell" if lexical else "ph-cell"}" data-langs="{e(" ".join(used))}"{style}>' + ' '.join(sound(i) for i in items) + '</td>'
             body += f'<tr><th scope="row">{e(r)}</th>{tds}</tr>'
         return f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner">{e(label)}</th>{head}</tr></thead><tbody>{body}</tbody></table></div>'
     # a chart of vowels that has long vowels (a sound ending in the length mark) is two tables, short on the left and long on the right, with one legend
     has_long = spec['kind'] == 'vowels' and any(is_long(i['p']) for cells in m['cells'].values() for items in cells.values() for i in items)
     tables = (f'<div class="phono-pair">{table(SHORT_LABEL, lambda s: not is_long(s))}{table(LONG_LABEL, is_long)}</div>' if has_long else table('', lambda s: True))
     legend = ''
-    if several:                                             # the legend is a set of check boxes: the reader chooses the languages to show
+    if several and lexical:
+        boxes = ' '.join(f'<label class="lg"><input type="checkbox" checked data-lang="{e(c)}" data-color="{_hex(by_code[c].get("color"))}">'
+                         f'<span class="lg-name">{e(by_code[c]["name"])}</span> <span class="lg-tag" style="--tag:{_hex(by_code[c].get("color"))}">{e(str(by_code[c].get("abbr") or c).upper())}</span></label>' for c in present)
+        legend = (f'<div class="phono-legend"><span class="pl-title">Languages shown:</span> {boxes}'
+                  '<div class="pl-note">The tag after a word says which language has it; a word without a tag is the same in all the languages shown. A tilde separates a word from its variant. '
+                  'Untick a language to leave its words out. Click a word to go to its entry of the dictionary.</div></div>')
+    elif several:                                             # the legend is a set of check boxes: the reader chooses the languages to show
         boxes = ' '.join(f'<label class="lg"><input type="checkbox" checked data-lang="{e(c)}" data-color="{_hex(by_code[c].get("color"))}">'
                          f'<span class="lg-name">{e(by_code[c]["name"])}</span> <span class="lg-tag" style="--tag:{_hex(by_code[c].get("color"))}">{e(str(by_code[c].get("abbr") or c).upper())}</span></label>' for c in present)
         legend = (f'<div class="phono-legend"><span class="pl-title">Languages shown:</span> {boxes}'
@@ -308,21 +396,23 @@ def render_latex(spec, languages, render_text=None, lab=None):
     render_text = render_text or _tex
     present = present_languages(spec, languages)
     label = spec.get('label') or ''
-    sound = lambda p: _tex(p)
+    lexical = spec['kind'] == 'lexical'
+    sound = (lambda p: _tex(lex_text(p))) if lexical else (lambda p: _tex(p))
+    sep = '; ' if lexical else ' '
     if len(present) <= 1:                                        # not split: as it is, with the name of its language if the caption asks for it
         caption = _cap.fill_language(spec['caption'], [l['name'] for l in (present or languages)], lab)
         cells = {}
         for l in present:
             for r in spec['rows']:
                 for c in spec['columns']:
-                    cells[(r, c)] = ' '.join(sound(p) for p in phonemes(spec['inventory'][l['code']].get(r, {}).get(c, '')))
+                    cells[(r, c)] = sep.join(sound(p) for p in units(spec['kind'], spec['inventory'][l['code']].get(r, {}).get(c, '')))
         return _latex_table(render_text(caption), spec['columns'], spec['rows'], cells, ('\\label{tab:%s}\n' % label) if label else '')
     out = ['\\tabgroupstart']
     for k, l in enumerate(present):
         inv = spec['inventory'][l['code']]
-        rows = [r for r in spec['rows'] if any(phonemes(inv.get(r, {}).get(c, '')) for c in spec['columns'])]
-        cols = [c for c in spec['columns'] if any(phonemes(inv.get(r, {}).get(c, '')) for r in rows)]
-        cells = {(r, c): ' '.join(sound(p) for p in phonemes(inv.get(r, {}).get(c, ''))) for r in rows for c in cols}
+        rows = [r for r in spec['rows'] if any(units(spec['kind'], inv.get(r, {}).get(c, '')) for c in spec['columns'])]
+        cols = [c for c in spec['columns'] if any(units(spec['kind'], inv.get(r, {}).get(c, '')) for r in rows)]
+        cells = {(r, c): sep.join(sound(p) for p in units(spec['kind'], inv.get(r, {}).get(c, ''))) for r in rows for c in cols}
         base = spec['caption']
         caption = base.replace(_cap.LANGUAGE, l['name']) if _cap.LANGUAGE in base else (f"{base} ({l['name']})" if base.strip() else l['name'])
         extra = ''
@@ -349,14 +439,14 @@ def extract(md_text):
     return BLOCK_RE.sub(take, md_text), blocks
 
 
-def render_block(text, languages, fmt='html', number=None, lab=None, render_text=None):
+def render_block(text, languages, fmt='html', number=None, lab=None, render_text=None, resolver=None):
     """One fenced block -> its chart; if it cannot be read, a message in its place (never an exception)."""
     spec, err = parse_block(text)
     if spec is not None:
         spec, err = clean(spec, {l['code'] for l in languages})
     if spec is None:
         return ('<div class="shortcode-error">Phonological table: %s</div>' % _html.escape(err)) if fmt == 'html' else '%% phonological table: %s\n' % err.replace('\n', ' ')
-    return render_html(spec, languages, number, lab) if fmt == 'html' else render_latex(spec, languages, render_text, lab)
+    return render_html(spec, languages, number, lab, resolver=resolver) if fmt == 'html' else render_latex(spec, languages, render_text, lab)
 
 
 def list_charts(blocks, languages):
@@ -373,13 +463,24 @@ def list_charts(blocks, languages):
     return out
 
 
+def lexical_specs(blocks, languages):
+    """The lexical tables among the blocks of a section, cleaned (what the dictionary may be asked about)."""
+    codes, out = {l['code'] for l in languages}, []
+    for b in blocks:
+        spec = parse_block(b)[0]
+        spec = clean(spec, codes)[0] if spec is not None else None
+        if spec is not None and spec['kind'] == 'lexical':
+            out.append(spec)
+    return out
+
+
 def count_valid(blocks, languages):
     """How many of the blocks are charts that can be shown (so that will have a number)."""
     codes = {l['code'] for l in languages}
     return sum(1 for b in blocks if parse_block(b)[0] is not None and clean(parse_block(b)[0], codes)[0] is not None)
 
 
-def put_back(rendered, blocks, languages, fmt='html', start=0, lab=None, render_text=None):
+def put_back(rendered, blocks, languages, fmt='html', start=0, lab=None, render_text=None, resolver=None):
     """Replace the markers in the converted text by the charts. In HTML each chart that can be shown is numbered, from start + 1, in the
     order of the text (a block that cannot be read has a message and no number); LaTeX numbers its own tables."""
     codes, n = {l['code'] for l in languages}, start
@@ -388,7 +489,7 @@ def put_back(rendered, blocks, languages, fmt='html', start=0, lab=None, render_
         ok = spec is not None and clean(spec, codes)[0] is not None
         if ok:
             n += 1
-        out = render_block(b, languages, fmt, n if ok else None, lab, render_text)
+        out = render_block(b, languages, fmt, n if ok else None, lab, render_text, resolver)
         marker = 'PHONOTABLEXZ%dZX' % i
         rendered = rendered.replace('<p>%s</p>' % marker, out).replace(marker, out)
     return rendered
