@@ -10,8 +10,11 @@ In a grammar section a chart is a fenced block that the editor writes (the autho
      "inventory": {"drg": {"Plosive": {"Bilabial": "p b", "Alveolar": "t d"}, "Nasal": {"Bilabial": "m"}}}}
     ```
 
-A sound found in every language that has an inventory is shown in black; a sound found in only some is shown in the colours of
-those languages (one character split into as many coloured parts as there are languages; in LaTeX, once for each language).
+Each sound is followed by a small coloured tag with the abbreviation of the language(s) that have it (NUM, DRG ...), and the background of
+each cell takes the colour(s) of the languages involved. A sound found in every language shown has no tag. Over a sound the reader sees
+a box with its description (place and manner of articulation, as the author typed it), a button that plays it and a link to PHOIBLE: they
+are in the optional "segments" of the definition ({"p": {"description": "...", "audio": "p.mp3", "phoible": "https://phoible.org/..."}}).
+In LaTeX the chart is split into one plain table for each language.
 
 Nothing here knows a language or the web framework: the languages (code, name, colour) are given.
 """
@@ -19,6 +22,7 @@ import html as _html
 import json
 import re
 import unicodedata
+from urllib.parse import quote as _urlquote
 
 import captions as _cap
 
@@ -36,6 +40,10 @@ DEFAULT_AXES = {
     },
 }
 MAX_AXIS, MAX_LABEL, MAX_PHONEMES, MAX_PHONEME, MAX_BLOCK = 40, 60, 24, 16, 200_000
+MAX_SEGMENTS, MAX_DESCRIPTION, MAX_LINK = 400, 200, 400
+AUDIO_BASE = 'audio/'                                       # where the page asks for an audio file (the server serves project/audio there)
+_AUDIO_FILE = re.compile(r'[^\s\\/:*?"<>|][^\s\\:*?"<>|]*\.(?:mp3|ogg|oga|opus|wav|m4a|aac|flac|webm)', re.I)
+_URL = re.compile(r'https?://[^\s<>"\']+', re.I)
 
 BLOCK_RE = re.compile(r'^[ \t]*```[ \t]*phonotable[ \t]*\r?\n(.*?)\r?\n[ \t]*```[ \t]*\r?$', re.S | re.M)
 
@@ -69,6 +77,67 @@ def phonemes(text):
     return out
 
 
+def _link(value):
+    """A PHOIBLE address: http(s) only ("phoible.org/…" gets https://); anything else is not kept."""
+    v = str(value or '').strip()
+    if re.match(r'(?i)(www\.)?phoible\.org(/|$)', v):
+        v = 'https://' + v
+    return v[:MAX_LINK] if len(v) <= MAX_LINK and _URL.fullmatch(v) else ''
+
+
+def _audio(value):
+    """An audio file: the name of a file of the audio folder (an audio extension, no .. and no hidden part), or an http(s) address."""
+    v = str(value or '').strip()
+    if len(v) > MAX_LINK:
+        return ''
+    if _URL.fullmatch(v):
+        return v
+    parts = v.split('/')
+    if v and _AUDIO_FILE.fullmatch(parts[-1]) and all(x and not x.startswith('.') for x in parts):
+        return v
+    return ''
+
+
+def audio_url(value):
+    """The address the page uses for the audio of a sound ('' if none)."""
+    v = _audio(value)
+    return v if _URL.fullmatch(v) or not v else AUDIO_BASE + _urlquote(v, safe='/')
+
+
+def clean_segments(raw, sounds):
+    """{sound: {description, audio, phoible}} for the sounds in `sounds` only; empty fields and entries are left out."""
+    out = {}
+    if not isinstance(raw, dict):
+        return out
+    for p, d in raw.items():
+        p = _nfc(p)
+        if p not in sounds or not isinstance(d, dict) or len(out) >= MAX_SEGMENTS:
+            continue
+        desc = re.sub(r'\s+', ' ', _nfc(d.get('description') if isinstance(d.get('description'), str) else '')).strip()[:MAX_DESCRIPTION]
+        item = {k: v for k, v in (('description', desc), ('audio', _audio(d.get('audio'))), ('phoible', _link(d.get('phoible')))) if v}
+        if item:
+            out[p] = item
+    return out
+
+
+def segment_problems(raw, cleaned):
+    """Messages about what the author typed in the sounds that was not kept (an address that is not one, a file that is not audio)."""
+    out = []
+    if not isinstance(raw, dict):
+        return out
+    for p, d in raw.items():
+        if p not in cleaned.get('segments', {}) and not (isinstance(d, dict) and any(str(d.get(k) or '').strip() for k in ('audio', 'phoible'))):
+            continue
+        if not isinstance(d, dict) or _nfc(p) not in {s for by_row in cleaned['inventory'].values() for by_col in by_row.values() for t in by_col.values() for s in t.split(' ')}:
+            continue
+        kept = cleaned.get('segments', {}).get(_nfc(p), {})
+        if str(d.get('audio') or '').strip() and 'audio' not in kept:
+            out.append('%s: the audio must be the name of a file (ending in .mp3, .ogg, .wav …) or an address that starts with http:// or https://.' % p)
+        if str(d.get('phoible') or '').strip() and 'phoible' not in kept:
+            out.append('%s: the PHOIBLE link must be an address that starts with https:// (or phoible.org/…).' % p)
+    return out
+
+
 def clean(spec, language_codes=None):
     """A definition as it will be kept: (spec, None), or (None, why not). Rows, columns and sounds are normalised; an inventory of a
     language that is not one of `language_codes`, or in a row or column that does not exist, is dropped."""
@@ -95,10 +164,12 @@ def clean(spec, language_codes=None):
                 ph = phonemes(text) if isinstance(text, str) else []
                 if c2 is not None and ph:
                     inv.setdefault(code, {}).setdefault(r2, {})[c2] = ' '.join(ph)
+    sounds = {p for by_row in inv.values() for by_col in by_row.values() for t in by_col.values() for p in t.split(' ')}
+    segments = clean_segments(spec.get('segments'), sounds)
     # the caption is the text shown after "Table 3 –": there is no title (an old block's title is read as its caption)
     caption = _cap.caption_text(spec['caption'] if isinstance(spec.get('caption'), str) else spec.get('title') if isinstance(spec.get('title'), str) else '')
     # the label is the short name that lets the text refer to the chart: {{ref: name}}
-    return {'kind': kind, 'caption': caption, 'label': _cap.clean_label(spec['label'] if isinstance(spec.get('label'), str) else ''), 'columns': cols, 'rows': rows, 'inventory': inv}, None
+    return {'kind': kind, 'caption': caption, 'label': _cap.clean_label(spec['label'] if isinstance(spec.get('label'), str) else ''), 'columns': cols, 'rows': rows, 'inventory': inv, 'segments': segments}, None
 
 
 def parse_block(text):
@@ -151,39 +222,47 @@ def _hex(color):
     return '#808080'
 
 
-def _grad(colors):
+def _stripes(colors, alpha='2e'):
+    """The background of a cell: the colours of the languages involved, side by side, light enough for the text to stay readable."""
     n = len(colors)
-    return 'linear-gradient(90deg,' + ','.join('%s %g%% %g%%' % (c, round(100 * i / n, 2), round(100 * (i + 1) / n, 2)) for i, c in enumerate(colors)) + ')'
+    return 'linear-gradient(90deg,' + ','.join('%s%s %g%% %g%%' % (c, alpha, round(100 * i / n, 2), round(100 * (i + 1) / n, 2)) for i, c in enumerate(colors)) + ')'
 
 
 def render_html(spec, languages, number=None, lab=None, anchors=True):
     """The chart as HTML, with its caption above it ("Table 3 – …"; the number is given by the caller). The text of the table is escaped;
-    the colours come from the languages of the project, never from the table."""
+    the colours and the tags come from the languages of the project, never from the table. With one language there are no tags and no tints."""
     e = _html.escape
     m = merge(spec, languages)
     present, by_code = m['languages'], {l['code']: l for l in languages}
+    several = len(present) > 1
+    seg = spec.get('segments') or {}
+    def tag(code, hidden):
+        l = by_code[code]
+        abbr = str(l.get('abbr') or l['code']).upper()
+        return (f'<span class="ph-tag" data-lang="{e(code)}" style="--tag:{_hex(l.get("color"))}" title="{e(l["name"])}"{" hidden" if hidden else ""}>{e(abbr)}</span>')
     def sound(item):
-        langs = item['langs']
-        names = ', '.join(e(by_code[c]['name']) for c in langs)
-        data = f'data-langs="{e(" ".join(langs))}"'
-        if len(langs) == len(present):
-            return f'<span class="ph ph-all" {data}>{e(item["p"])}</span>'
-        cols = [_hex(by_code[c].get('color')) for c in langs]
-        if len(cols) == 1:
-            return f'<span class="ph ph-one" style="color:{cols[0]}" title="{names}" {data}>{e(item["p"])}</span>'
-        return f'<span class="ph ph-mix" style="--ph-c1:{cols[0]};--ph-grad:{_grad(cols)}" title="{names}" {data}>{e(item["p"])}</span>'
+        langs, s = item['langs'], seg.get(item['p'], {})
+        shared = len(langs) == len(present)                     # a sound of every language needs no tag
+        tags = ''.join(tag(c, shared) for c in langs) if several else ''
+        attrs = f'data-seg="{e(item["p"])}" data-desc="{e(s.get("description", ""))}" data-audio="{e(audio_url(s.get("audio")))}" data-phoible="{e(s.get("phoible", ""))}"'
+        return f'<span class="ph" data-langs="{e(" ".join(langs))}"><span class="ph-seg" {attrs}>{e(item["p"])}</span>{tags}</span>'
     head = ''.join(f'<th scope="col">{e(c)}</th>' for c in spec['columns'])
     body = ''
     for r in spec['rows']:
-        tds = ''.join('<td>' + ' '.join(sound(i) for i in m['cells'].get(r, {}).get(c, [])) + '</td>' for c in spec['columns'])
+        tds = ''
+        for c in spec['columns']:
+            items = m['cells'].get(r, {}).get(c, [])
+            used = [code for code in present if any(code in i['langs'] for i in items)]
+            style = f' style="--cell-bg:{_stripes([_hex(by_code[x].get("color")) for x in used])}"' if several and used else ''
+            tds += f'<td class="ph-cell" data-langs="{e(" ".join(used))}"{style}>' + ' '.join(sound(i) for i in items) + '</td>'
         body += f'<tr><th scope="row">{e(r)}</th>{tds}</tr>'
     legend = ''
-    if len(present) > 1:                                    # the legend is a set of check boxes: the reader chooses the languages to show
+    if several:                                             # the legend is a set of check boxes: the reader chooses the languages to show
         boxes = ' '.join(f'<label class="lg"><input type="checkbox" checked data-lang="{e(c)}" data-color="{_hex(by_code[c].get("color"))}">'
-                         f'<span style="color:{_hex(by_code[c].get("color"))}">{e(by_code[c]["name"])}</span></label>' for c in present)
+                         f'<span class="lg-name">{e(by_code[c]["name"])}</span> <span class="lg-tag" style="--tag:{_hex(by_code[c].get("color"))}">{e(str(by_code[c].get("abbr") or c).upper())}</span></label>' for c in present)
         legend = (f'<div class="phono-legend"><span class="pl-title">Languages shown:</span> {boxes}'
-                  '<div class="pl-note">In black: sounds found in all the languages shown. In colour: sounds found only in some of them, in the colour of the language; '
-                  'a sound found in several of them, but not in all, shows their colours together. Untick a language to leave its sounds out.</div></div>')
+                  '<div class="pl-note">The tag after a sound says which language has it, and the background of a cell has the colours of the languages involved; '
+                  'a sound without a tag is found in all the languages shown. Untick a language to leave its sounds out. Hover over a sound to read about it.</div></div>')
     ident = f' id="{e(_cap.anchor("table", spec["label"]))}" data-label="{e(spec["label"])}"' if spec.get('label') and anchors else ''   # a preview has no anchor: the page must not have the id twice
     return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}"{ident}>{_cap.caption_html("table", number, _cap.fill_language(spec["caption"], caption_names(spec, languages), lab), lab)}'
             f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner"></th>{head}</tr></thead><tbody>{body}</tbody></table></div>{legend}</figure>')
