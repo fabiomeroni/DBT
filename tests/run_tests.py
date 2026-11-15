@@ -4265,6 +4265,52 @@ def suite_phonotip(browser, args):
 
 
 # ───────────────────────── 26. comparative tables of words (kind "lexical"): tags, links to the dictionary, proposed entries ─────────────────────────
+def suite_fnsplit(browser, args):
+    S = "fnsplit"
+    section("texts from fieldnotes: splitting a parallel sentence into groups of languages")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_fnsplit.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the rules of the split pass their own direct tests (tests/test_fnsplit.py)", unit.returncode == 0, (unit.stdout + unit.stderr)[-300:])
+    J = {"Content-Type": "application/json"}
+    site = Site()
+    try:
+        sid = "d01.Road:10"; url = "transcription.html?fieldnotes=1&index=0&title=D01"; api = site.url + "api/fieldnotes/tx/0/split"
+        vis = new_context(browser, site, 1280); va = vis.request
+        r = va.post(api, data=json.dumps({"sentence_id": sid, "groups": [["num", "drg"], ["kro", "olr", "lkn"]]}), headers=J)
+        check(S, "a visitor cannot split a sentence (401)", r.status == 401, str(r.status))
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        bad = [(g, aa.post(api, data=json.dumps({"sentence_id": sid, "groups": g}), headers=J).status) for g in ([["num", "drg", "kro", "olr", "lkn"]], [["num"], ["drg"]], [["num", "drg"], ["kro", "olr", "lkn", "num"]], [["num", "drg"], [], ["kro", "olr", "lkn"]])]
+        check(S, "one group, a missing language, a language twice or an empty group are refused (400), and nothing changes", all(c == 400 for _, c in bad) and "d01.Road:10a" not in (site.dir / "project/fieldnotes.xml").read_text(encoding="utf-8"), str(bad))
+        errs = []; pa = au.new_page(); watch(pa, errs); pa.on("dialog", lambda d_: errs.append("DIALOG " + d_.message))
+        open_page(pa, site, url, ".tx-phrase", 2200); pa.wait_for_timeout(900)
+        before = pa.locator(".tx-phrase").count()
+        ph = pa.locator(f'[id="{sid}"]'); ph.locator(".fn-edit-btn").click(); pa.wait_for_selector(f'#fn-editor-{sid.replace(".", chr(92) + ".").replace(":", chr(92) + ":")} .fn-editor, [id="fn-editor-{sid}"] .fn-editor')
+        check(S, "the edit menu of a sentence offers “Split…”", pa.locator(f'[id="fn-editor-{sid}"] button:has-text("Split")').count() == 1)
+        pa.locator(f'[id="fn-editor-{sid}"] button:has-text("Split")').click(); pa.wait_for_selector(f'[id="fn-editor-{sid}"] .fn-split-radio')
+        rows = pa.locator(f'[id="fn-editor-{sid}"] .fn-editor-table tr').count()
+        check(S, "it asks, for each language, which of two sentences (…a, …b) it goes to; all languages start in the first", pa.locator(f'[id="fn-editor-{sid}"] .fn-split-radio').count() == 10 and pa.locator(f'[id="fn-editor-{sid}"] .fn-split-radio:checked').evaluate_all("e => e.map(x => x.dataset.g)") == ["0"] * 5, str(rows))
+        pa.locator(f'[id="fn-editor-{sid}"] button:has-text("Split")').last.click(); pa.wait_for_timeout(300)
+        check(S, "splitting with an empty group is refused with a message", "at least one language" in pa.inner_text(f'[id="fn-editor-{sid}"] .fn-split-note') and "d01.Road:10a" not in (site.dir / "project/fieldnotes.xml").read_text(encoding="utf-8"))
+        for c in ("kro", "olr", "lkn"): pa.locator(f'[id="fn-editor-{sid}"] .fn-split-radio[data-lang="{c}"][data-g="1"]').check()
+        with pa.expect_navigation(): pa.locator(f'[id="fn-editor-{sid}"] button.primary:has-text("Split")').click()
+        pa.wait_for_selector(".tx-phrase", timeout=10000); pa.wait_for_timeout(1200)
+        check(S, "the page reloads with two sentences d01.Road:10a and d01.Road:10b in place of d01.Road:10", pa.locator(".tx-phrase").count() == before + 1 and pa.locator(f'[id="{sid}"]').count() == 0 and pa.locator(f'[id="{sid}a"]').count() == 1 and pa.locator(f'[id="{sid}b"]').count() == 1)
+        labs = lambda i: list(dict.fromkeys(pa.locator(f'[id="fn-display-{sid}{i}"] .fn-lang-abbr').all_inner_texts()))
+        check(S, "10a shows Nume and Dorig only, 10b Koro, Olrat and Lakon only; each keeps the translation", len(labs("a")) == 2 and len(labs("b")) == 3 and pa.locator(f'[id="{sid}a"] .tx-transl, [id="{sid}a"] .tx-transl-input').count() >= 1 and pa.locator(f'[id="{sid}b"] .tx-transl, [id="{sid}b"] .tx-transl-input').count() >= 1, f"{labs('a')} {labs('b')}")
+        x = (site.dir / "project/fieldnotes.xml").read_text(encoding="utf-8")
+        import re as _re
+        ids = _re.findall(r"<rf>([^<]*)</rf>", x)
+        check(S, "in the questionnaire the sentence is replaced in its place by 10a and 10b, the others untouched", ids.index("d01.Road:10a") == ids.index("d01.Road:09") + 1 and ids[ids.index("d01.Road:10a") + 1] == "d01.Road:10b" and "d01.Road:10" not in ids and "d01.Road:11" in ids, str(ids[8:14]))
+        # the two parts are glossed independently
+        g = lambda i: pa.locator(f'[id="{sid}{i}"] input.fn-col-gloss').first
+        ga, gb = g("a"), g("b")
+        ga.fill("AAA-only"); ga.press("Tab"); pa.wait_for_timeout(1200)
+        gl = site.json("project/texts/glosses/fieldnotes_0.json") if (site.dir / "project/texts/glosses/fieldnotes_0.json").exists() else {}
+        check(S, "a gloss typed in 10a is saved under 10a and does not touch 10b", "AAA-only" in json.dumps(gl.get(sid + "a", {})) and "AAA-only" not in json.dumps(gl.get(sid + "b", {})) and sid not in gl, str(list(gl)[:8]))
+        check(S, "no JavaScript error and no dialog", not errs, "; ".join(errs[:3]))
+    finally:
+        site.stop()
+
+
 def suite_lextable(browser, args):
     S = "lextable"
     section("grammar: comparative tables of words")
@@ -4371,7 +4417,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip", "lextable"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip", "lextable", "fnsplit"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -4407,6 +4453,7 @@ def main():
             if args.only in (None, "glossing"): suite_glossing(browser, args)
             if args.only in (None, "phonotip"): suite_phonotip(browser, args)
             if args.only in (None, "lextable"): suite_lextable(browser, args)
+            if args.only in (None, "fnsplit"): suite_fnsplit(browser, args)
             browser.close()
     finally:
         site.stop()
