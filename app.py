@@ -28,6 +28,7 @@ import captions as captions_lib
 import xmlimport as xmlimport_lib
 import glossary as glossary_lib
 import backup as backup_lib
+import fnsplit
 import datetime
 import tempfile
 import threading
@@ -1754,6 +1755,82 @@ def save_fieldnotes_gloss(index):
     _store_gloss(f'fieldnotes_{index}', sent_id, gloss)
     return jsonify({'ok': True})
 
+def _fieldnotes_path():
+    primary = os.path.join(UPLOAD_FOLDER, 'fieldnotes.xml')
+    return primary if os.path.exists(primary) else FIELDNOTES_FILE
+
+def _cites_of_sentence(index, sid):
+    """Files of the project that cite a fieldnotes sentence ({{cite: fieldnotes#index#sid}}), e.g. in the grammar or in the dictionary's examples."""
+    pat = re.compile(re.escape(f'fieldnotes#{index}#{sid}') + r'(?![\w.:-])')
+    found = []
+    for folder in (GRAMMAR_FOLDER, PROJECT['files'].get('glossaryDir', ''), PROJECT['files'].get('pagesDir', '')):
+        for root_, _d, names in os.walk(folder) if folder and os.path.isdir(folder) else []:
+            for n in names:
+                if n.endswith(('.md', '.html', '.xml', '.json')):
+                    fp = os.path.join(root_, n)
+                    try:
+                        if pat.search(open(fp, encoding='utf-8').read()):
+                            found.append(os.path.relpath(fp))
+                    except (OSError, UnicodeDecodeError):
+                        pass
+    for fp in (os.path.join(UPLOAD_FOLDER, 'dictionary.xml'), DICT_FILE):
+        if os.path.exists(fp):
+            try:
+                if pat.search(open(fp, encoding='utf-8').read()):
+                    found.append(os.path.relpath(fp))
+            except (OSError, UnicodeDecodeError):
+                pass
+            break
+    return found
+
+@app.route('/api/fieldnotes/tx/<int:index>/split', methods=['POST'])
+def split_fieldnotes_sentence(index):
+    """Split one parallel sentence into several, one per group of languages: {sentence_id, groups: [[code, …], …]}.
+    d01.Road:10 becomes d01.Road:10a, d01.Road:10b …; each keeps the prompt, its own languages, and a share of the old alignment and glosses."""
+    if not session.get('author'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    sid, parts = data.get('sentence_id', ''), data.get('groups')
+    if not sid:
+        return jsonify({'error': 'No sentence_id'}), 400
+    tree = get_fieldnotes_xml()
+    if tree is None:
+        return jsonify({'error': 'No fieldnotes XML found'}), 404
+    root = tree.getroot()
+    tgs = root.findall('.//tiGroup')
+    if index < 0 or index >= len(tgs):
+        return jsonify({'error': 'Group not found'}), 404
+    codes = [c for c, _a, _n in _FN_LANGS]
+    path = _fieldnotes_path()
+    try:
+        rfg = fnsplit.find_sentence(tgs[index], sid)
+        if rfg is None:
+            return jsonify({'error': 'Sentence not found.'}), 404
+        played = fnsplit.present_codes(rfg, codes)
+        before = _cites_of_sentence(index, sid)
+        ids = fnsplit.split_sentence(root, tgs[index], sid, parts, codes)
+        shutil.copy2(path, os.path.join(BACKUP_DIR_FN(), time.strftime('fieldnotes-before-split-%Y%m%d-%H%M%S.xml')))
+    except fnsplit.SplitError as e:
+        return jsonify({'error': str(e)}), 400
+    tree.write(path, xml_declaration=True, encoding='UTF-8')
+    with _GLOSS_LOCK:
+        p = _gloss_path(f'fieldnotes_{index}')
+        stored = _load_stored_glosses(f'fieldnotes_{index}')
+        old = stored.pop(sid, None)
+        if old is not None:
+            for k, (part, nid) in enumerate(zip(parts, ids)):
+                stored[nid] = fnsplit.split_gloss(old, part, played, k == 0)
+        tmp = f'{p}.{os.getpid()}.{_threading.get_ident()}.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(stored, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, p)
+    return jsonify({'ok': True, 'ids': ids, 'cited_in': before})
+
+def BACKUP_DIR_FN():
+    d = os.path.join(UPLOAD_FOLDER, 'backups', 'fieldnotes')
+    os.makedirs(d, exist_ok=True)
+    return d
+
 @app.route('/api/fieldnotes/tx/<int:index>')
 def fieldnotes_tx(index):
     """Return a fieldnotes tiGroup in transcription-viewer format."""
@@ -1779,6 +1856,8 @@ def fieldnotes_tx(index):
             for code, abbr, name in _FN_LANGS:
                 nodes = grp.findall(code)
                 vals  = [n.text.strip() for n in nodes if n.text and n.text.strip()]
+                if not vals and rfg.get('part') == '1':          # a part of a split sentence shows only its own languages
+                    continue
                 form  = ' / '.join(vals) if vals else '—'
                 words.append({'form': form, 'gloss': abbr,
                               'lang': code, 'lang_name': name})
