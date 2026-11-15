@@ -114,6 +114,13 @@ chosen: only the entries that have a form in that language are listed, with that
   `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
   shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
   language. The LaTeX export lists the same forms. To make a word's chip show its cognates, set its cognates in the dictionary.
+- **Splitting a parallel sentence** (texts from the fieldnotes). In the ✏ menu of a sentence, **⇆ Split…** asks, for each language, which
+  of two (or more, **+ Group**) sentences it goes to. `d01.Road:10` becomes `d01.Road:10a` (say Nume and Dorig) and `d01.Road:10b` (Koro, Olrat,
+  Lakon), in place, each with the prompt, its own languages, and its own alignment and glosses (cut from the old ones; confirmation is reset), so
+  that they can be glossed independently. A part can be split again (`10ba`, `10bb`). A part is marked `part="1"` on its `<rfGroup>` in
+  `fieldnotes.xml` and shows only the languages it holds. The old sentence is gone: if a grammar section or a dictionary example cites it with
+  `{{cite: fieldnotes#0#d01.Road:10}}`, the author is told where, and must point the citation to `10a` or `10b`. A copy of the questionnaire made
+  just before is kept in `uploads/backups/fieldnotes/`.
 - **An example** begins with its source, as the sentence is cited (for example *Fieldnotes · D01 ~ Trigeta i mit long rot · d01.Road:02*),
   which is also the link to the sentence in its text.
 - **Proposed entries** (words that confirmed texts suggest adding to the dictionary) are the author's worklist: they are shown, and
