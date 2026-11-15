@@ -320,7 +320,8 @@
 .fn-col-del { font-size: 0.7rem; color: #c06060; background: none; border: none; cursor: pointer; padding: 0 4px; }
 .fn-col-del:hover { color: #922810; }
 .fn-col-add { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--gold); background: none; border: 1px dashed var(--gold); border-radius: 3px; padding: 2px 8px; cursor: pointer; margin-left: 6px; }
-.fn-col-add:hover { background: #f5edd8; }
+.fn-split-btn { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--gold); background: none; border: 1px dashed var(--gold); border-radius: 3px; padding: 2px 8px; cursor: pointer; margin-left: 6px; }
+.fn-col-add:hover, .fn-split-btn:hover { background: #f5edd8; }
 .fn-col-ins { font-size: 0.75rem; line-height: 1; color: var(--gold); background: none; border: 1px solid transparent; border-radius: 2px; cursor: pointer; padding: 0 4px; }
 .fn-col-ins:hover { border-color: var(--gold); background: #f5edd8; }
 .fn-cell-box { display: flex; align-items: center; gap: 1px; }
@@ -782,6 +783,7 @@ function showAlignmentEditor(sid, btn) {
       <div class="fn-editor-actions">
         <span class="fn-editor-note">${note || '+ inserts a column before it; ⠿ moves a word to another place of its row.'}</span>
         <button class="fn-col-add" onclick="addCol()" title="Add a column at the end">+ Column</button>
+        ${isPapers ? '' : `<button class="fn-split-btn" onclick="showSplit()" title="Split this sentence into several, one per group of languages, to gloss them independently">⇆ Split…</button>`}
         <button class="modal-btn" onclick="cancelEdit('${sid}')">Cancel</button>
         <button class="modal-btn primary" onclick="saveAlignment('${sid}')">Save</button>
       </div>
@@ -840,6 +842,47 @@ function showAlignmentEditor(sid, btn) {
       });
     });
   }
+
+  // Split: the author shares the languages out in groups (one column of ticks per group); each group becomes a sentence of its own (…a, …b), glossed independently
+  let splitGroups = 2, splitOf = {};                 // number of groups; language -> index of its group
+  function renderSplit(msg) {
+    const letters = Array.from({length: splitGroups}, (_, i) => String.fromCharCode(97 + i));
+    const head = letters.map(l => `<td style="text-align:center;padding:0 10px;font-family:'Source Code Pro',monospace;font-size:0.75rem;">${sid}${l}</td>`).join('');
+    const rows = splitWords().map(w => {
+      const col = CODE_COLORS[w.lang] || 'var(--gold)';
+      const ticks = letters.map((l, i) => `<td style="text-align:center;"><input type="radio" class="fn-split-radio" name="fn-split-${w.lang}" data-lang="${w.lang}" data-g="${i}"${(splitOf[w.lang] || 0) === i ? ' checked' : ''}></td>`).join('');
+      return `<tr><td class="fn-editor-abbr" style="color:${col};">${FN_ABBRS[w.lang]}</td>${ticks}</tr>`;
+    }).join('');
+    document.getElementById('fn-editor-' + sid).innerHTML = `<div class="fn-editor">
+      <table class="fn-editor-table"><tr><td></td>${head}</tr>${rows}</table>
+      <div class="fn-editor-actions">
+        <span class="fn-editor-note fn-split-note">${msg || `Tick, for each language, the sentence it goes to. Each new sentence keeps the prompt, and can be glossed on its own. Unsaved changes to the alignment are lost.`}</span>
+        <button class="fn-split-btn" onclick="splitMoreGroups()" title="Add a group">+ Group</button>
+        <button class="modal-btn" onclick="splitBack()">Back</button>
+        <button class="modal-btn primary" onclick="splitDo()">Split</button>
+      </div>
+    </div>`;
+    document.querySelectorAll(`#fn-editor-${CSS.escape(sid)} .fn-split-radio`).forEach(r => r.addEventListener('change', () => { splitOf[r.dataset.lang] = parseInt(r.dataset.g); }));
+  }
+  const splitWords = () => s.words.filter(w => w.form && w.form !== '—');     // the languages that have a form in this sentence
+  function showSplit() { splitGroups = 2; splitOf = {}; renderSplit(''); }
+  function splitMoreGroups() { if (splitGroups < splitWords().length) { splitGroups++; renderSplit(''); } }
+  function splitBack() { renderEditor(); }
+  async function splitDo() {
+    const groups = Array.from({length: splitGroups}, () => []);
+    splitWords().forEach(w => groups[splitOf[w.lang] || 0].push(w.lang));
+    if (groups.some(g => !g.length)) { renderSplit('Every group needs at least one language.'); return; }
+    let r, d = {};
+    try {
+      r = await fetch(`/api/fieldnotes/tx/${fnIndex}/split`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sentence_id: sid, groups})});
+      d = await r.json().catch(() => ({}));
+    } catch (e) { renderSplit('The split failed: ' + e.message); return; }
+    if (!r.ok) { renderSplit(d.error || 'The split failed.'); return; }
+    if ((d.cited_in || []).length) alert(`${sid} is cited in: ${d.cited_in.join(', ')}.\nThose citations must now point to ${d.ids.join(' or ')}.`);
+    location.hash = '#' + d.ids[0];
+    location.reload();
+  }
+  window.showSplit = showSplit; window.splitMoreGroups = splitMoreGroups; window.splitBack = splitBack; window.splitDo = splitDo;
 
   function addCol()   { Alignment.insertColumn(st, st.n); note = ''; renderEditor(); }      // at the end
   function insCol(i)  { Alignment.insertColumn(st, i);    note = ''; renderEditor(); }      // before column i
