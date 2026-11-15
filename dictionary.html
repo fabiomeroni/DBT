@@ -252,7 +252,7 @@ body { overflow: hidden; }
 .example-wrap  { background: #faf6ef; border-left: 3px solid var(--gold); border-radius: 0 4px 4px 0; padding: 0.65rem 1.1rem 0.8rem; overflow-x: auto; display: inline-block; min-width: 240px; max-width: 100%; }
 .ex-table      { border-collapse: collapse; white-space: nowrap; }
 .ex-table .ex-abbr  { font-family: 'Crimson Pro', serif; font-variant: small-caps; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.05em; padding: 2px 14px 2px 0; vertical-align: baseline; border: none; }
-.ex-table .ex-cell  { padding: 2px 16px 2px 0; vertical-align: baseline; border: none; }
+.ex-table .ex-cell  { font-style: italic; padding: 2px 16px 2px 0; vertical-align: baseline; border: none; }
 .ex-table .ex-cell.ex-dash { font-family: 'EB Garamond', serif; font-size: 1.12rem; color: #ccc; }
 .ex-table .ex-cell.ex-own strong { font-family: 'EB Garamond', serif; font-size: 1.18rem; font-weight: 700; border-bottom: 2px solid currentColor; padding: 0 2px; }
 .ex-table .ex-cell a.lexlink { font-family: 'EB Garamond', serif; font-size: 1.12rem; color: var(--ink); text-decoration: none; border-bottom: 1.5px dotted var(--gold); border-radius: 2px; padding: 0 2px; transition: color 0.12s, border-color 0.12s, background 0.12s; }
@@ -260,7 +260,7 @@ body { overflow: hidden; }
 .ex-table .ex-sep td    { border-top: 1px solid var(--border); padding: 0; height: 0; border-bottom: none; }
 .ex-table .ex-gloss-empty { border: none; padding: 5px 14px 3px 0; vertical-align: baseline; }
 .ex-table .ex-gloss { font-family: 'Source Code Pro', monospace; font-size: 0.64rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-light); padding: 5px 16px 3px 0; vertical-align: baseline; border: none; white-space: nowrap; }
-.ex-transl  { font-family: 'Crimson Pro', serif; font-style: italic; font-size: 1rem; color: var(--ink-mid); margin-top: 5px; }
+.ex-transl  { font-family: 'Crimson Pro', serif; font-style: normal; font-size: 1rem; color: var(--ink-mid); margin-top: 5px; }
 
 /* ── Example expand button ── */
 .ex-expand-btn {
@@ -1066,6 +1066,11 @@ function senseMatches(e, s) {
   if (!searchQ) return true;
   return [senseLabel(s), stripTags(s.definition), stripTags(s.notes), e.langs[activeLang]].some(x => (x || '').toLowerCase().includes(searchQ));
 }
+// A headword is filed under its first letter: leading dashes (affixes such as -gēn) and other
+// punctuation are ignored, both for the letter heading and for the order within it.
+function sortForm(f) { return (f || '').replace(/^[^\p{L}\p{N}]+/u, '') || (f || ''); }
+function firstLetter(f) { return (sortForm(f)[0] || '—').toUpperCase(); }
+function byForm(a, b) { return sortForm(a).localeCompare(sortForm(b)) || (a || '').localeCompare(b || ''); }
 function renderSenses() {
   const color = COLORS[activeLang];
   const groups = new Map();                       // the same label gathers the headwords that share a sense
@@ -1076,7 +1081,7 @@ function renderSenses() {
     groups.get(key).items.push({ e, s });
   }));
   const list = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
-  list.forEach((g, i) => { g.id = 'sg-' + i; g.items.sort((a, b) => (a.e.langs[activeLang] || '').localeCompare(b.e.langs[activeLang] || '')); });
+  list.forEach((g, i) => { g.id = 'sg-' + i; g.items.sort((a, b) => byForm(a.e.langs[activeLang], b.e.langs[activeLang])); });
   document.getElementById('result-bar').innerHTML =
     `${list.length} sense${list.length === 1 ? '' : 's'} &nbsp;·&nbsp; headword: <span class="rbar-lang" style="color:${color};">${activeLang}</span>`;
   const byLetter = {};
@@ -1118,13 +1123,13 @@ function renderEntries() {
   const groups = {};
   entries.forEach(e => {
     const form = e.langs[activeLang] || e.hw;
-    const l = form[0].toUpperCase();
+    const l = firstLetter(form);
     (groups[l] = groups[l] || []).push(e);
   });
-  const letters = Object.keys(groups).sort();
+  const letters = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   letters.forEach(l =>
     groups[l].sort((a, b) =>
-      (a.langs[activeLang] || a.hw).localeCompare(b.langs[activeLang] || b.hw)
+      byForm(a.langs[activeLang] || a.hw, b.langs[activeLang] || b.hw)
       || (parseInt(a.homonym) || 0) - (parseInt(b.homonym) || 0)
     )
   );
