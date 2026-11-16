@@ -2468,18 +2468,31 @@ def _with_pos(found, pos):
         return found
     return [x for x in found if (x[1].findtext('ClasseGrammaticale') or '').strip().lower().rstrip('.').startswith(pos)]
 
+def _etymons_for(el, code):
+    """[(proto-language, proto-form)] of the entry that apply to the language `code` (an etymon without a list of languages applies to all of them)."""
+    out = []
+    for et in el.findall('Étymologie/Étymon'):
+        langs = _langs_attr(et)
+        form, proto = (et.findtext('Forme') or '').strip(), (et.findtext('Langue') or '').strip()
+        if form and proto and (langs is None or code in langs) and (proto, form) not in out:
+            out.append((proto, form))
+    return out
+
 def _entry_resolver():
-    """resolver(language, word, id) -> (entry id, gloss) or None, for the links of a comparative table: the entry that has the word as its form in
-    that language (when only one has it; of several, the one that is grammatical material if only one is), or the entry named by `word@ID`."""
+    """resolver(language, word, id) -> (entry id, gloss, etymologies) or None, for the links of a comparative table: the entry that has the word as its form in
+    that language (when only one has it; of several, the one that is grammatical material if only one is), or the entry named by `word@ID`.
+    The etymologies are [(proto-language, form)] that apply to that language."""
     index, glosses = _dictionary_index()
+    d = get_dict_xml()
+    els = {el.get('identifiant', ''): el for el in d.findall('.//EntréeLexicale')} if d is not None else {}
     def resolve(code, word, ident='', pos=''):
         if ident:
-            return (ident, glosses[ident]) if ident in glosses else None
+            return (ident, glosses[ident], _etymons_for(els[ident], code)) if ident in glosses else None
         found = _with_pos(index.get((code, _clean_form(word)), []), pos)
         if len(found) > 1:
             gram = [x for x in found if _entry_is_grammatical(x[1])]
             found = gram if len(gram) == 1 else found
-        return (found[0][0], glosses.get(found[0][0], '')) if len(found) == 1 else None
+        return (found[0][0], glosses.get(found[0][0], ''), _etymons_for(found[0][1], code)) if len(found) == 1 else None
     return resolve
 
 def _slug_key(s, n=24):
