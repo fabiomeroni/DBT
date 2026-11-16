@@ -43,13 +43,22 @@ SITE_URLS = []
 
 class Site:
     def __init__(self, project_override=None, orthography_override=None, pages_override=None, drop_pages=False,
-                 setup_mode=False, env_unset=(), extra_env=None, prepare=None, expect_failure=False):
+                 setup_mode=False, env_unset=(), extra_env=None, prepare=None, expect_failure=False, real_dictionary=False):
         self.work = Path(tempfile.mkdtemp(prefix="dbt-test-"))
         self.dir = self.work / "site"
         plain = shutil.ignore_patterns("uploads", "instance", "tests", ".git", "__pycache__", "*.pyc", "venv", ".venv", "node_modules")
         fixed = {"s1.md", "s1_phonology.md"}                      # the sections of the grammar that the tests are written for: a section the author adds since is not theirs
         shutil.copytree(ROOT, self.dir, ignore=lambda d, names: set(plain(d, names)) | ({n for n in names if n.endswith(".md")} - fixed if Path(d).name == "grammar" and Path(d).parent.name == "project" else set()))
         (self.dir / "uploads").mkdir(exist_ok=True)
+        if not real_dictionary:                          # the checks are written for the eight entries the dictionary began with: the pronouns the author added since (and the etymology of 3pl) are left out
+            from lxml import etree as _et
+            f = self.dir / "project" / "dictionary.xml"; t = _et.parse(str(f))
+            for el in list(t.getroot().iter("EntréeLexicale")):
+                if el.get("identifiant") != "3pl" and el.findtext("ClasseGrammaticale") == "pro." and el.get("identifiant") not in ("art", "poss"):
+                    el.getparent().remove(el)
+                elif el.get("identifiant") == "3pl":
+                    for e_ in el.findall("Étymologie"): el.remove(e_)
+            t.write(str(f), xml_declaration=True, encoding="UTF-8")
         if project_override is not None:
             self.file("project/project.json").write_text(json.dumps(project_override, ensure_ascii=False, indent=2), encoding="utf-8")
         if setup_mode:                                   # a fresh clone: no project yet, so the first-run setup is offered
@@ -4390,6 +4399,56 @@ def suite_ipamode(browser, args):
         site.stop()
 
 
+def suite_lextable_etym(browser, args):
+    S = "lextable"
+    section("grammar: etymologies in the comparative tables of words")
+    J = {"Content-Type": "application/json"}
+    site = Site(real_dictionary=True)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        ents = va.get(site.url + "api/dictionary/entries").json()
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        # etymologies, first in each cell
+        spec_e = {"kind": "lexical", "caption": "Pronouns", "label": "etypro", "pos": "pro.", "etymology": True, "columns": ["singular", "plural"], "rows": ["2", "3"],
+                  "inventory": {"num": {"2": {"singular": "nik", "plural": "kimi"}, "3": {"plural": "nir"}}, "drg": {"2": {"singular": "nēk"}}, "lkn": {"3": {"singular": "zzzz"}}}}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\n```phonotable\n" + json.dumps(spec_e, ensure_ascii=False) + "\n```\n"})
+        he = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "the dictionary has the 15 independent pronouns, each with its POc and PTB etymons", all(any(e.get("id") == x for e in (ents if isinstance(ents, list) else ents.get("entries", []))) for x in ("1sg", "2sg", "3sg", "1incdu", "2pl", "3pl", "3tri")))
+        check(S, "a table that asks for them shows the etymons of the entries first in each cell (POc and PTB), and none in a cell whose word has no entry", he.count('class="lx-etyms"') == 3 and '<span class="lx-ep">POc</span> <span class="lx-ef">*[i]ko[e]</span>' in he and "*kiⁿda-rua" not in he and "*nia" not in he, str(he.count('class="lx-etyms"')))
+        check(S, "…with one tick for each proto-language under the table", he.count('data-etym="POc"') == 1 and he.count('data-etym="PTB"') == 1)
+        sp2 = dict(spec_e); sp2.pop("etymology")
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\n```phonotable\n" + json.dumps(sp2, ensure_ascii=False) + "\n```\n"})
+        check(S, "a table that does not ask for them shows none", "lx-etym" not in va.get(site.url + f"api/grammar/{sid}").json()["html"])
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\n```phonotable\n" + json.dumps(spec_e, ensure_ascii=False) + "\n```\n"})
+        pv = vis.new_page(); e4 = []; watch(pv, e4)
+        open_page(pv, site, "grammar.html", "figure.phonotable[data-kind=lexical]", 900)
+        vis_etym = lambda: pv.evaluate("[...document.querySelectorAll('.lx-etym')].filter(e => e.offsetParent !== null).length")
+        n_all = vis_etym()
+        pv.locator('input[data-etym="PTB"]').uncheck(); pv.wait_for_timeout(200)
+        n_poc = vis_etym()
+        pv.locator('input[data-etym="POc"]').uncheck(); pv.wait_for_timeout(200)
+        n_none = vis_etym(); boxes = pv.evaluate("[...document.querySelectorAll('.lx-etyms')].filter(e => e.offsetParent !== null).length")
+        check(S, "the reader unticks PTB, then POc: the etymons of each leave the cells (and an empty first line leaves too)", n_all == 6 and n_poc == 3 and n_none == 0 and boxes == 0, f"{n_all} {n_poc} {n_none} {boxes}")
+        pv.locator('input[data-etym="POc"]').check(); pv.wait_for_timeout(200)
+        check(S, "…and ticking brings them back", vis_etym() == 3 and not e4, "; ".join(e4[:2]))
+        # the builder
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nPlain.\n"})
+        pa2 = au.new_page(); e5 = []; watch(pa2, e5)
+        open_page(pa2, site, "grammar.html", ".section-edit.visible", 900)
+        pa2.click(".section-edit"); pa2.wait_for_selector(".md-editor-wrap.visible"); pa2.click('.ed-tab[data-tab="phono"]'); pa2.click('[data-act="new"][data-kind="lexical"]'); pa2.wait_for_selector("#pt-grid-" + sid)
+        check(S, "the builder of a comparative table has an Etymologies tick, off by default", pa2.locator("#pt-etym-" + sid).count() == 1 and not pa2.locator("#pt-etym-" + sid).is_checked())
+        for axis, names in (("columns", ["singular"]), ("rows", ["2"])):
+            for n_ in names:
+                pa2.fill(f'input[data-add="{axis}"]', n_); pa2.click(f'[data-act="add"][data-axis="{axis}"]')
+        pa2.fill(f"#pt-caption-{sid}", "Etym"); pa2.click('.pt-lang[data-lang="num"]'); pa2.fill('.pt-cell[data-r="0"][data-c="0"]', "nik")
+        pa2.locator("#pt-etym-" + sid).check(); pa2.click(f"#pt-write-{sid}")
+        blk2 = json.loads(re.findall(r"```phonotable\n(.*?)\n```", pa2.input_value(f"#textarea-{sid}"), re.S)[0])
+        check(S, "ticking it writes \"etymology\": true in the block", blk2.get("etymology") is True and not e5, str(blk2)[:160])
+    finally:
+        site.stop()
+
+
 def suite_lextable(browser, args):
     S = "lextable"
     section("grammar: comparative tables of words")
@@ -4531,7 +4590,7 @@ def main():
             if args.only in (None, "backup"): suite_backup(browser, args)
             if args.only in (None, "glossing"): suite_glossing(browser, args)
             if args.only in (None, "phonotip"): suite_phonotip(browser, args)
-            if args.only in (None, "lextable"): suite_lextable(browser, args)
+            if args.only in (None, "lextable"): suite_lextable(browser, args); suite_lextable_etym(browser, args)
             if args.only in (None, "fnsplit"): suite_fnsplit(browser, args)
             if args.only in (None, "ipamode"): suite_ipamode(browser, args)
             browser.close()
