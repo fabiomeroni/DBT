@@ -369,6 +369,16 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .em-code { width: 100%; box-sizing: border-box; height: 3.3rem; resize: vertical; font-family: 'Source Code Pro', monospace; font-size: 0.8rem; }
 .em-attested { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.25rem 0 0.2rem; }
 .em-attested .lbl { font-family: 'Crimson Pro', serif; font-size: 0.78rem; color: var(--ink-light); }
+.em-corpus { display: block; border: 1px dashed var(--border); border-radius: 4px; padding: 0.3rem 0.5rem; }
+.em-corpus-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.em-corpus-list { max-height: 11rem; overflow-y: auto; margin-top: 0.25rem; }
+.em-corpus-row { display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.2rem 0; border-top: 1px solid var(--border-lt); font-family: 'Crimson Pro', serif; font-size: 0.9rem; }
+.em-corpus-row.other { opacity: 0.6; }
+.em-corpus-row.done { opacity: 0.55; }
+.em-corpus-txt { display: flex; flex-direction: column; }
+.em-corpus-lang { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.3rem; }
+.em-corpus-tr { color: var(--ink-light); }
+.em-corpus-src { font-size: 0.75rem; color: var(--ink-light); }
 .em-ex-add { background: #fff; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; padding: 0.1rem 0.45rem; font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--ink); }
 .em-ex-add:hover:not(:disabled) { border-color: var(--gold); background: #faf1dc; }
 .em-ex-add:disabled { opacity: 0.45; cursor: default; }
@@ -1507,16 +1517,62 @@ function langTicks(selected, kind, label) {
   ).join('') + `</div>`;
 }
 
-// The examples already attested for the entry being edited, each with a button that adds its {{cite: …}} to the sense
-function attestedPicker(s) {
-  const list = _editingId ? (dictExamples[_editingId] || []) : [];
-  if (!list.length) return '';
-  const used = new Set([...(s.examples || '').matchAll(/\{\{\s*cite\s*:\s*([^}]*?)\s*\}\}/g)].map(m => m[1].trim()));
-  const short = ex => { const tr = (ex.translation || ex.sentence_id || '').trim(); return tr.length > 44 ? tr.slice(0, 43) + '…' : tr; };
-  return `<div class="em-attested"><span class="lbl">Attested for this entry:</span>` + list.map(ex => {
-    const k = exKey(ex);
-    return `<button type="button" class="em-ex-add" data-key="${escHTML(k)}"${used.has(k) ? ' disabled' : ''} title="${escHTML(k)}">＋ ${escHTML(short(ex))}</button>`;
-  }).join('') + `</div>`;
+// Sentences of the corpus where the word being edited appears (found in the texts by its form in each language), offered to each sense
+// with a button that adds the {{cite: …}}. Loaded when the window opens and again when a form changes.
+let _sugg = [], _suggState = 'idle', _suggTimer = null, _suggSeq = 0;
+const citedKeys = s => new Set([...(s.examples || '').matchAll(/\{\{\s*cite\s*:\s*([^}]*?)\s*\}\}/g)].map(m => m[1].trim()));
+function loadSuggestions() {
+  clearTimeout(_suggTimer);
+  _suggTimer = setTimeout(async () => {
+    const forms = {};
+    LANGS.forEach(l => { const v = edVal(l); if (v) forms[LANG_CODE[l]] = v; });
+    const seq = ++_suggSeq;
+    if (!Object.keys(forms).length) { _sugg = []; _suggState = 'done'; return refreshCorpusPanels(); }
+    _suggState = 'loading'; refreshCorpusPanels();
+    try {
+      const r = await fetch('/api/dictionary/example-suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ forms }) });
+      const d = await r.json();
+      if (seq !== _suggSeq) return;
+      _sugg = r.ok ? (d.suggestions || []) : []; _suggState = r.ok ? 'done' : 'error';
+    } catch (e) { if (seq !== _suggSeq) return; _sugg = []; _suggState = 'error'; }
+    refreshCorpusPanels();
+  }, 350);
+}
+// How a sentence relates to a sense: 0 = the word is glossed like the sense, 1 = not glossed, 2 = glossed as something else
+function suggRank(sg, s, many) {
+  if (!many) return 0;
+  const t = cleanForm(s.shortGloss);
+  const gl = sg.hits.map(h => cleanForm(h.gloss)).filter(Boolean);
+  if (!gl.length) return 1;
+  return t && gl.includes(t) ? 0 : 2;
+}
+function corpusPanelHTML(s) {
+  if (_suggState === 'loading' || _suggState === 'idle') return '<span class="lbl">Looking for the word in the corpus…</span>';
+  if (_suggState === 'error') return '<span class="lbl">The corpus could not be searched.</span>';
+  const many = _senses.length > 1, have = citedKeys(s);
+  const rows = _sugg.map(sg => ({ sg, rk: suggRank(sg, s, many) })).sort((a, b) => a.rk - b.rk);
+  if (!rows.length) return '<span class="lbl">The word does not appear in the corpus yet.</span>';
+  const todo = rows.filter(r => r.rk < 2 && !have.has(r.sg.key));
+  const head = `<div class="em-corpus-head"><span class="lbl">This word appears in ${rows.length} sentence${rows.length > 1 ? 's' : ''} of the corpus</span>
+    <button type="button" class="em-ex-add" data-act="add-all"${todo.length ? '' : ' disabled'} title="Adds every sentence not yet cited${many ? ' (except those where the word is glossed as another sense)' : ''}">＋ Add all (${todo.length})</button></div>`;
+  return head + '<div class="em-corpus-list">' + rows.map(({ sg, rk }) => {
+    const h = sg.hits[0], code = h.lang, name = LANGS.find(l => LANG_CODE[l] === code) || code;
+    const done = have.has(sg.key);
+    const gl = [...new Set(sg.hits.map(x => x.gloss).filter(Boolean))].join(', ');
+    return `<div class="em-corpus-row${rk === 2 ? ' other' : ''}${done ? ' done' : ''}">
+      <button type="button" class="em-ex-add" data-key="${escHTML(sg.key)}"${done ? ' disabled' : ''} title="${escHTML(sg.key)}">${done ? '✓' : '＋'}</button>
+      <div class="em-corpus-txt"><span class="em-corpus-lang" style="color:${COLORS[name] || 'inherit'}">${escHTML(ABBRS[name] || code)}</span>
+        <i>${escHTML(h.left)} <b>${escHTML(h.match)}</b> ${escHTML(h.right)}</i>
+        ${sg.translation ? `<span class="em-corpus-tr">‘${escHTML(sg.translation)}’</span>` : ''}
+        <span class="em-corpus-src">${sg.link ? `<a href="${escHTML(sg.link)}" target="_blank" rel="noopener">${escHTML(sg.label)}</a>` : escHTML(sg.label)}${gl ? ` · glossed “${escHTML(gl)}”` : ''}${rk === 2 ? ' · another sense?' : ''}</span></div>
+    </div>`; }).join('') + '</div>';
+}
+function corpusPicker(s, i) {
+  if (!document.getElementById('entry-modal')) return '';
+  return `<div class="em-attested em-corpus" data-i="${i}">${corpusPanelHTML(s)}</div>`;
+}
+function refreshCorpusPanels() {
+  document.querySelectorAll('#em-senses .em-corpus').forEach(el => { const sn = _senses[+el.dataset.i]; if (sn) el.innerHTML = corpusPanelHTML(sn); });
 }
 // The relations of a sense in the editor: the ones it declares, and a search over the senses of the dictionary to add one
 function relEditorHTML(s) {
@@ -1565,7 +1621,7 @@ function renderSenseCards() {
                 placeholder="Usage notes, cognate information…">${escHTML(s.notes)}</textarea>
       <label>Examples <span class="em-sub">— the ones shown for this sense: one {{cite: …}} per line, as in the grammar</span></label>
       <textarea class="em-input em-code" data-f="examples" spellcheck="false" placeholder="{{cite: fieldnotes#0#d01.Road:02}}">${escHTML(s.examples || '')}</textarea>
-      ${attestedPicker(s)}
+      ${corpusPicker(s, i)}
       ${relEditorHTML(s)}
       ${langTicks(s.langs, 'sense', 'This sense applies to')}
     </div>`).join('');
@@ -1715,7 +1771,9 @@ function _openEntryModal(title, entry) {
   }
   showEditorRows();
   document.getElementById('em-etym-box').open = groupIdx() >= 0 && chainIdx().some(i => !!_etyms[i].form);
+  _sugg = []; _suggState = 'idle'; _suggSeq++;
   renderSenseCards();
+  loadSuggestions();
   updateHomHint();
   document.getElementById('entry-modal').classList.add('visible');
   document.getElementById('ef-' + LANG_CODE[_hw]).focus();      // the headword
@@ -1865,7 +1923,13 @@ function _bindEntryModal() {
     const b = e.target.closest('.em-ex-add');
     if (!b) return;
     const s = _senses[+b.closest('.em-sense').dataset.i];
-    s.examples = (s.examples ? s.examples.replace(/\s+$/, '') + '\n' : '') + '{{cite: ' + b.dataset.key + '}}';
+    let keys;
+    if (b.dataset.act === 'add-all') {                       // every suggestion not yet cited that fits this sense
+      const many = _senses.length > 1, have = citedKeys(s);
+      keys = _sugg.filter(sg => suggRank(sg, s, many) < 2 && !have.has(sg.key)).map(sg => sg.key);
+    } else keys = [b.dataset.key];
+    if (!keys.length) return;
+    s.examples = (s.examples ? s.examples.replace(/\s+$/, '') + '\n' : '') + keys.map(k => '{{cite: ' + k + '}}').join('\n');
     renderSenseCards();
   });
   box.addEventListener('change', e => {                       // the languages a sense applies to
@@ -1904,7 +1968,7 @@ function _bindEntryModal() {
   // homonym hint follows the forms; etymology edits are tracked so an untouched one is never rewritten
   LANGS.forEach(lang => {
     const c = LANG_CODE[lang];
-    document.getElementById('ef-' + c).addEventListener('input', () => { updateHomHint(); suggestIpa(c); });
+    document.getElementById('ef-' + c).addEventListener('input', () => { updateHomHint(); suggestIpa(c); loadSuggestions(); });
     document.getElementById('ef-ipa-' + c).addEventListener('input', e => {
       e.target.dataset.auto = '0'; e.target.classList.remove('auto');        // the author wrote it: confirmed
     });
