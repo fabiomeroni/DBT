@@ -74,7 +74,9 @@ const PhonoEditor = (() => {
         <div class="pt-field"><input type="text" id="pt-label-${id}" value="${esc(spec.label || '')}" maxlength="40" aria-label="Label of the chart" autocomplete="off" spellcheck="false"></div>
         ${lex ? `<h4>Part of speech</h4>
         <p class="pt-help">Optional. The part of speech of the dictionary entries that the words are links to, as the dictionary writes it (<code>pro.</code> for pronouns): it tells <code>na</code>, the pronoun, from <code>na</code>, the article. The new entries proposed for the words that are not in the dictionary get it too.</p>
-        <div class="pt-field"><input type="text" id="pt-pos-${id}" value="${esc(spec.pos || '')}" maxlength="30" aria-label="Part of speech of the entries" autocomplete="off" spellcheck="false" style="max-width:12rem;"></div>` : ''}
+        <div class="pt-field"><input type="text" id="pt-pos-${id}" value="${esc(spec.pos || '')}" maxlength="30" aria-label="Part of speech of the entries" autocomplete="off" spellcheck="false" style="max-width:12rem;"></div>
+        <h4>Etymologies</h4>
+        <label class="pt-check"><input type="checkbox" id="pt-etym-${id}"${spec.etymology ? ' checked' : ''}> Show, first in each cell, the etymology (POc, PTB…) that the dictionary gives for the entries the words are links to. The reader can hide it with a tick under the table; nothing is shown for words that have no entry or no etymology.</label>` : ''}
         <h4>Columns and rows</h4>
         <p class="pt-help">${lex ? 'Add the rows and the columns you need, with any names (for the personal pronouns: the rows 1 inclusive, 1 exclusive, 2, 3 and the columns singular, dual, trial, plural); rename, move (↑ ↓) or remove (✕) them as needed.' : 'Start from the suggested order and change what you need: rename, move (↑ ↓), remove (✕), or add rows and columns of your own, with any names.'}</p>
         <div class="pt-axes"><div class="pt-axis" data-axis="columns"></div><div class="pt-axis" data-axis="rows"></div></div>
@@ -162,7 +164,7 @@ const PhonoEditor = (() => {
         if (Object.keys(item).length) segments[p] = item;
       }
       const out = { kind: s.kind, caption: s.caption.trim(), label: (s.label || '').trim(), columns: s.columns, rows: s.rows, inventory: inv, segments };
-      if (s.kind === 'lexical') out.pos = (s.pos || '').trim();
+      if (s.kind === 'lexical') { out.pos = (s.pos || '').trim(); if (s.etymology) out.etymology = true; }
       return out;
     }
     function position() {                                // how many charts come before this one in the section (its number follows from that)
@@ -254,6 +256,7 @@ const PhonoEditor = (() => {
       const t = ev.target;
       if (t.id === 'pt-caption-' + id) { st.spec.caption = t.value; schedule(); }
       else if (t.id === 'pt-pos-' + id) { st.spec.pos = t.value; schedule(); }
+      else if (t.id === 'pt-etym-' + id) { st.spec.etymology = t.checked; schedule(); }
       else if (t.id === 'pt-label-' + id) {                 // letters, digits, - and _ only: anything else becomes -
         const v = t.value.replace(/[^A-Za-z0-9_-]+/g, '-'); if (v !== t.value) t.value = v;
         st.spec.label = v.replace(/^[-_]+|[-_]+$/g, ''); schedule();
@@ -325,5 +328,11 @@ const PhonoEditor = (() => {
   document.addEventListener('change', ev => {
     const box = ev.target;
     if (box && box.matches && box.matches('.phono-legend input[data-lang]')) apply(box.closest('figure.phonotable'));
+    if (box && box.matches && box.matches('.phono-legend input[data-etym]')) {       // the etymologies of a table of words: one tick for each proto-language
+      const fig = box.closest('figure.phonotable');
+      const on = new Set([...fig.querySelectorAll('.phono-legend input[data-etym]')].filter(b => b.checked).map(b => b.dataset.etym));
+      fig.querySelectorAll('.lx-etym').forEach(x => { x.hidden = !on.has(x.dataset.proto); });
+      fig.querySelectorAll('.lx-etyms').forEach(x => { x.hidden = ![...x.querySelectorAll('.lx-etym')].some(y => !y.hidden); });
+    }
   });
 })();
