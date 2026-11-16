@@ -174,7 +174,6 @@ FREEZE = ("*{animation:none!important;transition:none!important;caret-color:tran
 # ───────────────────────── 1. visual suite ─────────────────────────
 VISITOR_PAGES = [
     ("home",              "index.html",                      None),
-    ("about",             "about.html",                      None),
     ("grammar",           "grammar.html",                    "#sections-container .grammar-section"),
     ("dictionary-koro",   "dictionary.html?lang=Koro",       "#dict-content .entry"),
     ("dictionary-nume",   "dictionary.html?lang=Nume",       "#dict-content .entry"),
@@ -414,12 +413,12 @@ def suite_functional(browser, site, args):
     check(S, "settings: the try-it box converts both ways", page.inner_text("#st-try-ipa") == "[tuk͡pʷa]" and page.inner_text("#st-try-orth-out") == "m̄a")
     check(S, "settings: five language colours in east-to-west order", page.locator(".st-color label").all_inner_texts() == ["Nume", "Dorig", "Koro", "Olrat", "Lakon"])
     page.locator('.st-color input[data-hex][data-c="num"]').fill("#0066cc"); page.click("#st-save"); page.wait_for_timeout(2500)
-    page.goto(site.url + "about.html", wait_until="domcontentloaded"); page.wait_for_timeout(800)
+    page.goto(site.url + "index.html", wait_until="domcontentloaded"); page.wait_for_timeout(800)
     got = page.locator(".lang-section h3").first.evaluate("e => getComputedStyle(e).color")
     check(S, "a colour chosen in the settings is used on other pages", got == rgb("#0066cc"), got)
     page.goto(site.url + "dictionary.html?lang=Koro", wait_until="domcontentloaded"); page.wait_for_timeout(1500)
     page.click("#settings-btn"); page.wait_for_timeout(800); page.click("#st-colors-reset"); page.click("#st-save"); page.wait_for_timeout(2500)
-    page.goto(site.url + "about.html", wait_until="domcontentloaded"); page.wait_for_timeout(800)
+    page.goto(site.url + "index.html", wait_until="domcontentloaded"); page.wait_for_timeout(800)
     got = page.locator(".lang-section h3").first.evaluate("e => getComputedStyle(e).color")
     check(S, "'Default colours' restores them", got == rgb("#2e5c8a"), got)
     r = api.post(site.url + "api/dictionary/settings", headers=H, data=json.dumps({"correspondences": api.get(site.url + "api/dictionary/settings").json()["correspondences"], "colors": {"num": "red"}}))
@@ -539,7 +538,7 @@ def suite_functional(browser, site, args):
 
 
 # ───────────────────────── 4. generality suite: the code knows no language ─────────────────────────
-CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "ttr.js", "phonotable.py", "phonotable.js", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
+CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "ttr.js", "phonotable.py", "phonotable.js", "setup.html", "auth.js", "style.css", "index.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
 PROJECT_WORDS = re.compile(r"\b(Nume|Dorig|Koro|Olrat|Lakon|Gaua|Vanuatu|Banks Islands|Meroni|Fran[cç]ois)\b")
 NOT_SERVED = ["app.py", "references.py", "concordance.py", "phonotable.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
               "project/orthography.json", "project/dictionary.xml", "project/fieldnotes.xml", "project/grammar/s1.md",
@@ -555,7 +554,7 @@ def suite_generality(browser, site, args):
     anon = new_context(browser, site, author=False); api = anon.request
     bad = [p for p in NOT_SERVED if api.get(site.url + p).status != 404]
     check(S, "source code and data files are not served (app.py, XML, JSON, uploads, project, tests ...)", not bad, str(bad))
-    pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html", "concordance.html"]
+    pages = ["index.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html", "concordance.html"]
     assets = ["style.css", "auth.js", "ttr.js", "phonotable.js", "images/gaua_map.png", "etymograph_icon.png"]
     check(S, "the site's pages and images are served", all(api.get(site.url + p).status == 200 for p in pages + assets))
     left = [p for p in pages if "{{project." in api.get(site.url + p).text()]
@@ -571,11 +570,17 @@ def suite_generality(browser, site, args):
     pg = new_context(browser, site, 1280).new_page(); perrs = []; watch(pg, perrs)
     open_page(pg, site, "index.html", ".lang-strip", 1000)
     cells = pg.locator(".lang-strip .lang-cell")
-    check(S, "home: the language strip is generated from the project's languages", cells.count() == len(proj["languages"]) and [c for c in cells.evaluate_all("els => els.map(e => e.getAttribute('href'))")] == [f"about.html#{l['name'].lower()}" for l in proj["languages"]])
-    check(S, "home: the map section, the three cards and the footer come from the project", pg.locator(".map-section .map-desc").count() == 2 and pg.locator(".dbt-card").count() == 3 and "Documentation:" in pg.locator("footer").inner_text())
-    open_page(pg, site, "about.html", ".lang-section", 1000)
+    check(S, "home: the language strip is generated from the project's languages", cells.count() == len(proj["languages"]) and [c for c in cells.evaluate_all("els => els.map(e => e.getAttribute('href'))")] == [f"#{l['name'].lower()}" for l in proj["languages"]])
+    check(S, "home: the three cards and the footer come from the project", pg.locator(".dbt-card").count() == 3 and "Documentation:" in pg.locator("footer").inner_text())
+    open_page(pg, site, "index.html", ".lang-section", 1000)
     check(S, "about: one section per language, a table of contents with a line for each", pg.locator(".lang-section").count() == len(proj["languages"]) and pg.locator(".about-toc li.sub").count() == len(proj["languages"]) and pg.locator(".about-toc li:not(.sub)").count() == 4)
     check(S, "about: the infobox and the four sections come from the project", pg.locator(".infobox tr").count() == 7 and pg.locator(".about-main h2").count() == 4)
+    r2 = new_context(browser, site, 1280).request.get(site.url + "about.html#nume", max_redirects=0)
+    check(S, "about.html is gone: it redirects to the home page (a link keeps its #language)", r2.status == 301 and r2.headers.get("location", "").endswith("/index.html"), f"{r2.status} {r2.headers.get('location')}")
+    check(S, "the home page has the whole about part as its second part, and no separate map section", pg.locator(".about-shell").count() == 1 and pg.locator(".about-main .page-title").inner_text().strip() != "" and pg.locator(".map-section").count() == 0 and pg.locator(".about-shell").evaluate("e => e.compareDocumentPosition(document.querySelector('.lang-strip')) & Node.DOCUMENT_POSITION_PRECEDING") != 0)
+    pg.goto(site.url + "about.html#" + proj["languages"][2]["name"].lower(), wait_until="domcontentloaded"); pg.wait_for_timeout(1500)
+    top = pg.evaluate("document.getElementById(%s).getBoundingClientRect().top" % json.dumps(proj["languages"][2]["name"].lower()))
+    check(S, "an old link about.html#koro lands on the home page at the Koro section", pg.url.endswith("/index.html#" + proj["languages"][2]["name"].lower()) and -5 < top < 300, f"{pg.url} {top}")
     check(S, "home and about: no JavaScript or loading error", not perrs, "; ".join(perrs[:2]))
     pg.context.close()
     # 2. no Gaua wording left in the code
@@ -641,15 +646,15 @@ def suite_generality(browser, site, args):
         open_page(page, asite, "index.html", ".lang-strip", 1000)
         home_txt = page.locator("body").inner_text()
         check(S, "other project: its home page shows its own wording (byline, intro with the language list, cards, map, footer)",
-              all(x.lower() in home_txt.lower() for x in ("Alt byline", "Alt intro: five tongues, Alpha, Beta, Gamma, Delta, and Epsilon.", "Alt grammar card", "Alt map title", "Alt map credit", "More about Alt", "Alt footer text")), home_txt[:120].replace("\n", " "))
-        check(S, "other project: …and its language strip", page.locator(".lang-strip .lname").all_inner_texts() == [n for _, n, _, _ in ALT_LANGS] and page.locator(".lang-strip a").first.get_attribute("href") == "about.html#alpha")
-        open_page(page, asite, "about.html", ".lang-section", 1000)
+              all(x.lower() in home_txt.lower() for x in ("Alt byline", "Alt intro: five tongues, Alpha, Beta, Gamma, Delta, and Epsilon.", "Alt grammar card", "Alt footer text")), home_txt[:120].replace("\n", " "))
+        check(S, "other project: …and its language strip", page.locator(".lang-strip .lname").all_inner_texts() == [n for _, n, _, _ in ALT_LANGS] and page.locator(".lang-strip a").first.get_attribute("href") == "#alpha")
+        open_page(page, asite, "index.html", ".lang-section", 1000)
         check(S, "other project: its about page: title, sections, table of contents, language sections",
-              page.title() == "About Alt — Alt DBT Languages" and page.locator("h1.page-title").inner_text() == "Alt page title" and page.locator(".infobox tr").count() == 1
+              page.locator(".about-main .page-title").inner_text() == "Alt page title" and page.locator(".infobox tr").count() == 1
               and page.locator(".about-toc li:not(.sub)").all_inner_texts() == ["First", "Alt tongues"] and page.locator(".lang-section").count() == 5)
         check(S, "other project: a language with content shows its badge and notes, one without shows just its links",
               page.locator("#alpha .speaker-badge").inner_text() == "~1 speaker" and page.locator("#alpha .lang-meta span").count() == 2 and page.locator("#beta .lang-meta").count() == 0 and page.locator("#beta .lang-link").count() == 3)
-        served = " ".join(api.get(asite.url + p).text() for p in ("index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html"))
+        served = " ".join(api.get(asite.url + p).text() for p in ("index.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html"))
         left = sorted(set(PROJECT_WORDS.findall(served)))
         check(S, "other project: no trace of the first project's names in any page it serves, home and about included", not left, str(left))
         check(S, "other project: no JavaScript or loading error on any of those pages", not errs, "; ".join(errs[:2]))
@@ -720,7 +725,7 @@ def suite_languages(browser, args):
         check(S, "one language: the grammar has no language toggles", not page.locator(".lang-pills-wrap").first.is_visible())
         open_page(page, site, "texts.html", "#texts-grid .text-card", 1500)
         check(S, "one language: the Texts page has no language filter", not page.locator(".filter-row-lang").is_visible())
-        open_page(page, site, "about.html", ".lang-section", 1000)
+        open_page(page, site, "index.html", ".lang-section", 1000)
         check(S, "one language: the about page has one language section and one line under Languages in the contents", page.locator(".lang-section").count() == 1 and page.locator(".about-toc li.sub").count() == 1)
         open_page(page, site, "index.html", ".lang-strip", 1000)
         check(S, "one language: the home page's language strip has one cell", page.locator(".lang-strip .lang-cell").count() == 1)
@@ -764,7 +769,7 @@ def suite_languages(browser, args):
         api.delete(site.url + "api/grammar/zz_eight")
         tex = api.get(site.url + "api/grammar/export/latex").text()
         check(S, "eight languages: the LaTeX export defines eight colours", tex.count("\\definecolor") == 8, str(tex.count("\\definecolor")))
-        open_page(page, site, "about.html", ".lang-section", 1000)
+        open_page(page, site, "index.html", ".lang-section", 1000)
         check(S, "eight languages: eight sections on the about page, and eight lines in its contents", page.locator(".lang-section").count() == 8 and page.locator(".about-toc li.sub").count() == 8)
         open_page(page, site, "index.html", ".lang-strip", 1000)
         check(S, "eight languages: eight cells in the home page's language strip", page.locator(".lang-strip .lang-cell").count() == 8)
@@ -1215,7 +1220,7 @@ def suite_references(browser, args):
         au = new_context(browser, site, 1280, author=True); aa = au.request
 
         # ── the page, the navigation and what a visitor sees ──
-        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "transcription.html", "references.html", "concordance.html"]
+        pages = ["index.html", "grammar.html", "texts.html", "dictionary.html", "transcription.html", "references.html", "concordance.html"]
         missing = [p for p in pages if 'href="references.html"' not in va.get(site.url + p).text()]
         check(S, "every page has the References link in its top bar", not missing, str(missing))
         check(S, "no project marker is left unexpanded on the References page", "{{project." not in va.get(site.url + "references.html").text())
@@ -3817,7 +3822,7 @@ def suite_glossary(browser, args):
         au = new_context(browser, site, 1280, author=True); aa = au.request
         J = {"Content-Type": "application/json"}
         # ── the nav ──
-        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "concordance.html", "transcription.html", "glossary.html"]
+        pages = ["index.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "concordance.html", "transcription.html", "glossary.html"]
         navs = {p_: re.findall(r'<li><a href="([^"]+)"( class="active")?>([^<]+)</a></li>', re.search(r'<nav class="topnav">.*?</nav>', va.get(site.url + p_).text(), re.S).group(0)) for p_ in pages}
         check(S, "the Glossary tab is in the navigation of every page, after the References tab, and is the active tab of the Glossary page only", all([n[0] for n in v] == ["index.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "glossary.html"] for v in navs.values()) and all(bool(v[-1][1]) == (p_ == "glossary.html") for p_, v in navs.items()) and all(not any(x[1] for x in v[:-1]) or p_ != "glossary.html" for p_, v in navs.items()), str({p_: [x[0] for x in v] for p_, v in navs.items() if len(v) != 6}))
         check(S, "its label comes from the project like the others (nav.glossary, “Glossary” by default)", "Glossary</div>" in va.get(site.url + "glossary.html").text() and "{{project" not in va.get(site.url + "glossary.html").text(), "")
@@ -4016,7 +4021,7 @@ def suite_backup(browser, args):
         pa = au.new_page(); watch(pa, errs); present = {}
         for p_ in pages:
             open_page(pa, site, p_, None, 300); pa.wait_for_timeout(600); present[p_] = pa.locator("#backup-btn").count()
-        open_page(pa, site, "about.html", None, 400)
+        open_page(pa, site, "index.html", None, 400)
         check(S, "the author sees the Backup button (and its reminder) in the top bar of every page that has the author’s login", all(v == 1 for v in present.values()) and pa.locator("#backup-box").count() == 0, str(present))
         age_download(40)
         open_page(pa, site, "grammar.html", "#backup-note", 800); pa.wait_for_timeout(800)
