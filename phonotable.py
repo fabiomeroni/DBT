@@ -230,6 +230,8 @@ def clean(spec, language_codes=None):
     out = {'kind': kind, 'caption': caption, 'label': _cap.clean_label(spec['label'] if isinstance(spec.get('label'), str) else ''), 'columns': cols, 'rows': rows, 'inventory': inv, 'segments': segments}
     if kind == 'lexical':                                   # the part of speech of the entries the words are links to (so that na, the pronoun, is not the article na)
         out['pos'] = re.sub(r'\s+', ' ', _nfc(spec.get('pos') if isinstance(spec.get('pos'), str) else '')).strip()[:30]
+        if spec.get('etymology') is True:                   # show the etymologies the dictionary has for the entries, first in each cell
+            out['etymology'] = True
     return out, None
 
 
@@ -312,7 +314,8 @@ def render_html(spec, languages, number=None, lab=None, anchors=True, resolver=N
         abbr = str(l.get('abbr') or l['code']).upper()
         return (f'<span class="ph-tag" data-lang="{e(code)}" style="--tag:{_hex(l.get("color"))}" title="{e(l["name"])}"{" hidden" if hidden else ""}>{e(abbr)}</span>')
     lexical = spec['kind'] == 'lexical'
-    def word(item):
+    protos = []                                              # the proto-languages that have an etymology in some cell
+    def word(item, collect=None):
         """A word of a lexical table: its parts (a link where the dictionary has the entry), separated by a tilde, then the tags."""
         langs = item['langs']
         shared = len(langs) == len(present)
@@ -324,14 +327,16 @@ def render_html(spec, languages, number=None, lab=None, anchors=True, resolver=N
                 if hit:
                     break
             if hit:
+                if collect is not None and len(hit) > 2:
+                    collect.extend(x for x in hit[2] if x not in collect)
                 shown.append(f'<a class="lx-link" href="dictionary.html#{e(hit[0])}"' + (f' title="{e(hit[1])}"' if hit[1] else '') + f'>{e(text)}</a>')
             else:
                 shown.append(f'<span class="lx-plain">{e(text)}</span>')
         tags = ''.join(tag(c, shared) for c in langs) if several else ''
         return f'<span class="ph" data-langs="{e(" ".join(langs))}"><span class="lx-form">{' <span class="lx-tilde">~</span> '.join(shown)}</span>{tags}</span>'
-    def sound(item):
+    def sound(item, collect=None):
         if lexical:
-            return word(item)
+            return word(item, collect)
         langs, s = item['langs'], seg.get(item['p'], {})
         shared = len(langs) == len(present)                     # a sound of every language needs no tag
         tags = ''.join(tag(c, shared) for c in langs) if several else ''
@@ -348,7 +353,12 @@ def render_html(spec, languages, number=None, lab=None, anchors=True, resolver=N
                 items = [i for i in m['cells'].get(r, {}).get(c, []) if keep(i['p'])]
                 used = [code for code in present if any(code in i['langs'] for i in items if len(i['langs']) < len(present))]
                 style = f' style="--cell-bg:{_stripes([_hex(by_code[x].get("color")) for x in used])}"' if several and used and not lexical else ''
-                tds += f'<td class="{"lx-cell" if lexical else "ph-cell"}" data-langs="{e(" ".join(used))}"{style}>' + ' '.join(sound(i) for i in items) + '</td>'
+                found = []                                           # the etymologies of the entries the words of this cell are links to (proto-language, form)
+                words = ' '.join(sound(i, found) for i in items)
+                if lexical and spec.get('etymology') and found:
+                    protos.extend(x[0] for x in found if x[0] not in protos)
+                    words = '<div class="lx-etyms">' + ' '.join(f'<span class="lx-etym" data-proto="{e(pl)}"><span class="lx-ep">{e(pl)}</span> <span class="lx-ef">{e(fm)}</span></span>' for pl, fm in found) + '</div>' + words
+                tds += f'<td class="{"lx-cell" if lexical else "ph-cell"}" data-langs="{e(" ".join(used))}"{style}>' + words + '</td>'
             body += f'<tr><th scope="row">{e(r)}</th>{tds}</tr>'
         return f'<div class="phono-scroll"><table class="phono"><thead><tr><th class="corner">{e(label)}</th>{head}</tr></thead><tbody>{body}</tbody></table></div>'
     # a chart of vowels that has long vowels (a sound ending in the length mark) is two tables, short on the left and long on the right, with one legend
@@ -367,6 +377,10 @@ def render_html(spec, languages, number=None, lab=None, anchors=True, resolver=N
         legend = (f'<div class="phono-legend"><span class="pl-title">Languages shown:</span> {boxes}'
                   '<div class="pl-note">The tag after a sound says which language has it; a cell that holds a sound not found in all the languages shown is tinted with the colours of the languages that have it, and what all of them share stays plain; '
                   'a sound without a tag is found in all the languages shown. Untick a language to leave its sounds out. Hover over a sound to read about it.</div></div>')
+    if protos:                                                # the reader can hide the etymologies: one tick for each proto-language
+        legend += ('<div class="phono-legend lx-etym-legend"><span class="pl-title">Etymologies shown:</span> '
+                   + ' '.join(f'<label class="lg"><input type="checkbox" checked data-etym="{e(pl)}"><span class="lg-name">{e(pl)}</span></label>' for pl in protos)
+                   + '<div class="pl-note">The first line of a cell gives the proto-form, in the proto-language named, from which the entry of the dictionary descends.</div></div>')
     ident = f' id="{e(_cap.anchor("table", spec["label"]))}" data-label="{e(spec["label"])}"' if spec.get('label') and anchors else ''   # a preview has no anchor: the page must not have the id twice
     return (f'<figure class="phonotable" data-kind="{e(spec["kind"])}"{ident}>{_cap.caption_html("table", number, _cap.fill_language(spec["caption"], caption_names(spec, languages), lab), lab)}'
             f'{tables}{legend}</figure>')
