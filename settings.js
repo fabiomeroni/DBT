@@ -13,8 +13,15 @@ const DIALOG_HTML = () => `<div class="dbt-modal-backdrop" id="settings-modal">
   <div class="dbt-modal" style="max-width:700px;width:96vw;max-height:92vh;overflow-y:auto;">
     <h3>Settings</h3>
     <h4 class="st-h">Display</h4>
-    <label class="st-check"><input type="checkbox" id="st-rel"> In the dictionary, show the semantic relations (synonyms, antonyms) under the senses</label>
-    <p class="modal-desc" style="margin-top:0.4rem;">Visitors choose for themselves, with the <b>Orthography / IPA</b> switch in the top bar of every page, whether the linguistic data are shown in the orthography or in IPA.</p>
+    <p class="modal-desc" style="margin-bottom:0.4rem;">Show the linguistic data (the entries of the dictionary, the examples of the grammar, the texts, the tables of words, the concordance) in:</p>
+    <div class="st-script">
+      <label class="st-check"><input type="radio" name="st-script" id="st-script-orth" value="orth"> the orthography</label>
+      <label class="st-check"><input type="radio" name="st-script" id="st-script-ipa" value="ipa"> IPA</label>
+    </div>
+    <p class="modal-desc" style="margin-top:0.3rem;">This choice is yours alone: it applies at once, to every page, and is kept in this browser.</p>
+    <div id="st-author">
+    <h4 class="st-h" style="margin-top:1.1rem;">Dictionary</h4>
+    <label class="st-check"><input type="checkbox" id="st-rel"> Show the semantic relations (synonyms, antonyms) under the senses</label>
     <h4 class="st-h" style="margin-top:1.1rem;">Language colours</h4>
     <p class="modal-desc">The colour that codes each language everywhere on the site: headwords, tables, texts, the grammar and the LaTeX export.</p>
     <div id="st-colors" class="st-colors"></div>
@@ -58,6 +65,7 @@ const DIALOG_HTML = () => `<div class="dbt-modal-backdrop" id="settings-modal">
       <button type="button" class="fn-col-add" id="pw-change">Change password</button>
       <div class="dbt-modal-msg" id="pw-msg"></div>
     </details>
+    </div>
     <div class="dbt-modal-msg" id="st-msg"></div>
     <div class="dbt-modal-row">
       <button class="modal-btn" id="st-cancel">Close</button>
@@ -72,6 +80,7 @@ function ensureDialog() {
   wrap.innerHTML = DIALOG_HTML();
   document.body.appendChild(wrap.firstElementChild);
   bindSettings();
+  document.querySelectorAll('input[name="st-script"]').forEach(r => r.addEventListener('change', () => { if (r.checked && window.dbtDisplay) window.dbtDisplay.setMode(r.value); }));
 }
 
 // ── Settings: the orthography ↔ IPA correspondence table ──
@@ -266,19 +275,29 @@ function renderSettingsRowsKeepFocus(tr, input) {
 }
 
 const _openSettings = openSettings;
-window.openSettings = function () { if (!isLoggedIn) { showLoginModal(); return; } ensureDialog(); return _openSettings(); };
+// Everyone can open the Settings (the Display choice is the reader's own); the rest of the dialog is the author's
+window.openSettings = function () {
+  ensureDialog();
+  const m = document.getElementById('settings-modal');
+  document.getElementById('st-author').hidden = !isLoggedIn;
+  document.getElementById('st-save').hidden = !isLoggedIn;
+  document.getElementById('st-script-' + (window.dbtDisplay ? window.dbtDisplay.mode : 'orth')).checked = true;
+  if (isLoggedIn) return _openSettings();
+  const msg = document.getElementById('st-msg'); msg.textContent = ''; msg.className = 'dbt-modal-msg';
+  m.classList.add('visible');
+};
 
 // the author's button, in the top bar of every page (shown once logged in)
 window.settingsUI = function (loggedIn) {
   const bar = document.querySelector('.topnav-auth');
   if (!bar) return;
   let b = document.getElementById('settings-btn');
-  if (!loggedIn) { if (b) b.remove(); return; }
   if (!b) {
     b = document.createElement('button'); b.type = 'button'; b.id = 'settings-btn'; b.className = 'auth-btn settings-btn';
-    b.title = 'Settings: language colours, the orthography ↔ IPA table, the dictionary display, the password'; b.textContent = '⚙ Settings';
+    b.title = 'Settings: show the data in the orthography or in IPA' + (loggedIn ? '; language colours, the orthography ↔ IPA table, the dictionary display, the password' : '');
+    b.innerHTML = '⚙<span class="st-label"> Settings</span>';
     b.addEventListener('click', () => window.openSettings());
-    const login = bar.querySelector('.login-btn'); bar.insertBefore(b, login || bar.firstChild);
-  }
+    bar.insertBefore(b, bar.firstChild);
+  } else b.title = 'Settings: show the data in the orthography or in IPA' + (loggedIn ? '; language colours, the orthography ↔ IPA table, the dictionary display, the password' : '');
 };
 })();
