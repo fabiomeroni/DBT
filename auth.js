@@ -29,6 +29,7 @@ function updateAuthUI() {
   document.querySelectorAll('.edit-tab').forEach(el => {
     el.classList.toggle('visible', isLoggedIn);
   });
+  if (typeof settingsUI === 'function') settingsUI(isLoggedIn);      // the ⚙ Settings button, likewise
   backupUI(isLoggedIn);                      // the Backup button and its reminder: the author's, in the top bar of every page
   // Page-specific callback
   if (typeof onAuthChange === 'function') onAuthChange(isLoggedIn);
