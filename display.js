@@ -1,6 +1,6 @@
 /**
- * display.js — the Orthography / IPA switch, shared by every page.
- * A visitor chooses (in the top bar) whether the linguistic data are shown in the orthography or in IPA; the choice is kept in the browser.
+ * display.js — the Orthography / IPA choice, shared by every page.
+ * A visitor chooses (in the Settings, ⚙ in the top bar) whether the linguistic data are shown in the orthography or in IPA; the choice is kept in the browser.
  * The vernacular text of the page (the examples, the entries, the texts, the tables of words, the concordance) is found by the selectors below;
  * its text is converted by the server with the table of the Settings, and put back when the visitor returns to the orthography.
  * A headword that has an IPA form in the dictionary carries it in data-ipa: that form is shown (it is the author's own), not a derived one.
@@ -79,23 +79,11 @@
     mode = m === 'ipa' ? 'ipa' : 'orth';
     try { localStorage.setItem(KEY, mode); } catch (e) { /* kept for this page only */ }
     document.documentElement.classList.toggle('script-ipa', mode === 'ipa');
-    document.querySelectorAll('.script-switch button').forEach(b => { b.classList.toggle('active', b.dataset.s === mode); b.setAttribute('aria-pressed', b.dataset.s === mode); });
+    document.querySelectorAll('input[name="st-script"]').forEach(r => { r.checked = r.value === mode; });      // the Settings dialog
     if (mode === 'ipa') apply(document.body); else restore();
   }
 
   function refresh() { cache.clear(); if (mode === 'ipa') { restore(); apply(document.body); } }     // the table of the Settings changed
-
-  function buildSwitch() {
-    const bar = document.querySelector('.topnav-auth');
-    if (!bar || document.getElementById('script-switch')) return;
-    const box = document.createElement('div');
-    box.id = 'script-switch'; box.className = 'script-switch'; box.setAttribute('role', 'group');
-    box.title = 'Show the linguistic data (entries, examples, texts) in the orthography or in IPA';
-    box.innerHTML = '<button type="button" data-s="orth" title="Orthography">Orth.</button><button type="button" data-s="ipa" title="IPA">IPA</button>';
-    box.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.s); });
-    bar.insertBefore(box, bar.firstChild);
-    setMode(mode);
-  }
 
   // what a page draws later (the dictionary, the texts, the concordance, the grammar sections) is converted as it appears
   const obs = new MutationObserver(muts => {
@@ -107,7 +95,6 @@
 
   function start() {
     document.documentElement.classList.toggle('script-ipa', mode === 'ipa');
-    buildSwitch();
     obs.observe(document.body, { childList: true, subtree: true });
     if (mode === 'ipa') apply(document.body);
   }
