@@ -369,6 +369,10 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .em-code { width: 100%; box-sizing: border-box; height: 3.3rem; resize: vertical; font-family: 'Source Code Pro', monospace; font-size: 0.8rem; }
 .em-attested { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.25rem 0 0.2rem; }
 .em-attested .lbl { font-family: 'Crimson Pro', serif; font-size: 0.78rem; color: var(--ink-light); }
+.em-rel-hit { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; padding: 2px 0; }
+.em-rel-hit > span { flex: 1 1 12rem; }
+.em-rel-hit button { background: #fff; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-size: 0.78rem; padding: 0.05rem 0.4rem; }
+.em-rel-rev { opacity: 0.75; }
 .em-corpus { display: block; border: 1px dashed var(--border); border-radius: 4px; padding: 0.3rem 0.5rem; }
 .em-corpus-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .em-corpus-list { max-height: 11rem; overflow-y: auto; margin-top: 0.25rem; }
@@ -1574,29 +1578,33 @@ function corpusPicker(s, i) {
 function refreshCorpusPanels() {
   document.querySelectorAll('#em-senses .em-corpus').forEach(el => { const sn = _senses[+el.dataset.i]; if (sn) el.innerHTML = corpusPanelHTML(sn); });
 }
-// The relations of a sense in the editor: the ones it declares, and a search over the senses of the dictionary to add one
+// The relations of a sense in the editor: the ones it declares (the type of each can be changed here), the ones other senses declare about it
+// (shown, to be changed on that sense), and a search over the senses of the dictionary with one button for each type
 function relEditorHTML(s) {
   const ix = relIndex();
-  const items = (s.relations || []).map((r, k) => {
-    const t = ix.sense[r.target];
-    const label = t ? entryLabel(t.entry) + (t.entry.senses.length > 1 ? ` (sense ${t.sense.n})` : '') : r.target;
-    return `<span class="em-rel-item">${r.type === 'antonym' ? 'Antonym' : 'Synonym'}: <b>${escHTML(label)}</b><button type="button" data-act="rel-del" data-k="${k}" title="Remove this relation">✕</button></span>`;
-  }).join('');
-  return `<div class="em-rel"><label>Semantic relations <span class="em-sub">— synonyms and antonyms of this sense; they are shown on both senses</span></label>
-    <div class="em-rel-list">${items || '<span class="em-sub">none</span>'}</div>
-    <div class="em-rel-add"><select data-rel="type"><option value="synonym">Synonym</option><option value="antonym">Antonym</option></select>
-      <input type="text" data-rel="q" placeholder="search a sense: a form or a meaning" autocomplete="off" spellcheck="false"><div class="em-rel-results" data-rel="results"></div></div></div>`;
+  const nameOf = id => { const t = ix.sense[id]; return t ? entryLabel(t.entry) + (t.entry.senses.length > 1 ? ` (sense ${t.sense.n})` : '') : id; };
+  const items = (s.relations || []).map((r, k) => `<span class="em-rel-item"><select data-rel="settype" data-k="${k}" title="Type of this relation">
+      <option value="synonym"${r.type === 'synonym' ? ' selected' : ''}>Synonym</option><option value="antonym"${r.type === 'antonym' ? ' selected' : ''}>Antonym</option></select>
+      <b>${escHTML(nameOf(r.target))}</b><button type="button" data-act="rel-del" data-k="${k}" title="Remove this relation">✕</button></span>`).join('');
+  const mine = new Set((s.relations || []).map(r => r.target));
+  const rev = s.id ? (ix.reverse[s.id] || []): [];
+  const revHTML = rev.map(r => `<span class="em-rel-item em-rel-rev">${r.type === 'antonym' ? 'Antonym' : 'Synonym'}: <b>${escHTML(nameOf(r.from.sense.id))}</b> <small>(declared by that sense: change it there)</small></span>`).join('');
+  return `<div class="em-rel"><label>Semantic relations <span class="em-sub">— synonyms and antonyms of this sense; they are shown on both senses. One relation per pair: remove it to change the pair</span></label>
+    <div class="em-rel-list">${items || ''}${revHTML}${items || revHTML ? '' : '<span class="em-sub">none</span>'}</div>
+    <div class="em-rel-add">
+      <input type="text" data-rel="q" placeholder="search a sense: a form or a meaning, then choose Synonym or Antonym" autocomplete="off" spellcheck="false"><div class="em-rel-results" data-rel="results"></div></div></div>`;
 }
 function relSearch(card, q) {
   const s = _senses[+card.dataset.i], res = card.querySelector('[data-rel="results"]'), words = q.toLowerCase().trim();
   if (!words) { res.innerHTML = ''; return; }
   const hits = [];
   DICTIONARY.forEach(e => e.senses.forEach(sn => {
-    if (!sn.id || (s.id && sn.id === s.id) || (s.relations || []).some(r => r.target === sn.id)) return;
+    const revIds = s.id ? (relIndex().reverse[s.id] || []).map(r => r.from.sense.id) : [];        // a pair has one relation, declared on one side
+    if (!sn.id || (s.id && sn.id === s.id) || (s.relations || []).some(r => r.target === sn.id) || revIds.includes(sn.id)) return;
     const hay = [...Object.values(e.langs), e.hw, sn.shortGloss, sn.gloss, stripTags(sn.definition || '')].join(' ').toLowerCase();
     if (hay.includes(words) && hits.length < 10) hits.push({ e, sn });
   }));
-  res.innerHTML = hits.length ? hits.map(h => `<button type="button" data-act="rel-add" data-id="${escHTML(h.sn.id)}"><b>${escHTML(entryLabel(h.e))}</b>${h.e.senses.length > 1 ? ' · sense ' + escHTML(h.sn.n) : ''} <small>${escHTML(stripTags(h.sn.shortGloss || h.sn.definition || '').slice(0, 60))}</small></button>`).join('') : '<span class="em-sub">no sense found</span>';
+  res.innerHTML = hits.length ? hits.map(h => `<div class="em-rel-hit"><span><b>${escHTML(entryLabel(h.e))}</b>${h.e.senses.length > 1 ? ' · sense ' + escHTML(h.sn.n) : ''} <small>${escHTML(stripTags(h.sn.shortGloss || h.sn.definition || '').slice(0, 60))}</small></span><button type="button" data-act="rel-add" data-type="synonym" data-id="${escHTML(h.sn.id)}">＋ Synonym</button><button type="button" data-act="rel-add" data-type="antonym" data-id="${escHTML(h.sn.id)}">＋ Antonym</button></div>`).join('') : '<span class="em-sub">no sense found</span>';
 }
 function renderSenseCards() {
   const box = document.getElementById('em-senses');
@@ -1932,6 +1940,10 @@ function _bindEntryModal() {
     s.examples = (s.examples ? s.examples.replace(/\s+$/, '') + '\n' : '') + keys.map(k => '{{cite: ' + k + '}}').join('\n');
     renderSenseCards();
   });
+  box.addEventListener('change', e => {                       // the type of a relation, changed in place
+    const st = e.target.closest('select[data-rel="settype"]');
+    if (st) { _senses[+st.closest('.em-sense').dataset.i].relations[+st.dataset.k].type = st.value === 'antonym' ? 'antonym' : 'synonym'; }
+  });
   box.addEventListener('change', e => {                       // the languages a sense applies to
     const tick = e.target.closest('input[data-kind="sense"]');
     if (!tick) return;
@@ -1943,7 +1955,7 @@ function _bindEntryModal() {
     if (!b) return;
     const i = +b.closest('.em-sense').dataset.i, act = b.dataset.act;
     if (act === 'rel-add') {
-      const type = b.closest('.em-sense').querySelector('[data-rel="type"]').value, s = _senses[i];
+      const type = b.dataset.type === 'antonym' ? 'antonym' : 'synonym', s = _senses[i];
       s.relations = s.relations || []; if (!s.relations.some(r => r.target === b.dataset.id)) s.relations.push({ type, target: b.dataset.id });
       renderSenseCards(); return;
     }
