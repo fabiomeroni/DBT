@@ -383,6 +383,10 @@ sup.hom-num { font-family: 'Crimson Pro', serif; font-size: 0.55em; font-weight:
 .cog-label { font-family: 'Crimson Pro', serif; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-light); margin-right: 0.55rem; }
 .entry-cognates { margin-bottom: 0.3rem; }
+.em-etym-card { border-left: 3px solid var(--border); padding: 0.1rem 0 0.3rem 0.6rem; margin-bottom: 0.5rem; position: relative; }
+.em-etym-card .st-del { position: absolute; right: 0; top: 0; background: none; border: none; color: #c06060; cursor: pointer; font-size: 0.78rem; }
+.etym-chain { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0; margin-bottom: 0.45rem; }
+.etym-arrow { margin: 0 0.45rem; color: var(--ink-light); font-family: 'Source Code Pro', monospace; font-size: 0.85rem; }
 .no-sense { color: var(--ink-light); font-style: italic; font-size: 0.95rem; }
 .em-langs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 0.8rem; margin: 0.45rem 0 0.1rem; }
 .em-langs .lbl { font-family: 'Crimson Pro', serif; font-size: 0.78rem; color: var(--ink-light); }
@@ -545,9 +549,21 @@ function relationsHTML(entry, sn) {
   return parts.length ? `<div class="entry-rel">${parts.join(' · ')}</div>` : '';
 }
 window.dbtSettingsSaved = async () => { await loadDisplay(); await reloadDictionary(); };       // the shared Settings dialog (settings.js) saved: redraw
+let PROTO_ORDER = [], _protoFirst = null;             // the proto-languages in order of descent (Settings); else the order they first appear in
 async function loadDisplay() {
-  try { const r = await fetch('/api/dictionary/display'); if (r.ok) SHOW_RELATIONS = (await r.json()).relations !== false; } catch (e) { /* the default: shown */ }
+  try { const r = await fetch('/api/dictionary/display'); if (r.ok) { const d = await r.json(); SHOW_RELATIONS = d.relations !== false; PROTO_ORDER = d.protoOrder || []; } } catch (e) { /* the default: shown */ }
 }
+function protoRank(lang) {
+  const i = PROTO_ORDER.indexOf(lang);
+  if (i >= 0) return i;
+  if (!_protoFirst || _protoFirst.src !== DICTIONARY) {
+    _protoFirst = { src: DICTIONARY, list: [] };
+    DICTIONARY.forEach(e => (e.etyms || []).forEach(t => { if (t.lang && !_protoFirst.list.includes(t.lang)) _protoFirst.list.push(t.lang); }));
+  }
+  const j = _protoFirst.list.indexOf(lang);
+  return PROTO_ORDER.length + (j < 0 ? 999 : j);
+}
+const sortChain = ets => ets.map((e, i) => [e, i]).sort((a, b) => protoRank(a[0].lang) - protoRank(b[0].lang) || a[1] - b[1]).map(x => x[0]);
 let activeLang = DBT.nameByCode[DBT.project.headwordLanguage];
 let searchQ    = '';
 
@@ -668,6 +684,17 @@ function etymHTML(et) {
   return `<span class="etym-badge">
     ${tl ? `<a class="etym-tag" href="${escHTML(tl)}" target="_blank" rel="noopener" title="${lang} etymology — TLOPO">${tag}</a>` : `<span class="etym-tag">${tag}</span>`}
     ${eg ? `<a class="etymograph-link" href="${escHTML(eg)}" target="_blank" rel="noopener" title="View in Etymograph"><img src="evosem_logo.png" alt="Etymograph"></a>` : ''}
+  </span>`;
+}
+
+// One stage of an etymology chain: the proto-language and its form (a link to TLOPO if the author gave one), then the Etymograph link
+function etymNodeHTML(et, withGloss) {
+  const label = escHTML(et.form) + (withGloss && et.gloss ? ` '${escHTML(et.gloss)}'` : ''), lang = escHTML(et.lang);
+  const tag = `<span class="etym-pre">${lang}</span><span class="etym-form">${label}</span>`;
+  const tl = safeUrl(et.tlopo), eg = safeUrl(et.etymograph);
+  return `<span class="etym-badge">
+    ${tl ? `<a class="etym-tag" href="${escHTML(tl)}" target="_blank" rel="noopener" title="${lang} etymology — TLOPO">${tag}</a>` : `<span class="etym-tag">${tag}</span>`}
+    ${eg ? `<a class="etymograph-link" href="${escHTML(eg)}" target="_blank" rel="noopener" title="${lang} in Etymograph"><img src="evosem_logo.png" alt="Etymograph"></a>` : ''}
   </span>`;
 }
 
@@ -929,10 +956,17 @@ function senseHTML(entry, sn, multi, vis, number, cognate) {
 // Nothing else from the other languages is shown: the words that merely mean the same are not parallels of the entry
 // (they depend on the sense). Used by the list of entries and by the list of senses, so that both say the same.
 function etymBlock(entry) {
-  const cognate = new Set();
-  const html = etymsFor(entry).map(et => {
-    const h = et.form ? `<div style="margin-bottom:0.45rem;">${etymHTML(et)}</div>` : '';
-    const cogs = LANGS.filter(l => l !== activeLang && (!et.langs || et.langs.includes(l)) && hasForm(entry, l));
+  const cognate = new Set(), groups = [];
+  etymsFor(entry).forEach(et => {                      // the etymons that apply to the same languages are the stages of one chain (POc > PTB)
+    const all = !et.langs || et.langs.length === LANGS.length, key = all ? '*' : [...et.langs].sort().join(',');
+    let g = groups.find(x => x.key === key);
+    if (!g) groups.push(g = { key, langs: all ? null : et.langs, ets: [] });
+    g.ets.push(et);
+  });
+  const html = groups.map(g => {
+    const chain = sortChain(g.ets.filter(e => e.form));   // in the order of descent of the Settings, then the cognates, once
+    const h = chain.length ? `<div class="etym-chain">${chain.map((et, i) => etymNodeHTML(et, i === chain.length - 1 || (chain[i + 1].gloss || '') !== (et.gloss || ''))).join('<span class="etym-arrow">&gt;</span>')}</div>` : '';
+    const cogs = LANGS.filter(l => l !== activeLang && (!g.langs || g.langs.includes(l)) && hasForm(entry, l));
     cogs.forEach(l => cognate.add(l));
     return h + cognatesHTML(entry, cogs);
   }).join('');
@@ -1546,12 +1580,32 @@ const CITE_LINE = /^(?:\{\{\s*cite\s*:\s*(?:fieldnotes#\d+#[^\s}]+|papers#[^\s}]
 let _hw = null;
 const edVal      = l => (document.getElementById('ef-' + LANG_CODE[l])?.value || '').trim();
 const edHasForm  = l => { const v = edVal(l); return !!v && v !== '\u2014'; };
+const sameLangs  = (a, b) => a.langs.length === b.langs.length && a.langs.every(l => b.langs.includes(l));
 const groupIdx   = () => _etyms.findIndex(e => e.langs.includes(_hw));
+const chainIdx   = () => { const g = _etyms[groupIdx()]; return g ? _etyms.map((e, i) => i).filter(i => sameLangs(_etyms[i], g)) : []; };   // the stages of the headword's chain
 const groupLangs = () => { const g = _etyms[groupIdx()]; return g ? LANGS.filter(l => l !== _hw && g.langs.includes(l)) : []; };
-const protoField = f => document.querySelector(`#em-etym-box [data-ef="${f}"]`);
-function newGroup() {
-  const v = f => (protoField(f)?.value || '').trim();
-  return { ref: null, lang: v('lang') || 'POc', form: v('form'), gloss: v('gloss'), tlopo: v('tlopo'), etymograph: v('etymograph'), langs: [_hw], legacyAll: false };
+function newGroup(lang) {
+  const used = new Set(chainIdx().map(i => _etyms[i].lang));
+  const next = [...PROTO_ORDER, ..._etyms.map(e => e.lang)].find(l => l && !used.has(l)) || 'POc';
+  const g = _etyms[groupIdx()];
+  return { ref: null, lang: lang || next, form: '', gloss: '', tlopo: '', etymograph: '', langs: g ? g.langs.slice() : [_hw], legacyAll: false };
+}
+function renderEtymCards() {
+  const box = document.getElementById('em-etym-list');
+  const idx = chainIdx();
+  box.innerHTML = idx.map((i, n) => { const e = _etyms[i]; return `<div class="em-etym-card" data-i="${i}">
+    <div class="em-etym-grid">
+      <label>Proto-language</label><input class="em-input" data-ef="lang" value="${escHTML(e.lang || '')}" placeholder="POc">
+      <label>Form</label><input class="em-input" data-ef="form" value="${escHTML(e.form || '')}" placeholder="*qaliŋa-" spellcheck="false">
+      <label>Meaning</label><input class="em-input" data-ef="gloss" value="${escHTML(e.gloss || '')}" placeholder="voice">
+      <label>TLOPO link</label><input class="em-input" data-ef="tlopo" value="${escHTML(e.tlopo || '')}" placeholder="https://tlopo…">
+      <label>Etymograph</label><input class="em-input" data-ef="etymograph" value="${escHTML(e.etymograph || '')}" placeholder="https://evosem…">
+    </div>${idx.length > 1 ? `<button type="button" class="st-del" data-del="${i}" title="Remove this etymon">✕ remove</button>` : ''}</div>`; }).join('') ||
+    `<div class="em-etym-grid"><label>Proto-language</label><input class="em-input" data-ef="lang" value="${escHTML(PROTO_ORDER[0] || 'POc')}" placeholder="POc">
+      <label>Form</label><input class="em-input" data-ef="form" placeholder="*qaliŋa-" spellcheck="false">
+      <label>Meaning</label><input class="em-input" data-ef="gloss" placeholder="voice">
+      <label>TLOPO link</label><input class="em-input" data-ef="tlopo" placeholder="https://tlopo…">
+      <label>Etymograph</label><input class="em-input" data-ef="etymograph" placeholder="https://evosem…"></div>`;
 }
 function showEditorRows() {
   const group = new Set(groupLangs());
@@ -1566,8 +1620,7 @@ function showEditorRows() {
   const others = LANGS.filter(l => l !== _hw && !group.has(l) && edHasForm(l));
   document.getElementById('em-others').innerHTML = others.length
     ? `Also stored in this entry, not cognates, so not shown with it: ${others.map(l => `<b style="color:${COLORS[l]};">${escHTML(l)}</b> ${escHTML(edVal(l))}`).join(' · ')}. They stay in the dictionary under their own language.` : '';
-  const g = _etyms[groupIdx()];
-  ['lang', 'form', 'gloss', 'tlopo', 'etymograph'].forEach(f => { protoField(f).value = g ? (g[f] || '') : (f === 'lang' ? 'POc' : ''); });
+  renderEtymCards();
 }
 
 // Homonyms: entries that share a form with the one being edited
@@ -1661,7 +1714,7 @@ function _openEntryModal(title, entry) {
     _etyms = [];
   }
   showEditorRows();
-  document.getElementById('em-etym-box').open = groupIdx() >= 0 && !!_etyms[groupIdx()].form;
+  document.getElementById('em-etym-box').open = groupIdx() >= 0 && chainIdx().some(i => !!_etyms[i].form);
   renderSenseCards();
   updateHomHint();
   document.getElementById('entry-modal').classList.add('visible');
@@ -1866,29 +1919,40 @@ function _bindEntryModal() {
     _etymDirty = true;
     let gi = groupIdx();
     if (tick.checked) {
-      if (gi < 0) { _etyms.push(newGroup()); gi = _etyms.length - 1; }
-      const g = _etyms[gi];
-      g.langs = LANGS.filter(l => g.langs.includes(l) || l === lang); g.legacyAll = false;
-      _etyms.forEach((x, j) => { if (j !== gi) x.langs = x.langs.filter(l => l !== lang); });
+      if (gi < 0) { _etyms.push(newGroup(PROTO_ORDER[0] || 'POc')); gi = _etyms.length - 1; }
+      const chain = chainIdx();                          // every stage of the chain gets the cognate
+      chain.forEach(i => { const g = _etyms[i]; g.langs = LANGS.filter(l => g.langs.includes(l) || l === lang); g.legacyAll = false; });
+      _etyms.forEach((x, j) => { if (!chain.includes(j)) x.langs = x.langs.filter(l => l !== lang); });
     } else if (gi >= 0) {
-      const g = _etyms[gi];
-      g.langs = g.langs.filter(l => l !== lang); g.legacyAll = false;
+      chainIdx().forEach(i => { const g = _etyms[i]; g.langs = g.langs.filter(l => l !== lang); g.legacyAll = false; });
     }
     _etyms = _etyms.filter(x => x.langs.length || x.form.trim());
     showEditorRows();
     if (tick.checked) document.getElementById('ef-' + LANG_CODE[lang]).focus();
   });
-  // the proto-form of the headword's etymon
+  // the proto-forms of the headword's chain: one card for each stage
   document.getElementById('em-etym-box').addEventListener('input', e => {
     const f = e.target.dataset.ef;
     if (!f) return;
     _etymDirty = true;
-    let gi = groupIdx();
+    const card = e.target.closest('.em-etym-card');
+    let gi = card ? +card.dataset.i : groupIdx();
     if (gi < 0) {
-      if (!e.target.value.trim() || (f === 'lang' && e.target.value.trim() === 'POc')) return;
-      _etyms.push(newGroup()); gi = _etyms.length - 1;
+      if (!e.target.value.trim() || (f === 'lang' && e.target.value.trim() === (PROTO_ORDER[0] || 'POc'))) return;
+      _etyms.push(newGroup(PROTO_ORDER[0] || 'POc')); gi = _etyms.length - 1;
     }
     _etyms[gi][f] = e.target.value;
+  });
+  document.getElementById('em-etym-box').addEventListener('click', e => {
+    const del = e.target.closest('[data-del]');
+    if (del) { _etymDirty = true; _etyms.splice(+del.dataset.del, 1); renderEtymCards(); return; }
+    if (e.target.closest('#em-etym-add')) {
+      _etymDirty = true;
+      if (groupIdx() < 0) _etyms.push(newGroup());
+      else _etyms.push(newGroup());
+      renderEtymCards();
+      document.querySelector('#em-etym-list .em-etym-card:last-child input[data-ef="form"]')?.focus();
+    }
   });
   document.getElementById('em-hw-lang').addEventListener('change', e => { _hw = e.target.value; showEditorRows(); document.getElementById('ef-' + LANG_CODE[_hw]).focus(); });
 }
@@ -2045,14 +2109,9 @@ init();
     <details id="em-etym-box" style="margin-bottom:0.9rem;">
       <summary style="font-family:'Crimson Pro',serif;font-size:0.82rem;color:var(--ink-light);
                       cursor:pointer;letter-spacing:0.05em;">Etymology of the headword and its cognates (optional)</summary>
-      <div class="em-etym-grid" style="margin-top:0.5rem;">
-        <label>Proto-language</label><input class="em-input" data-ef="lang" value="POc" placeholder="POc">
-        <label>Form</label><input class="em-input" data-ef="form" placeholder="*qaliŋa-" spellcheck="false">
-        <label>Meaning</label><input class="em-input" data-ef="gloss" placeholder="voice">
-        <label>TLOPO link</label><input class="em-input" data-ef="tlopo" placeholder="https://tlopo…">
-        <label>Etymograph</label><input class="em-input" data-ef="etymograph" placeholder="https://evosem…">
-      </div>
-      <div class="em-hint visible" style="margin-top:0.4rem;">Leave the form empty if the proto-form is unknown: the cognates are still listed.</div>
+      <div id="em-etym-list" style="margin-top:0.5rem;"></div>
+      <button type="button" class="fn-col-add" id="em-etym-add" style="margin-top:0.3rem;">＋ Add an etymon (another stage of the chain)</button>
+      <div class="em-hint visible" style="margin-top:0.4rem;">The etymons of the headword's cognates are read in the order of descent set in the Settings (POc &gt; PTB …). Each may have its own TLOPO and Etymograph link. Leave the form empty if the proto-form is unknown: the cognates are still listed.</div>
     </details>
     <div class="em-others" id="em-others"></div>
 
