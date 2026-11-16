@@ -464,6 +464,12 @@ figure.grammar-figure figcaption.caption { max-width: 46rem; }
 .phonotable .lx-link:hover { color: var(--gold); border-bottom-color: var(--gold); background: #fff6d8; border-radius: 2px; }
 .phonotable td.lx-cell .ph { display: block; margin: 0; }
 .phonotable td.lx-cell .ph.ph-off { display: none; }              /* the words of a cell, one under the other: five languages do not fit on a line */
+.phonotable .lx-etyms { font-size: 0.82rem; line-height: 1.35; color: var(--ink-light); margin-bottom: 0.25rem; padding-bottom: 0.2rem; border-bottom: 1px dotted var(--border); }
+.phonotable .lx-etyms[hidden], .phonotable .lx-etym[hidden] { display: none; }
+.phonotable .lx-etym { display: block; white-space: nowrap; }
+.phonotable .lx-ep { font-family: 'Source Code Pro', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 0.25em; }
+.phonotable .lx-ef { font-family: var(--font-ipa); font-style: italic; color: var(--ink-mid); }
+.pt-check { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.86rem; line-height: 1.4; }
 .phonotable .lx-tilde { color: var(--ink-light); margin: 0 0.1em; }
 .grammar-section table.phono td.lx-cell { font-size: 1.05rem; line-height: 1.7; }
 #phono-tip { position: absolute; z-index: 1000; max-width: 19rem; min-width: 9rem; background: #fffdf6; color: var(--ink); border: 1px solid var(--gold, #b8862b); border-radius: 5px;
@@ -706,3 +712,20 @@ a.gloss-link:hover { color: var(--gold); border-bottom-style: solid; }
 /* shown in IPA: the headword is the IPA, so the [IPA] beside it would only repeat it */
 .script-ipa .ipa-wrap { display: none; }
 .script-ipa :is(.ex-cell, .cite-form-cell, .cite-fn-form, .chip-form, .lx-form, .tx-form, .tx-word-form, .fn-form-cell, .entry-headword, .sg-hw, .hw-index a, .idiome_lang, .cc-left, .cc-match, .cc-right, [data-vern]) { font-family: var(--font-ipa), 'EB Garamond', serif; }
+@media (max-width: 720px) {
+  .script-switch { margin-right: 0.15rem; }
+  .script-switch button { font-size: 0.68rem; padding: 2px 5px; }
+  .topnav-auth { gap: 0.3rem; }
+}
+@media (max-width: 480px) {
+  .script-switch button { font-size: 0.64rem; padding: 2px 4px; }
+  .topnav-auth .auth-btn { padding: 3px 6px; }
+  .topnav-auth .logout-btn { padding: 3px 5px; }
+}
+@media (max-width: 360px) {
+  .script-switch { margin-right: 0; }
+  .script-switch button { font-size: 0.6rem; padding: 2px 3px; }
+  .topnav ul li a { padding: 0 0.22rem; }
+  .topnav-auth { gap: 0.2rem; }
+  .topnav-auth .auth-btn { padding: 3px 4px; font-size: 0.68rem; }
+}
