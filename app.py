@@ -882,6 +882,59 @@ def concordance_search():
         return jsonify({'error': str(e)}), 400
     return jsonify(res)
 
+_SUGGEST_PER_LANG = 40
+
+def _cite_key(line):
+    """The {{cite: …}} key of a corpus line: fieldnotes#group#sentence, papers#sentence, or file.xml#sentence."""
+    kind, _, ref = (line.get('tkey') or '').partition(':')
+    sid = line.get('sid', '')
+    if kind == 'fieldnotes' and ref.isdigit():
+        return f'fieldnotes#{ref}#{sid}'
+    if kind == 'papers':
+        return f'papers#{sid}'
+    if kind == 'recording' and ref:
+        return f'{ref}#{sid}'
+    return ''
+
+@app.route('/api/dictionary/example-suggestions', methods=['POST'])
+def dictionary_example_suggestions():
+    """For the entry being edited: the sentences of the corpus where its word (its form in each language) appears, one suggestion for each
+    sentence that can be cited. Body: {forms: {code: form}}. A sentence found in several languages is one suggestion with all of them.
+    The suggestions say how the word is glossed there, so that the editor can offer each to the sense it fits."""
+    data = request.get_json(silent=True) or {}
+    forms = data.get('forms') if isinstance(data.get('forms'), dict) else {}
+    lines = _corpus_lines()
+    by_key, order = {}, []
+    for code, raw in forms.items():
+        form = _clean_form(str(raw or ''))
+        if code not in LANG_CODES or not form or form == '\u2014' or len(form) > 80:
+            continue
+        match = 'phrase' if ' ' in form else 'word'
+        n = 0
+        for line in lines:
+            if line.get('lang') != code:
+                continue
+            key = _cite_key(line)
+            if not key:
+                continue
+            text = conc._scope_text(line, 'forms')
+            spans = conc.find_spans(text, form, match, True, False)
+            if not spans:
+                continue
+            n += 1
+            if n > _SUGGEST_PER_LANG:
+                break
+            left, found, right, _lc, _rc = conc.context(text, spans[0], 8)
+            toks = [t for t, pos in zip(line.get('tokens', []), conc.align_tokens(line.get('text', ''), line.get('tokens', []))) if pos and pos[0] < spans[0][1] and pos[1] > spans[0][0]]
+            gloss = ' '.join(t['gloss'] for t in toks if t.get('gloss'))
+            sug = by_key.get(key)
+            if sug is None:
+                sug = by_key[key] = {'key': key, 'src': line.get('src'), 'label': line.get('label', ''), 'link': line.get('link', ''),
+                                     'translation': conc.nfc(line.get('translation', '')), 'hits': []}
+                order.append(key)
+            sug['hits'].append({'lang': code, 'left': left, 'match': found, 'right': right, 'gloss': gloss, 'sentence': conc.nfc(line.get('text', ''))})
+    return jsonify({'suggestions': [by_key[k] for k in order]})
+
 # ══════════════════════════════════════════════════════════════
 #  REFERENCES (the project's bibliography, APA 7)
 #  project/references.json holds what the author typed in the form; the formatting is done by references.py.
