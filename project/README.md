@@ -114,6 +114,15 @@ chosen: only the entries that have a form in that language are listed, with that
   `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
   shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
   language. The LaTeX export lists the same forms. To make a word's chip show its cognates, set its cognates in the dictionary.
+- **Orthography or IPA, on every page.** The top bar of every page has an **Orth. / IPA** switch. In IPA, the dictionary's headwords, the
+  cognates and the index, the examples (`{{example}}`, `{{cite}}`), the `{{entry}}` chips, the comparative tables of words, the texts and the
+  concordance are shown in IPA instead of the orthography, and the `[IPA]` beside a headword is hidden. A headword that has an IPA form in the
+  dictionary shows that form (the author's own); everything else is converted by the orthography ↔ IPA table of the Settings
+  (`POST /api/ipa/convert`, open to every visitor). Each visitor's choice is kept in their browser; the data themselves are never changed. What the
+  author types in the running text of a grammar section (an example in italics, say) is not converted, since the site cannot know it is vernacular:
+  use `{{example}}`, `{{cite}}`, `{{entry}}` or a table of words for what should follow the switch.
+- **Settings on every page.** The author's **⚙ Settings** is in the top bar of every page (`settings.js`): the dictionary's display option, the
+  language colours, the orthography ↔ IPA table and the author password. A page that depends on a setting redraws itself when it is saved.
 - **Splitting a parallel sentence** (texts from the fieldnotes). In the ✏ menu of a sentence, **⇆ Split…** asks, for each language, which
   of two (or more, **+ Group**) sentences it goes to. `d01.Road:10` becomes `d01.Road:10a` (say Nume and Dorig) and `d01.Road:10b` (Koro, Olrat,
   Lakon), in place, each with the prompt, its own languages, and its own alignment and glosses (cut from the old ones; confirmation is reset), so
