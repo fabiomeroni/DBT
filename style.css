@@ -704,28 +704,10 @@ a.gloss-link:hover { color: var(--gold); border-bottom-style: solid; }
 #settings-modal .fn-col-add:hover { background: #f5edd8; }
 #st-try-ipa-in, #st-try-ipa, .ipa-from { font-family: var(--font-ipa); }
 
-/* ── Orthography / IPA switch (display.js) ── */
-.script-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-right: 0.5rem; vertical-align: middle; }
-.script-switch button { font-family: 'Crimson Pro', serif; font-size: 0.78rem; background: transparent; color: var(--ink-light); border: none; padding: 3px 9px; cursor: pointer; }
-.script-switch button + button { border-left: 1px solid var(--border); }
-.script-switch button.active { background: var(--gold); color: #fff; }
+/* ── Orthography / IPA (display.js, chosen in the Settings) ── */
 /* shown in IPA: the headword is the IPA, so the [IPA] beside it would only repeat it */
 .script-ipa .ipa-wrap { display: none; }
 .script-ipa :is(.ex-cell, .cite-form-cell, .cite-fn-form, .chip-form, .lx-form, .tx-form, .tx-word-form, .fn-form-cell, .entry-headword, .sg-hw, .hw-index a, .idiome_lang, .cc-left, .cc-match, .cc-right, [data-vern]) { font-family: var(--font-ipa), 'EB Garamond', serif; }
-@media (max-width: 720px) {
-  .script-switch { margin-right: 0.15rem; }
-  .script-switch button { font-size: 0.68rem; padding: 2px 5px; }
-  .topnav-auth { gap: 0.3rem; }
-}
-@media (max-width: 480px) {
-  .script-switch button { font-size: 0.64rem; padding: 2px 4px; }
-  .topnav-auth .auth-btn { padding: 3px 6px; }
-  .topnav-auth .logout-btn { padding: 3px 5px; }
-}
-@media (max-width: 360px) {
-  .script-switch { margin-right: 0; }
-  .script-switch button { font-size: 0.6rem; padding: 2px 3px; }
-  .topnav ul li a { padding: 0 0.22rem; }
-  .topnav-auth { gap: 0.2rem; }
-  .topnav-auth .auth-btn { padding: 3px 4px; font-size: 0.68rem; }
-}
+.st-script { display: flex; gap: 1.4rem; }
+@media (max-width: 480px) { .settings-btn .st-label { display: none; } }
+#settings-modal [hidden] { display: none !important; }
