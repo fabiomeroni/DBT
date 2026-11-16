@@ -100,6 +100,10 @@ chosen: only the entries that have a form in that language are listed, with that
   entry (they are parallels for one sense only): they are found in the examples, and each stays an entry of its own language.
   An etymon may name its cognates without knowing the proto-form (it then has only `langues`). An etymon with no `langues`
   attribute (older data) applies to every language. An entry that names no cognates shows none.
+- **Etymologies as a chain, in the order of descent.** An entry's etymons that apply to the same languages are stages of one chain, shown as
+  *POc \*x > PTB \*y 'gloss'* with one **Cognates** line. The author sets the order of the proto-languages (oldest first) in **⚙ Settings → Etymology**
+  (saved as `display.protoOrder` in `uploads/dictionary_settings.json`); the same order is used in the etymologies of the comparative tables. In the entry
+  editor each stage is a card with its own proto-language, form, meaning, **TLOPO** link and **Etymograph** link; **＋ Add an etymon** adds a stage.
 - **Etymology belongs to forms.** The etymon that applies to the headword's language is shown, followed by its **cognates**.
   An entry may have several etymons for different groups of languages; a language belongs to one of them only.
 - **Senses belong to languages.** `<Sens langues="aa cc">` is shown only for those languages; without the attribute a sense
