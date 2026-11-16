@@ -4311,6 +4311,85 @@ def suite_fnsplit(browser, args):
         site.stop()
 
 
+def suite_ipamode(browser, args):
+    S = "ipamode"
+    section("the Orthography / IPA switch of every page, and the Settings available on every page")
+    J = {"Content-Type": "application/json"}
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        words = ["Tēlge mē-vēysas metehal", "n̄ōn̄", "x"]
+        r = va.post(site.url + "api/ipa/convert", data=json.dumps({"texts": words}), headers=J); d = r.json() if r.ok else {}
+        conv = d.get("ipa", [])
+        check(S, "any visitor can have a text converted to IPA with the table of the Settings (one IPA per text, in order, and not the orthography itself)", r.status == 200 and len(conv) == 3 and conv[0] != words[0].lower() and conv[2] == "x", str(d)[:200])
+        bad = [va.post(site.url + "api/ipa/convert", data=json.dumps(x), headers=J).status for x in ({"texts": "a"}, {"texts": ["a"] * 3001}, {"texts": ["a" * 2001]}, {})]
+        check(S, "a malformed or oversized request is refused (400)", bad == [400] * 4, str(bad))
+        conv_of = lambda t: va.post(site.url + "api/ipa/convert", data=json.dumps({"texts": [t]}), headers=J).json()["ipa"][0]
+        # the dictionary: the headword shows the author's IPA
+        errs = []; pv = vis.new_page(); watch(pv, errs)
+        open_page(pv, site, "dictionary.html?lang=Nume", "#dict-content .entry", 700)
+        check(S, "every page has the switch in its top bar (Orth. / IPA), the dictionary too", pv.locator("#script-switch button").count() == 2 and pv.locator("#script-switch button.active").get_attribute("data-s") == "orth")
+        before = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        wants = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.dataset.ipa || null)")
+        pv.click('#script-switch button[data-s="ipa"]'); pv.wait_for_timeout(900)
+        after = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        have_ipa = [i for i, w in enumerate(wants) if w]
+        check(S, "in IPA the headwords that have an IPA form in the dictionary show that form (the author’s own), the others are converted", have_ipa and all(after[i] == wants[i] for i in have_ipa) and all(after[i] == conv_of(before[i]) for i in range(len(before)) if i not in have_ipa), str((before[:3], after[:3], wants[:3])))
+        check(S, "…and the [IPA] beside a headword is hidden (it would repeat it)", pv.evaluate("[...document.querySelectorAll('.ipa-wrap')].every(e => getComputedStyle(e).display === 'none')"))
+        pv.reload(wait_until="domcontentloaded"); pv.wait_for_selector("#dict-content .entry", timeout=10000); pv.wait_for_timeout(900)
+        again = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        check(S, "the choice is remembered in the browser: after a reload the page is still in IPA", again == after and pv.locator("#script-switch button.active").get_attribute("data-s") == "ipa", str(again[:3]))
+        pv.click('#script-switch button[data-s="orth"]'); pv.wait_for_timeout(400)
+        back = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        check(S, "back to the orthography the page is exactly as it was", back == before, str(back[:3]))
+        # the texts
+        pv.evaluate("localStorage.setItem('dbt.script', 'orth')")
+        open_page(pv, site, "transcription.html?fieldnotes=1&index=0&title=D01", ".fn-form-cell", 2200); pv.wait_for_timeout(800)
+        txt = lambda: pv.evaluate("[...document.querySelectorAll('.fn-form-cell')].slice(0, 12).map(e => e.textContent.trim())")
+        o = txt(); pv.click('#script-switch button[data-s="ipa"]'); pv.wait_for_timeout(1200); i_ = txt()
+        check(S, "the texts are read in IPA: each form is its orthography converted (the missing ones, —, stay)", len(o) >= 6 and i_ != o and all(b == (a if a in ("—", "") else conv_of(a)) for a, b in zip(o, i_)), str((o[:3], i_[:3])))
+        pv.click('#script-switch button[data-s="orth"]'); pv.wait_for_timeout(400)
+        check(S, "…and back to the orthography", txt() == o)
+        # the grammar: a cited sentence and a table of words
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        spec = {"kind": "lexical", "caption": "Pronouns", "label": "ipapro", "pos": "pro.", "columns": ["singular"], "rows": ["2"], "inventory": {"num": {"2": {"singular": "nēk"}}, "drg": {"2": {"singular": "nēk"}}}}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Test\n\n{{cite: fieldnotes#0#d01.Road:02}}\n\n```phonotable\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n"})
+        open_page(pv, site, "grammar.html", ".cite-fn-form", 1500); pv.wait_for_timeout(500)
+        gt = lambda: pv.evaluate("[...document.querySelectorAll('.cite-fn-form, .lx-form')].map(e => e.textContent.trim())")
+        o = gt(); pv.click('#script-switch button[data-s="ipa"]'); pv.wait_for_timeout(1200); i_ = gt()
+        check(S, "in the grammar the cited examples and the tables of words are in IPA, too", len(o) >= 4 and len(o) == len(i_) and pv.locator(".lx-form").count() >= 1 and i_ != o and "nēk" in o and "nēk" not in i_ and "nɪk" in " ".join(i_), str((o[-4:], i_[-4:])))
+        pv.click('#script-switch button[data-s="orth"]'); pv.wait_for_timeout(400)
+        check(S, "…and back to the orthography", gt() == o)
+        pv.evaluate("localStorage.setItem('dbt.script', 'orth')")
+        # the concordance
+        open_page(pv, site, "concordance.html?q=na&scope=forms&match=word", ".cc-match", 2500)
+        o = pv.evaluate("[...document.querySelectorAll('.cc-match')].slice(0, 6).map(e => e.textContent)")
+        if o:
+            pv.click('#script-switch button[data-s="ipa"]'); pv.wait_for_timeout(900)
+            i_ = pv.evaluate("[...document.querySelectorAll('.cc-match')].slice(0, 6).map(e => e.textContent)")
+            check(S, "the concordance shows its lines in IPA", all(b == conv_of(a) for a, b in zip(o, i_)), str((o[:3], i_[:3])))
+        pv.evaluate("localStorage.setItem('dbt.script', 'orth')")
+        check(S, "no JavaScript error on any of these pages", not errs, "; ".join(errs[:3]))
+        # the Settings: on every page, for the author
+        seen = {}
+        for pg_ in ("index.html", "grammar.html", "dictionary.html", "texts.html", "concordance.html", "references.html", "glossary.html", "transcription.html?fieldnotes=1&index=0&title=D01"):
+            pa = au.new_page(); open_page(pa, site, pg_, None, 900); pa.wait_for_timeout(500)
+            seen[pg_] = (pa.locator("#settings-btn").count(), pa.locator("#script-switch").count()); pa.close()
+        check(S, "the author finds ⚙ Settings (once) and the switch in the top bar of every page", all(v == (1, 1) for v in seen.values()), str(seen))
+        pgv = vis.new_page(); open_page(pgv, site, "grammar.html", None, 700)
+        check(S, "a visitor does not see ⚙ Settings", pgv.locator("#settings-btn").count() == 0)
+        pa = au.new_page(); e2 = []; watch(pa, e2); open_page(pa, site, "grammar.html", None, 900); pa.wait_for_timeout(500)
+        pa.click("#settings-btn"); pa.wait_for_selector("#settings-modal.visible #st-rows tr", timeout=6000)
+        check(S, "in the grammar the Settings dialog opens with the colours and the orthography ↔ IPA table, and offers the Orthography / IPA switch’s explanation", pa.locator("#st-colors .st-color").count() == len(json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))["languages"]) and pa.locator("#st-rows tr").count() > 10 and "Orthography / IPA" in pa.inner_text("#settings-modal"))
+        pa.fill("#st-try-orth", "tēlge"); pa.wait_for_timeout(700)
+        check(S, "…and “Try it” works there", pa.inner_text("#st-try-ipa").startswith("[") and len(pa.inner_text("#st-try-ipa")) > 3)
+        pa.click("#st-cancel"); pa.wait_for_timeout(200)
+        check(S, "…and closes", not pa.locator("#settings-modal.visible").count() and not e2, "; ".join(e2[:2]))
+    finally:
+        site.stop()
+
+
 def suite_lextable(browser, args):
     S = "lextable"
     section("grammar: comparative tables of words")
@@ -4417,7 +4496,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
     ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
-    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip", "lextable", "fnsplit"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip", "lextable", "fnsplit", "ipamode"), help="run a single suite (generality includes the languages checks)")
     ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
@@ -4454,6 +4533,7 @@ def main():
             if args.only in (None, "phonotip"): suite_phonotip(browser, args)
             if args.only in (None, "lextable"): suite_lextable(browser, args)
             if args.only in (None, "fnsplit"): suite_fnsplit(browser, args)
+            if args.only in (None, "ipamode"): suite_ipamode(browser, args)
             browser.close()
     finally:
         site.stop()
