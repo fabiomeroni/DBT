@@ -22,6 +22,13 @@ const DIALOG_HTML = () => `<div class="dbt-modal-backdrop" id="settings-modal">
     <div id="st-author">
     <h4 class="st-h" style="margin-top:1.1rem;">Dictionary</h4>
     <label class="st-check"><input type="checkbox" id="st-rel"> Show the semantic relations (synonyms, antonyms) under the senses</label>
+    <h4 class="st-h" style="margin-top:1.1rem;">Etymology</h4>
+    <p class="modal-desc">The proto-languages in the order of descent, oldest first (e.g. POc, then PTB). An entry's etymons are shown in this order, as a chain <i>POc *x &gt; PTB *y</i>, and so are the etymologies in the tables of words.</p>
+    <div id="st-protos" class="st-protos"></div>
+    <div class="st-actions" style="margin-top:0.2rem;">
+      <input id="st-proto-new" class="em-input" style="width:7rem;" placeholder="e.g. PEOc" spellcheck="false">
+      <button type="button" class="fn-col-add" id="st-proto-add">＋ Add</button>
+    </div>
     <h4 class="st-h" style="margin-top:1.1rem;">Language colours</h4>
     <p class="modal-desc">The colour that codes each language everywhere on the site: headwords, tables, texts, the grammar and the LaTeX export.</p>
     <div id="st-colors" class="st-colors"></div>
@@ -162,6 +169,14 @@ function stLoad(cfg) {
   renderSettingsRows(); stTry();
 }
 
+let _stProtos = [];
+function renderProtos() {
+  const box = document.getElementById('st-protos');
+  box.innerHTML = _stProtos.map((p, i) => `<div class="st-proto"><span class="st-proto-n">${i + 1}</span><b>${esc0(p)}</b>
+    <button type="button" data-pm="up" data-i="${i}" ${i ? '' : 'disabled'} title="Earlier">↑</button>
+    <button type="button" data-pm="down" data-i="${i}" ${i < _stProtos.length - 1 ? '' : 'disabled'} title="Later">↓</button>
+    <button type="button" data-pm="del" data-i="${i}" title="Remove">✕</button></div>`).join('') || '<div class="modal-desc">No proto-language yet.</div>';
+}
 async function openSettings() {
   if (!isLoggedIn) { showLoginModal(); return; }
   const msg = document.getElementById('st-msg');
@@ -174,6 +189,7 @@ async function openSettings() {
     _stDefaults = d.defaults;
     document.getElementById('st-rel').checked = !d.display || d.display.relations !== false;
     _stColors = {...d.colors}; _stColorsLoaded = {...d.colors}; _stDefaultColors = d.default_colors; _stColorNames = d.color_names;
+    _stProtos = (d.protos || []).slice(); renderProtos();
     renderColorRows();
     stLoad(d.correspondences);
   } catch (e) { msg.textContent = 'Could not load the settings: ' + e.message; msg.className = 'dbt-modal-msg error'; }
@@ -184,7 +200,7 @@ async function saveSettings() {
   msg.textContent = 'Saving…'; msg.className = 'dbt-modal-msg'; btn.disabled = true;
   try {
     const r = await fetch('/api/dictionary/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ correspondences: stCollect(), colors: _stColors, display: { relations: document.getElementById('st-rel').checked }, rederive: document.getElementById('st-rederive').checked }) });
+      body: JSON.stringify({ correspondences: stCollect(), colors: _stColors, display: { relations: document.getElementById('st-rel').checked, protoOrder: _stProtos }, rederive: document.getElementById('st-rederive').checked }) });
     const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
     const display = { relations: document.getElementById('st-rel').checked };
@@ -224,6 +240,17 @@ function bindSettings() {
   document.getElementById('st-cancel').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('visible'));
   document.getElementById('settings-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible'); });
   document.getElementById('st-save').addEventListener('click', saveSettings);
+  document.getElementById('st-protos').addEventListener('click', e => {
+    const b = e.target.closest('button[data-pm]'); if (!b) return;
+    const i = +b.dataset.i, k = b.dataset.pm;
+    if (k === 'del') _stProtos.splice(i, 1);
+    else { const j = k === 'up' ? i - 1 : i + 1; if (j >= 0 && j < _stProtos.length) [_stProtos[i], _stProtos[j]] = [_stProtos[j], _stProtos[i]]; }
+    renderProtos();
+  });
+  const addProto = () => { const inp = document.getElementById('st-proto-new'), v = inp.value.trim();
+    if (v && !_stProtos.includes(v)) { _stProtos.push(v); renderProtos(); } inp.value = ''; };
+  document.getElementById('st-proto-add').addEventListener('click', addProto);
+  document.getElementById('st-proto-new').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addProto(); } });
   document.getElementById('st-add-row').addEventListener('click', () => {
     _stRows.push({ orth: '', ipa: '', type: 'consonant', default: false }); renderSettingsRows();
     document.getElementById('st-rows').lastElementChild?.querySelector('input')?.focus();
