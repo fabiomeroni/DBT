@@ -1,498 +1,4707 @@
-# The project folder
-
-Everything that is specific to **one language, or one group of languages**, lives here and in the data files it
-points to. The code (`app.py`, the pages, the stylesheet) knows no language: to build a DBT for another language,
-you change this folder and your data, not the code.
-
-## `project.json`
-
-| field | what it is |
-|---|---|
-| `id` | a short identifier of the project |
-| `name` | the name in the top bar (e.g. `DBT Gaua`) |
-| `titleSuffix` | what follows the page name in the browser tab (`Comparative Dictionary — <titleSuffix>`) |
-| `homeTitle` | the browser title of the home page |
-| `nav` | the small label at the right of the top bar, for `home`, `about`, `dictionary`, `grammar`, `texts`. `{n}` is the number of languages; `{languages}` is that number with the word, in the singular or plural (`1 Language`, `5 Languages`) |
-| `languages` | the project's languages, **in the order they are shown** (see below) |
-| `headwordLanguage` | the language whose forms the dictionary opens on, and that names new entries |
-| `recordings` | `author` and `year` shown for recordings whose XML does not say |
-| `latex` | `title`, `subtitle` and `author` of the LaTeX export (LaTeX source: write `\&` for &) |
-| `captions` | optional: the words of the captions, `table` (default `Table`), `figure` (default `Figure`), `separator` (default ` – `, with its spaces), the plurals `tables` and `figures` (the singular and an s if you do not give them: write `Tableaux` yourself) and `and` (the word between the last two items of a list, default `and`): for a grammar in another language, e.g. `{"table": "Tableau", "tables": "Tableaux", "and": "et", "separator": " : "}` |
-| `latex` → `fonts` | optional: the fonts of the LaTeX export by role, `{"body": "…", "headings": "…", "captions": "…", "ipa": "…"}` (plain font names; see *The LaTeX export*) |
-| `footer` | the line at the bottom of the home and about pages (inline HTML). Leave empty for no footer |
-| `redirects` | old page names that now live elsewhere, e.g. `{"gaua.html": "about.html"}` |
-| `files` | (optional) where the data lives, if it is not in the standard places below: `dictionary`, `fieldnotes`, `grammarDir`, `recordingsDir`, `imagesDir`, `pagesDir`, `orthography`, `seedPhonetic` |
-| `legacyFiles` | (optional) the places where an older version of the project kept some of its data, as `{"dictionary": "dbt_dictionary.xml", "recordingsDir": "transcribed_narratives"}`. The first time the server starts and finds one of them, it moves that data into the project folder (see "Where the data is") |
-| `grammaticalDomains` | (optional) the semantic domains that mark **grammatical** entries (markers, pronouns, TAMP forms …), e.g. `["Grammar"]`: the default. In the grammar, the chip of such an entry shows all its forms; see "The dictionary" below |
-
-Each language has:
-
-| field | what it is |
-|---|---|
-| `code` | a short code (lower case letters, digits, `-` `_`). It is what the dictionary XML writes in `langue="…"` |
-| `name` | the name shown on the site |
-| `abbr` | the abbreviation used in the interlinear lines |
-| `color` | the default colour, `#rrggbb`. The author can change it in the dictionary's Settings |
-| `aliases` | the other codes by which texts name the language (e.g. ISO 639-3 or Pangloss: `tgs`, `wwo`) |
-
-`project.json` is read when the site starts: restart after editing it.
-
-## How many languages?
-
-Any number, from one up. With **one** language the language selectors disappear (the headword-language buttons,
-the Texts filter, the grammar's language toggles) and the text views show no language label in front of the single
-row. With several, every view has a row or button per language, in the order of `languages`.
-
-New languages go at the **end** of the list: column keys that texts have stored are read with the new number of
-languages (the added language simply has an empty slot). Do not reorder or remove languages of a project that
-already has glossed texts.
-
-## `orthography.json`
-
-The default correspondences between the orthography and the IPA (it feeds the IPA suggestions and the reading of
-IPA). The author edits them in the dictionary's Settings; what they save there overrides this file. Without this
-file the table is empty. `previousDefaults` lists tables an earlier release shipped: a Settings file saved
-unchanged from one of them is ignored, so the current default applies.
-
-## `seed-phonetic-forms.json`
-
-Optional: the IPA the author gave for dictionary entries that were written before entries had a phonetic form,
-as `{entry id: {language code: IPA}}`. They are used (as confirmed) only while the entry still has that form.
-
-## `pages/home.json` and `pages/about.json`
-
-The prose of the **home page** and of the **about page** (the page about the place and its languages). The layout is
-code; the content is yours. Paragraphs are written in inline HTML (`<strong>`, `<em>`, links). A page whose file is
-missing is simply left out: without `home.json` the home page has no map section, without `about.json` there is no
-about page (the language strip on the home page then points to the dictionary).
-
-In any paragraph, `{languages.count}` becomes the number of languages in words (`five`) and `{languages.list}` the
-list of their names (`<strong>Nume, Dorig</strong>, and <strong>Lakon</strong>`).
-
-**`home.json`**
-
-| field | what it is |
-|---|---|
-| `byline` | the line under the title |
-| `intro` | a list of paragraphs about the languages, after the standard text about the Boasian trilogy |
-| `cards` | `grammar`, `texts`, `dictionary`: the sentence in each of the three cards (a generic one is used if missing) |
-| `map` | the section with a map: `title`, `text` (paragraphs), `credit`, `image`, `imageAlt`, `moreLabel` (the link to the about page). Leave it out for no map |
-
-**`about.json`**
-
-| field | what it is |
-|---|---|
-| `tabTitle`, `title`, `subtitle` | the browser tab, the heading and the line under it |
-| `sidebarImage`, `sidebarImageAlt` | the picture in the sidebar |
-| `infobox` | `caption` and `rows` (a list of `[label, value]`), shown in the section flagged `infobox` |
-| `sections` | a list of `{id, title, tocLabel, text: [paragraphs], infobox?, languageSections?}`. The section flagged `languageSections` is followed by one block per language of the project |
-| `languages` | for each language **code**: `badge` (e.g. `~700 speakers`), `meta` (a list of short notes) and `text` (paragraphs). A language with nothing here still gets its block, with its links |
-
-Image files are named as they sit in the site folder for now (`gaua_map.png`).
-
-## The dictionary: entries, cognates, etymologies and senses
-
-One entry (`<EntréeLexicale>`) is a **headword with its cognates**. The dictionary shows it in the **headword language** that is
-chosen: only the entries that have a form in that language are listed, with that form as the headword.
-
-- **Cognates, not parallels.** An entry shows, from the other languages, only the forms that are cognate with the headword: the
-  languages of its etymology (`<Étymologie><Étymon langues="aa cc">`). Words that merely mean the same are not parallels of the
-  entry (they are parallels for one sense only): they are found in the examples, and each stays an entry of its own language.
-  An etymon may name its cognates without knowing the proto-form (it then has only `langues`). An etymon with no `langues`
-  attribute (older data) applies to every language. An entry that names no cognates shows none.
-- **Etymologies as a chain, in the order of descent.** An entry's etymons that apply to the same languages are stages of one chain, shown as
-  *POc \*x > PTB \*y 'gloss'* with one **Cognates** line. The author sets the order of the proto-languages (oldest first) in **⚙ Settings → Etymology**
-  (saved as `display.protoOrder` in `uploads/dictionary_settings.json`); the same order is used in the etymologies of the comparative tables. In the entry
-  editor each stage is a card with its own proto-language, form, meaning, **TLOPO** link and **Etymograph** link; **＋ Add an etymon** adds a stage.
-- **Etymology belongs to forms.** The etymon that applies to the headword's language is shown, followed by its **cognates**.
-  An entry may have several etymons for different groups of languages; a language belongs to one of them only.
-- **Senses belong to languages.** `<Sens langues="aa cc">` is shown only for those languages; without the attribute a sense
-  applies to all of them. Senses are numbered 1, 2 … among those shown.
-- **Examples belong to senses.** The author chooses the examples shown under a sense with the same markup as in the grammar, one
-  per line, in the sense's *Examples* box of the editor (stored in the sense's `<Exemples>`): `{{cite: fieldnotes#0#d01.Road:02}}`,
-  `{{cite: papers#id}}`, `{{cite: recording.xml#sentence}}`. The editor lists the examples already attested for the entry, with a
-  button to add each one. A sense with a chosen list shows exactly those examples, and no other sense shows them. A sense with
-  none shows the attested examples whose word was glossed like it (an entry with a single sense shows all of its examples).
-  Nothing is gathered at the entry level: the author is told, on the entry, when an attested example is shown under no sense.
-- **Chips in the grammar.** `{{entry: id}}` shows, for **grammatical** material (an entry whose semantic domain is one of
-  `grammaticalDomains`, default *Grammar*), all its forms, one slot per language. For **lexical** material (every other domain) it
-  shows only the cognates (the union of the languages of its etymons) or, if none are named, the form in the project's headword
-  language. The LaTeX export lists the same forms. To make a word's chip show its cognates, set its cognates in the dictionary.
-- **Orthography or IPA, on every page.** The top bar of every page has an **Orth. / IPA** switch. In IPA, the dictionary's headwords, the
-  cognates and the index, the examples (`{{example}}`, `{{cite}}`), the `{{entry}}` chips, the comparative tables of words, the texts and the
-  concordance are shown in IPA instead of the orthography, and the `[IPA]` beside a headword is hidden. A headword that has an IPA form in the
-  dictionary shows that form (the author's own); everything else is converted by the orthography ↔ IPA table of the Settings
-  (`POST /api/ipa/convert`, open to every visitor). Each visitor's choice is kept in their browser; the data themselves are never changed. What the
-  author types in the running text of a grammar section (an example in italics, say) is not converted, since the site cannot know it is vernacular:
-  use `{{example}}`, `{{cite}}`, `{{entry}}` or a table of words for what should follow the switch.
-- **Settings on every page.** The author's **⚙ Settings** is in the top bar of every page (`settings.js`): the dictionary's display option, the
-  language colours, the orthography ↔ IPA table and the author password. A page that depends on a setting redraws itself when it is saved.
-- **Splitting a parallel sentence** (texts from the fieldnotes). In the ✏ menu of a sentence, **⇆ Split…** asks, for each language, which
-  of two (or more, **+ Group**) sentences it goes to. `d01.Road:10` becomes `d01.Road:10a` (say Nume and Dorig) and `d01.Road:10b` (Koro, Olrat,
-  Lakon), in place, each with the prompt, its own languages, and its own alignment and glosses (cut from the old ones; confirmation is reset), so
-  that they can be glossed independently. A part can be split again (`10ba`, `10bb`). A part is marked `part="1"` on its `<rfGroup>` in
-  `fieldnotes.xml` and shows only the languages it holds. The old sentence is gone: if a grammar section or a dictionary example cites it with
-  `{{cite: fieldnotes#0#d01.Road:10}}`, the author is told where, and must point the citation to `10a` or `10b`. A copy of the questionnaire made
-  just before is kept in `uploads/backups/fieldnotes/`.
-- **An example** begins with its source, as the sentence is cited (for example *Fieldnotes · D01 ~ Trigeta i mit long rot · d01.Road:02*),
-  which is also the link to the sentence in its text.
-- **Proposed entries** (words that confirmed texts suggest adding to the dictionary) are the author's worklist: they are shown, and
-  served by the API, to the logged-in author only.
-- **Two ways to list.** The *List* switch in the sidebar shows the dictionary as **Entries** (each headword with its etymology,
-  cognates and senses) or as **Senses** (each meaning, with the headwords of the language that have it, each showing what the entry says about that sense: IPA, part of speech, domain, definition, etymology and cognates, notes and the attested examples). The choice is kept in
-  the address (`?mode=senses`) and remembered in the browser.
-- **In the editor** (author mode) the window opens on the headword: its form and IPA, then **Cognates**: tick a language and write
-  its form; then the senses (each with a tick per language) and, optionally, the proto-form. Forms that are not cognates are not
-  asked for: a form already stored in the entry stays in the data, is listed in a note, and shows under its own language (the
-  author sees a line "Not cognates, so not shown here" **under each sense**, with a link to set the cognates: it lists the forms
-  of the languages *that sense applies to*, since the words that merely mean the same belong to a sense, not to the entry as a whole).
-  For a project with one language there is nothing to tick.
-
-## Importing an XML dictionary (the wizard)
-
-The **⬆ Upload XML** button of the dictionary (author only) opens a wizard that takes **any XML dictionary**, not only files in the DBT's own format
-(LEXICA XML): LIFT (FLEx, WeSay, Lexique Pro), TEI, or a schema of your own. You say once which XML node is what, and the DBT converts the file. The logic is
-that of **LExport** (https://lexport-anonymous.streamlit.app/), the tool that converts lexical XML dictionaries into other formats; the wizard says *Powered by LExport*.
-
-1. **File.** Choose the file. XML namespaces (TEI) are removed so that you see plain tag names. A file that is already in the DBT's format says so and can be used
-   as it is.
-2. **Entries.** Which node wraps each entry. The likeliest one is chosen for you; the first entries are shown as XML. For LIFT and TEI files the whole mapping is
-   started for you: check each step.
-3. **Headwords.** The node that holds the headword, and what is read from it (its text, an attribute, or the text of a child, as `./text` in LIFT). The **language**
-   is a language of the project (all the headwords), or comes from an attribute (`lang`), whose values you map to the project's languages (those you leave
-   blank are ignored). Optional: the IPA (LIFT's `nme-fonipa` is the IPA of `nme`); the forms without IPA are derived from your orthography table as usual.
-4. **Grammar.** The part of speech (a node, or an attribute such as LIFT's `grammatical-info`, `value`) and a table saying how each value is written in the DBT
-   (`Noun` → `n.`); optionally the semantic domain.
-5. **Senses.** The sense node (or none: the entry is its own sense), optionally subsenses (they become senses of their own), the definition, the short gloss and
-   the notes. Each of these can be **filtered by an attribute**: *only where `lang` is `en`* (the DBT shows English definitions). Samples of what is read are shown
-   under each field.
-6. **Examples.** If the file has example sentences, you choose to **ignore** them (the default) or to **use** them. If you use them, they become a **text
-   of the Texts page**, *Examples from pre-existent dictionary* (on the model of *Examples from papers*), and each sense cites its own examples, so they appear
-   under the sense in the dictionary. You say which node is an example, where its sentence is, and where its translation is (filtered by language: only where
-   `lang` is `en`); the language of a sentence is the headwords' language, or read from an attribute and mapped (a table lists the values found on the sentences,
-   which can be languages no headword has). A text has one language, so with several languages there is one text for each, with the language in its title
-   (*Examples from pre-existent dictionary (Nume)*). You can then gloss the sentences like any other text.
-7. **Relations.** If the file says that a sense is a **synonym** or an **antonym** of another, you choose to import the relations (the default when the file has
-   them) or to ignore them. You say which node is a relation, where its type is (LIFT: the attribute `type` of the node itself) with a table saying what each type
-   is in the DBT (*Synonyms* → Synonym, *Antonyms* → Antonym; the others are not imported), where its target is (LIFT: the attribute `ref`), and how the target is
-   found: by an **identifier** (the attribute of the entries, such as LIFT's `guid`, and of the senses, such as `id`) or by its **headword**. Targets are resolved after all the entries
-   are converted, so a relation can point to an entry that comes later; one that points to nothing is skipped and reported. A relation under a sense belongs
-   to it; one under the entry belongs to its first sense.
-8. **Etymology.** Optional: the node, the form, the language (a child, or an attribute of the node itself, as LIFT's `source`) and a gloss.
-9. **Review.** How many entries will be imported (and with how many senses), which are skipped and why (for instance no headword in a language of the project),
-   a **coverage report** (how many entries lack the part of speech, the IPA …, with examples), and the first entries as the DBT will hold them. Choose to
-   **replace** the dictionary (the current one is backed up first, in `uploads/backups`) or to **add** to it (identifiers already in use are not reused).
-   Nothing is written until you press *Import*.
-
-An imported dictionary is saved as the uploaded dictionary: the file shipped with the project (`project/dictionary.xml`) is never overwritten.
-
-**Replacing and adding.** *Add* goes on in the text of examples that is already there (the new sentences are numbered after the old ones, so the glosses you made
-stay valid). *Replace* starts the text again: the old text and the glosses made on it are first backed up (in `uploads/backups`) and the glosses removed, since they
-belonged to the old sentences.
-
-**Safety.** Only the author can use the wizard. The file is read without expanding entities or fetching anything (an external entity cannot read a file of the
-server), is limited to 60 MB, and is kept for one hour under a random name until the import is made or abandoned. A path typed into the wizard can only look
-*inside* the entries.
-
-## Captions: tables and figures, numbered through the grammar
-
-A **phonological chart** is a table and has its **caption above** it, an **image** is a figure and has its **caption below** it. The author writes
-only the text; the number is automatic and goes on through the **whole grammar**: the sections in the order of their file names, the tables and
-the figures in the order of the text, each kind counted by itself (*Table 1 – …*, *Table 2 – …*, *Figure 1 – …*). When a section gains or loses a
-table or a figure, the numbers of the sections after it change, and the page shows them again at once.
-
-- **A chart** has no title. Its **Caption** box (in the *Phonological table* tab) is the text after “Table 3 –”; the preview shows the number the
-  chart will have. Left empty, the chart has its number alone. (A chart written before captions existed keeps its old title, as its caption.)
-- **A figure** is an image alone on a line: `![the caption](images/map.png)`. The caption is what is between the brackets. The **📷 Image** button of the
-  editor uploads the picture and writes the line for you, with the caption ready to be typed over. An image in the middle of a line of text is only an
-  image: no caption, no number. (Ordinary Markdown tables are not numbered.)
-- **Referring to them: `{{ref: label}}`.** Give a table or a figure a **label**, a short name made of letters, digits, `-` and `_`: a chart has a
-  *Label* box in the *Phonological table* tab, a figure takes it after the image, `![the caption](images/map.png){#map}` (an image uploaded from the
-  editor gets one made from its file name). Then `{{ref: map}}` in the grammar **or in the dictionary** (a definition or a note) becomes a link that
-  reads *Figure 3* or *Table 2*, always with the number the item has now, and goes to it (from the dictionary it opens the Grammar page at that
-  table or figure). Several at once: `{{ref: a, b}}` gives "Table 1 and Figure 2". The **🔗 Reference** button of the grammar editor lists everything
-  that can be referred to and inserts the shortcode. An unknown label is shown as a visible error; a shortcode inside a code block or in `inline code`
-  is shown as written. A label belongs to one item (tables and figures share their names): the chart editor refuses a label that is taken, and the
-  first item to use a label keeps it. In the LaTeX export the shortcode becomes the project's word and LaTeX's own number (`\tablename~\ref{…}`,
-  with `\label`s in the tables and the figures), so the PDF follows the same numbers.
-- **The words** ("Table", "Figure", the separator) are in `project.json` (`captions`, above); the defaults are English.
-- **LaTeX:** the charts are `table` environments with the caption above and the images are `figure` environments with the caption below, so LaTeX numbers
-  them in the same order; the words and the separator are given to LaTeX (the `caption` package). The images are taken from an `images` folder next to
-  the `.tex` file (copy the project's `images` folder there).
-
-## Backups (author only)
-
-Everything you edit in the browser (the dictionary, the grammar, the glossary, the references, the texts and their glosses, the images, the settings) lives **only on the server**. Two things keep it safe:
-
-- **The 💾 Backup button**, in the top bar of every page where you are logged in as author (beside *Logout*), downloads **one zip** with everything: the folder `project` (the dictionary,
-  the grammar and the glossary sections, the references, the texts and their glosses, the images, the pages, `project.json`, whatever folders your `project.json` configures) and the data
-  under `uploads` (the dictionary you uploaded or imported, its settings). Inside, `BACKUP-README.txt` says what it is and **how to restore** (copy the `project` and `uploads` folders of the
-  archive over the server's, then restart; or copy back just one file), and `manifest.json` lists each file with its SHA-256. **Keep these zips on your own computer**: it is what protects you if the server is lost.
-- **The reminder beside the button** says *last backup: 3 days ago*, counting from the last time you pressed it. It stays quiet while nothing has been edited since; with edits since it turns **amber
-  after a week** and **red after a month** (the button gets a dot too, so the warning is visible on a narrow screen where the words give way). *no backup yet* is red.
-- **Daily snapshots**, kept by the server in `uploads/backups/snapshots/` (`daily-2026-11-13.zip`, the same kind of archive). Once a day, **when the site is used and something has changed since the last
-  snapshot**, the server makes one by itself (in the background; a day with no edit is skipped). A snapshot brings back what a **mistake** destroyed (an entry deleted, a bad import); it does **not**
-  survive the loss of the server, which only your downloaded zip does.
-- **Disposing of snapshots.** Snapshots are **never removed by themselves**. Click the reminder to open the panel: it lists them (day, age, size, a download link) and offers the 🗑 for each snapshot
-  that is **30 days old or more**, and *Dispose of them* for all of those at once (it tells how much space is freed). A younger snapshot cannot be disposed of; the server refuses it whatever is sent.
-  Disposing asks for confirmation and cannot be undone.
-- **Settings** (environment variables, for the person who runs the server): `DBT_SNAPSHOT_DISABLE=1` turns the daily snapshots off; `DBT_SNAPSHOT_CHECK_SECONDS` (default 600) is how often the server looks
-  whether one is due. The About page has no author login, so it has no Backup button.
-- **To restore a snapshot or a downloaded zip**, unzip it and copy the folders over the server's, as its readme says. Nothing is restored by a button yet (it is in `TODO.md`).
-
-## The Glossary
-
-The **Glossary** tab (after *References* in the navigation) holds the **concepts** that the grammar and the dictionary refer to: *predicate*, *omnipredicative*, … An entry has a
-**term**, a **definition** and, if you wish, a link to a reference site (for instance the Grammaticon).
-
-- **An entry is a text file** in `project/glossary/`, written with **the markup of the grammar**: the same Markdown, the same editor (toolbar, 📷 images, 🔗 references, the
-  *Phonological table* tab) and **every shortcode of the grammar** (`{{source: …}}`, `{{cite: …}}`, `{{example: …}}`, `{{entry: …}}`, `{{ref: …}}`, tables, figures). The file name (without
-  `.md`) is the entry's **id** and its first heading is its **term**: `predicate.md` begins `## Predicate`. For example the entry *predicate*:
-
-  ```
-  ## Predicate
-
-  The predicate makes a statement … can act as a predicate.
-
-  [see in the Grammaticon](https://grammaticon.clld.org/concepts/25) ![Grammaticon](grammaticon_logo.png){.glossary-logo}
-  ```
-
-  (`{.glossary-logo}` makes the logo a line high, after the link; a picture of your own can go in `project/images` or next to the pages, as for the grammar.)
-- **Adding, editing, deleting** (author only): *＋ Add entry* asks for the term and makes the id from it (`Case marking` → `case_marking`); *✏ Edit* opens the editor; *🗑 Delete*.
-  Under each entry the author sees the shortcode to copy. Entries are listed alphabetically (accents and case ignored) and the sidebar lists the terms.
-- **Referring to an entry: `{{glossary: id}}`** in the grammar, in the dictionary (a definition or a note), or in another entry. It becomes a link that reads as the **term**, with the
-  beginning of the definition as a tooltip, to `glossary.html#id` (the entry is shown). `{{glossary: id | the words shown}}` shows your own words. An unknown id is shown as a visible
-  error; inside a code block or `inline code` the shortcode is left as written. The **📖 Glossary** button of the editors lists the entries and inserts the shortcode.
-- **In the LaTeX export** the shortcode is plain text (the term, or the words shown): the Glossary is a page of the site.
-- **Settings** (`project.json`): `nav.glossary` is the label at the right of the navigation bar (default *Glossary*); `files.glossaryDir` is the folder (default `project/glossary`).
-- **Numbers.** Tables and figures inside an entry are numbered within the glossary (*Table 1* in each entry's own series), not after those of the grammar; `{{ref: label}}` in an
-  entry refers to the grammar's tables and figures and goes to the Grammar page.
-- **For developers.** The editor is shared by the Grammar and Glossary pages (`editor.js`, and `grammar.css` for the look of the texts), so that both always accept the same markup.
-
-## Semantic relations (synonyms and antonyms)
-
-A sense can be related to another sense as its **synonym** or its **antonym**. Relations belong to **senses**, not to entries: the word *know* has a sense that is a
-synonym of one word and another sense that is an antonym of another.
-
-- **In the entry editor** each sense has a *Semantic relations* block: choose the type, type a form or a meaning, and pick the sense you mean in the results (each result is a
-  sense: its headword, its number if the entry has several, its gloss). The ✕ removes a relation. A sense is never offered as its own relation.
-- **On the page** the relations appear under the sense (*Synonym: …  ·  Antonyms: …*, each a link to the entry). A relation is entered **once**; since both types are symmetric,
-  the page shows it on **both** senses. The reverse side is only drawn, never stored.
-- **The author's choice:** *Settings → Display → Show the semantic relations* hides them from everybody (the data stays).
-- **In the XML:** `<Sens> … <RelationSémantique><Type>synonym</Type><Cible cible="idⓢ2">headword</Cible></RelationSémantique> … </Sens>`, where `cible` is the identifier of the **target
-  sense**. Only the two types are shown and edited; a relation of any other type that an older dictionary has is left exactly as it is.
-- **When a sense or an entry is removed,** the relations that point to it are removed with it.
-- **Import:** the wizard's *Relations* step (below) brings them from LIFT, TEI or any schema.
-
-## The LaTeX export (and the Word and PDF exports to come)
-
-**Tables by language.** On the website a phonological chart is one table with all the languages (the colours tell them apart). In the exports each
-language has its own table, in black, in the order of the project's languages, with the rows and columns that are empty for that language left out.
-The tables of a chart share its number and are lettered: *Table 1a*, *1b*, *1c*… (a chart with the sounds of a single language is not split and is
-*Table 1*). The numbers of the website and of the exports always agree.
-
-- **`{language}` in a caption.** Write it where the name of the language belongs: *Consonant phonemes of {language}*. The website shows the names of the
-  languages that have sounds in the chart (*Consonant phonemes of Nume, Dorig, Koro, Olrat and Lakon*); each table of the exports has its own name
-  (*Table 1a – Consonant phonemes of Nume*). A caption without `{language}` gets the name in parentheses in the exports (*Table 1a – Consonants (Nume)*).
-- **References.** `{{ref: cons}}` is *Table 1* on the website and *Tables 1a–e* in the exports (*1a–b* for two languages); `{{ref: cons#drg}}`, with the
-  code of a language, is *Table 1b* in the exports (on the website, where there is one chart, it is *Table 1*).
-- **XeLaTeX.** The `.tex` file must be compiled with **XeLaTeX** or LuaLaTeX (twice, for the references): the IPA and the fonts need it. It begins with
-  `% !TEX program = xelatex`, which most editors understand (Overleaf: *Menu → Compiler → XeLaTeX*; command line: `xelatex grammar.tex`). With
-  pdfLaTeX it stops with a message saying so. The packages it uses (`fontspec`, `gb4e`, `booktabs`, `caption`, `adjustbox`, `newunicodechar`, `titlesec`,
-  `hyperref`, `xcolor`, `iftex`) come with TeX Live and MiKTeX (on Debian and Ubuntu, `gb4e` is in `texlive-humanities`). Copy the project's `images`
-  folder next to the `.tex` file. If a journal insists on pdfLaTeX, the IPA would have to be converted for it (`tipa`): that is not done.
-- **Fonts by role.** In `project.json`, `"latex": {"fonts": {"body": "…", "headings": "…", "captions": "…", "ipa": "…"}}` (plain font names; anything
-  else is ignored). Default: Latin Modern for the text, no change for the headings and captions, and for the IPA **Charis SIL**, then Gentium Plus, Doulos SIL
-  and DejaVu Serif, whichever is installed on the machine that compiles (if none is, the compilation warns that the IPA letters will be missing). Each IPA
-  letter of the document is set in the IPA font wherever it appears, as on the website, the combining marks and the ordinary letters excepted. A font
-  that is not installed falls back to Latin Modern, so that the document always compiles.
-
-## Fonts: the IPA is in Charis SIL
-
-All the IPA of the site is shown in **Charis SIL** (SIL Global, SIL Open Font License; the license is in `fonts/OFL.txt`). The font files are in
-the `fonts/` folder and are served by the site itself: visitors need nothing installed, and nothing is asked of Google for it (the other fonts
-of the site still come from Google Fonts, as before). Charis SIL has all the IPA, including the tie bars (k͡pʷ, ŋ͡mʷ, ɛ͡a), the superscripts (ᵐb, ⁿd, kʷ)
-and the length mark.
-
-- **Where it is used by design:** the IPA beside a headword, the IPA field of the entry editor, the orthography ↔ IPA settings (and their "try it"
-  boxes), the list of forms of the IPA → orthography converter, the proto-forms of the etymologies, the phonological charts and the cells where
-  their sounds are typed.
-- **Everywhere else, automatically:** wherever an IPA letter appears in the site's text, even in a paragraph of the grammar, a concordance line
-  or a note, it is drawn in Charis SIL, with no markup: the IPA letters (ɣ ʧ ɪ ʊ ɛ ɔ ʔ ʃ ...), the modifier letters (ʷ ʰ ː), ᵐ ⁿ, and æ ð ø œ ŋ β θ χ.
-  Ordinary letters and the combining marks (the macron of ō and n̄) are deliberately **not** in this list, so that the orthography is never split
-  between two fonts. (A sound written only with ordinary letters, such as /pata/, stays in the text font: use the IPA parts of the site, or the
-  `ipa` class in HTML, for those.)
-- **A newer Charis SIL:** replace the four `.woff2` files in `fonts/` by those of the new release (`fonts/README.txt`). The LaTeX export is not
-  concerned (its font is chosen in LaTeX).
-
-## Phonological charts (grammar)
-
-In the editor of a grammar section there are two tabs: **Text** and **Phonological table**. The second makes a chart of the **consonants** or of
-the **vowels** (each is a chart of its own; a section can have both) without any markup:
-
-- **Columns and rows.** A new chart starts from the suggested order: for the consonants the columns Bilabial, Labiodental, Dental, Alveolar,
-  Postalveolar, Retroflex, Palatal, Velar, Uvular, Pharyngeal, Glottal and the rows Plosive, Nasal, Trill, Tap or flap, Fricative, Lateral
-  fricative, Approximant, Lateral approximant; for the vowels the columns Front, Central, Back and the rows Close, Near-close, Close-mid,
-  Mid, Open-mid, Near-open, Open. Rename, move (↑ ↓), remove (✕) or add rows and columns of your own, with any names (the names are free text: nothing
-  is suggested but the standard lists above); *Suggested columns and rows* puts the lists back. The suggested lists are in `phonotable.py` (`DEFAULT_AXES`).
-- **Inventories.** The author types the sounds of each language of the project in the cells (separated by spaces: `p b`); a project with
-  one language has one grid. A sound is one to sixteen characters (`t͡ʃ`, `kʷ`, `ᵐb` ...).
-- **The chart.** One chart for all the languages. Each sound is followed by a small **coloured tag** with the abbreviation of the language(s)
-  that have it (`abbr` in `project.json`, in capitals: NUM, DRG, KRO, OLR, LKN), in the language's colour (`color`); a sound that **all the
-  languages shown share has no tag**. A cell is **tinted** with the colour(s) of the languages that have a sound in it that *not all* the languages shown have (side by side, lightly, so the sounds stay readable); where everything is shared the cell stays plain, so a table of common sounds is just black. A project with one language, or a chart with the sounds of one language only, has no tags and no tints. Under the chart the **legend is a set of check boxes, one for each language**: untick a language to leave its sounds out and see only the
-  inventory of the languages of interest; tags and tints are then worked out again for the languages that remain ticked (with a single language
-  ticked there is nothing to tell apart: no tag, no tint). This works in the page, in the preview of the editor and for visitors. The preview
-  in the tab is made by the server with the same code as the page. The LaTeX export prints one plain table for each language (Table 1a, 1b…).
-  The columns share the width of the text, so a chart is seen whole without sliding.
-- **Long vowels.** A chart of vowels in which some sounds end with the length mark (`iː`, `aː`) is shown as **two tables, short vowels on the
-  left and long vowels on the right**, under one caption and one legend. Nothing to set: the author types all the vowels in the same grid, as
-  before, and the sounds with `ː` go to the table on the right.
-- **The sounds** (hover box). Under the inventory, the **Sounds** panel lists every sound of the chart once. For each one the author types
-  its **description**, place and manner of articulation, as in `prenasalised voiced bilabial plosive`; its **audio**, the name of a file of the
-  audio folder (`mb.mp3`; a subfolder is fine: `num/mb.mp3`) or an address starting with `http://` or `https://`; and its **PHOIBLE link** (an
-  address; `phoible.org/…` is completed with `https://`). Any of them may stay empty, and the panel says at once if something typed is not
-  accepted (a file that is not audio, an address that is not one). When the reader hovers over a sound (or taps it, or reaches it with Tab),
-  a box opens with the sound, its description, a button with `audio_icon.svg` that plays the recording and a button with `phoible_logo.png`
-  that opens the PHOIBLE page in a new tab. A button with nothing behind it yet is dimmed. The two images are in the main folder next to
-  `index.html`; if one is missing, a 🔊 or the word PHOIBLE stands in. The recordings go in **`project/audio/`** (the folder can be changed with
-  `files.audioDir` in `project.json`); only audio files (`.mp3 .ogg .oga .opus .wav .m4a .aac .flac .webm`) are served from it, at `/audio/…`, and the
-  folder is part of the backup. The descriptions, audio and links are kept in the block of the chart (`"segments"`), next to the inventories.
-- **In the text.** *Insert into the text* writes the chart into the section where the cursor is, as a block (`&#96;&#96;&#96;phonotable` ... `&#96;&#96;&#96;`)
-  that the tab reads and rewrites: *Update in the text* changes it, *Remove this chart from the text* takes it out. Press *Save & render* to
-  keep it. Nothing in the block needs to be typed by hand.
-
-## Comparative tables of words (grammar)
-
-Besides the charts of the consonants and of the vowels, the **Tables** tab of the grammar editor makes a **comparative table of words**: the
-independent personal pronouns, the numerals, the kinship terms… (*＋ Comparative table of words*). It is a table like the others: the author adds the
-rows and the columns (for the pronouns: 1 inclusive, 1 exclusive, 2, 3 and singular, dual, trial, plural; nothing is suggested), chooses a language and
-types its word in each cell, as it is written in the dictionary. The caption, the label (`{{ref: label}}`) and the number work as for the charts.
-
-- **Common and divergent.** As in the phonological charts, a word that **all the languages of the table have is plain black**; a word found in only some is followed by the
-  **tag** of those languages (NUM, DRG, KRO, OLR, LKN), in their colour. No cell is tinted. Under the table the legend lets the reader leave a language out
-  (the tags are then worked out again for the languages that remain).
-- **Variants.** A tilde separates a word from its variant: `ni ~ nē` (the entry first, then its variant; up to four parts). It is one word with one tag. Different
-  words in one cell are separated by a semicolon (`kama; gama`).
-- **Links to the dictionary.** Each part of a word is a link to its entry (dictionary.html#id), as `{{entry: ID}}` is, when an entry has that form (the form as the
-  dictionary writes it) in that language. If several entries have it, the table links only if one of them is grammatical material. `na@ID` names the entry
-  by its identifier, when the word alone is not enough. The **part of speech** field of the table (`pro.`) keeps `na`, the pronoun, from `na`, the article:
-  only the entries of that part of speech are considered.
-- **Etymologies in the table.** Tick **Etymologies** in the table's builder (`"etymology": true` in the block) and the first line of each cell gives the
-  etymons (POc, PTB…) of the dictionary entries that the cell's words are links to, as the entry's `<Étymologie>` has them (an etymon limited to some
-  languages with `langues` is shown for those only). Under the table, one tick per proto-language lets the reader hide them. A cell whose words have no
-  entry, or an entry with no etymon, shows no line; a table that does not ask for them shows none. The 15 independent pronouns of the Gaua languages
-  (`1sg` … `3pl`) are entries of the dictionary with their POc and PTB etymons, and the table of pronouns shows them.
-- **Proposed entries.** When the section is saved (and when the application starts), the words of the table that the dictionary does not have are proposed to the author in
-  the dictionary page, under *Proposed entries*, in the way the words of confirmed texts are: one proposal for each cell of the table (a row and a column), with
-  the missing words of the languages that have them, the cell as its gloss (*1 exclusive singular*) and the part of speech of the table; *Add to dictionary* makes the entry,
-  *Dismiss* turns it down for good (it is not proposed again). A proposal that has not been dealt with follows the table (a word corrected there is corrected in it); one whose
-  words have been added to the dictionary by other means goes away. The variants (the parts after the tilde) are not proposed.
-- **In the exports.** LaTeX prints, as for the sounds, one plain table for each language.
-
-## Glossing the texts (author only)
-
-In a text (the fieldnotes, the examples from papers, the imported examples, a transcribed narrative) a sentence is shown as **columns**: one word in each language row, and **one gloss under each column**.
-The author glosses it there, and edits the alignment itself with the ✏ button of the sentence.
-
-- **The gloss of a column is a text field.** Type the gloss: a gloss that has no precedent is simply what you type (it is saved as you type and when you leave the field). There is no "+ New" entry and no
-  second field. If the earlier glosses of that word, the dictionary or the other texts have suggestions, a small **▾** appears at the right of the field: it lists them in groups (*Previous glosses*,
-  *📖 Dictionary*, *📜 Texts*; `~` marks a partial match), and the list **narrows as you type**. Click a suggestion to take it, or use the keyboard: **↓ ↑** move in the list, **Enter** takes the
-  highlighted one, **Esc** closes it. Changing a gloss makes the sentence's badge go back to *?* until you confirm it.
-- **The alignment editor** (✏) shows the words of every language in a grid, the glosses under it, and these controls:
-  - **+** above a column inserts an **empty column before it**, in every language and in the glosses; **+ Column** adds one **at the end**; **×** deletes a column.
-  - **⠿**, at the left of a word, is its **handle: drag the word to another place of the same language row.** If the place is **empty**, the word goes there and leaves its old place empty. If the place is
-    **occupied**, the word takes it and **the word that was there, and the words that follow it without a gap, move one place to the right**. The first **empty place** takes up the shift (what is after it does
-    not move); only if there is no empty place before the end of the row **a column is created** at the end (empty in the other languages and in the glosses). A word can only be dropped in its own language's row.
-  - Only that word moves: **the glosses and the other languages stay where they are**. The editor says what a drop did ("Moved "Na". 7 words pushed one place right, and a column was added.").
-  - **Cancel** throws all the changes away; **Save** keeps them (and sets the sentence's badge back to *?*).
-- The rules of the editing (insert, delete, move with the shift) are in `alignment.js`, with no page in them, and have their own tests.
-
-## Searching the texts (the concordance)
-
-The **Search the texts** tab of the Texts page searches every sentence of the corpus (the fieldnotes, the recordings and the examples
-from papers, in every language, also those the project does not list) for a string, and shows each occurrence in its context
-(key word in context), with the translation and a link to the sentence in its text.
-
-- **The query is a plain string** (a dot is a dot), a word, a morpheme or a phrase. It can be searched **in** the words of the texts, in
-  the glosses or in the translations, and matched **anywhere**, as **a whole word** or as **a whole morpheme** (between spaces, `-` or `=`).
-  *Ignore case* is on by default; *ignore diacritics* is off, because in the orthography `n` and `n̄` are different letters. A letter and
-  its combining-mark spelling count as the same.
-- The hits can be narrowed to a language and to some sources, shown with 1 to 25 words of context, sorted by the word before or after,
-  and downloaded as a CSV file. The address holds the whole search, so a link can be shared.
-- For a word that is glossed, the hit also gives its gloss and, when its form is in the dictionary, the entry and the part of speech.
-  The server keeps the corpus as a list of sentences whose words carry such annotations (`concordance.py`): a search on the part of
-  speech or on a gloss is the next step, and a tagger or NLTK / spaCy can feed the same list.
-- **N-grams.** The *N-grams* tab of the same page lists the runs of 2 to 6 tokens (inside one sentence) that **contain the word, or the
-  words, typed**, most frequent first, with their count, the number of sentences and the count by language; the word is highlighted in each,
-  and *lines →* opens every occurrence of that n-gram in the concordance (as whole words in sequence, so the counts agree). Tokens are
-  words (case and the punctuation at their edges ignored; `va-wē` is one word) or morphemes (the aligned tokens, `va-` `wē`); the n-grams can
-  be of the words, of the glosses or of the translations, restricted to a language or to some sources, with a minimum frequency, and
-  downloaded as CSV.
-- **Lexical diversity.** Each text has, in the upper right corner of its card and of its page, its **tokens**, **types**, **type-token ratio**
-  (TTR = types / tokens) and **Root TTR** (Guiraud's index = types / √tokens, which depends less on the length of the text). The Texts
-  page gives them for the fieldnotes as a whole and for the recordings as a whole in the corner of each tab; **for the fieldnotes and for a
-  fieldnotes text there is a row per language** (the questionnaire is in several languages), and the recordings are also given by language.
-  The published examples are a text of their own. A token is a word as above, and types are counted ignoring case; both are computed from the
-  texts as they are (`/api/texts/stats`, also by morpheme with `?unit=morpheme`). Compare Root TTR rather than TTR between texts of
-  different lengths.
-- The corpus is read again whenever a text, a gloss file or the questionnaire changes: nothing to rebuild.
-
-## `references.json` (the bibliography)
-
-The author adds, changes and deletes references on the **References** page (a form per work). They are stored here, as
-what was typed (type, authors, year, title, journal or book, pages, DOI ...); the APA 7 text is made when it is shown, so it
-can never go out of step. The grammar cites a reference by author and year, as one writes it in a text:
-`{{source: Smith 2020}}` gives (Smith, 2020), `{{source: Smith 2020, p. 12}}` adds the page, `{{source: Smith 2020, narrative}}`
-gives Smith (2020), and `{{source: Smith 2020; Jones 2019}}` cites two works. Two authors are written `Smith & Jones 2016`, three or
-more `Smith et al. 2016`, and a first-author initial separates two authors of the same surname (`A. Smith 2020`). Works by the same
-authors in the same year are told apart by letters (2020a, 2020b ...), and **the author chooses which is which**: when a reference is
-saved (added, changed or imported) that would share its authors and year with another, the save waits and a window asks for the letters.
-It suggests that **a** goes to the reference the grammar cites first (the sections in their order, the citations in theirs), then the others
-that it cites, then those not cited yet, the older ones first and the new one last; if none of them is cited yet, give **a** to the one you
-will cite first. Nothing is saved until the letters are chosen (Cancel saves nothing), and the citations in the grammar written by author and
-year (`{{source: Smith 2020}}`) are changed to the letter of their reference (`Smith 2020a`); citations by key stay as they are. Without the
-letter a citation of such a work is refused as ambiguous, in a message that names the choices. Each reference also has a **key** (`smith2020`) that can be used in place of the
-author and year: it is the safe choice if a name is spelled in several ways. Changing a key on the page updates the citations
-in the grammar.
-
-**Importing a list.** The author can add many references at once with **⬆ Import** on the References page: choose one or more files in
-**BibTeX** (`.bib`), **EndNote** (`.enw`, the tagged format that EndNote and many other programs export, and the one this site writes)
-or **RIS** (`.ris`), or paste the references. The format is recognised from what is in the file. Nothing is added at once: a **preview**
-shows each reference in APA 7 with its status: *new*, *key changed* (the key in the file was already used by another reference, so a free
-one was given), *already there* (the same authors, year and title: it is not added again, so importing the same file twice is harmless)
-or *not read* (with the reason, for instance that it has no title). Then **Import** adds the new ones. LaTeX accents (`{\c c}`, `{\"o}`),
-protective braces and `@string` macros in BibTeX are resolved; a file saved in Windows-1252 is read correctly; a URL that does not
-start with http(s) is left out with a warning. A year letter (2026b) is not part of these formats: the page adds the letters itself.
-
-**One reference as a file.** Next to each reference everyone can download it alone as **BibTeX** or **EndNote** (`/api/references/<key>/export/bibtex`
-and `.../endnote`), to drop into their own reference manager. The whole list is still on the buttons at the top of the page.
-
-The top-bar label of the page is `nav.references` in `project.json` (default: References).
-
-## Where the data is
-
-Everything the project is made of sits in this folder:
-
-    project/
-      project.json            the project
-      orthography.json        the orthography <-> IPA table
-      seed-phonetic-forms.json
-      dictionary.xml          the dictionary (LEXICA XML)
-      fieldnotes.xml          the fieldwork questionnaire (optional)
-      references.json         the bibliography (edited on the References page)
-      grammar/                the grammar, one Markdown file per section
-      texts/                  the transcribed texts (Pangloss XML) and "examples from papers";
-                              it also receives what the authoring creates: glosses/, confirmed_glosses.json,
-                              proposed_entries.json
-      images/                 pictures used by the pages and the grammar
-      pages/                  home.json, about.json
-
-The author edits dictionary, grammar and glosses through the site, so these files change on the server while it runs:
-**back up the `project/` folder** (or commit it) regularly.
-
-### Moving an older installation into this layout
-
-If the project's data used to sit in the site's root, list the old names in `legacyFiles`. The first start then
-(1) copies the old locations to `uploads/backups/legacy-layout-<date>/`, (2) copies them into the project folder, the
-live version winning over a shipped copy, (3) checks every file, and only then (4) removes the old locations. If anything
-fails, the server stops with a message and nothing is deleted. It happens once (`uploads/layout-migrated.json`).
+#!/usr/bin/env python3
+"""
+DBT regression harness
+
+It starts the site on a PRIVATE COPY of the repository with clean data (your real uploads, edits
+and settings are never touched), then checks three things:
+
+  visual      a screenshot of every page, at two screen widths, as a visitor and as the author,
+              compared pixel by pixel with the recorded baseline
+  api         what the server returns (dictionary, texts, grammar, LaTeX ...), compared with the baseline
+  functional  the features themselves, used like a person would use them: editing and saving entries,
+              glossing and confirming texts, citing in the grammar, exporting, changing the settings
+
+    python tests/run_tests.py                      run everything against the baseline
+    python tests/run_tests.py --update-baseline    record the current behaviour as the baseline
+    python tests/run_tests.py --only functional    run one suite (visual | api | functional)
+
+Needs:  pip install -r tests/requirements-test.txt  &&  playwright install chromium
+Screenshots depend on the fonts of the machine, so a baseline belongs to the machine that recorded it.
+"""
+import argparse, hashlib, html as html_lib, json, urllib.parse, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+from pathlib import Path
+from lxml import etree
+
+ROOT = Path(__file__).resolve().parent.parent
+HERE = Path(__file__).resolve().parent
+BASELINE, OUTPUT = HERE / "baseline", HERE / "output"
+PASSWORD = "dbt-test-password"
+
+# ───────────────────────── reporting ─────────────────────────
+RESULTS = []          # (suite, name, ok, detail)
+
+def check(suite, name, ok, detail=""):
+    RESULTS.append((suite, name, bool(ok), detail))
+    print(f"  {'✓' if ok else '✗'} {name}" + (f"   [{detail}]" if detail and not ok else ""), flush=True)
+    return bool(ok)
+
+def section(title):
+    print(f"\n── {title} " + "─" * max(0, 70 - len(title)), flush=True)
+
+# ───────────────────────── the site, on a private copy ─────────────────────────
+SITE_URLS = []
+
+class Site:
+    def __init__(self, project_override=None, orthography_override=None, pages_override=None, drop_pages=False,
+                 setup_mode=False, env_unset=(), extra_env=None, prepare=None, expect_failure=False, real_dictionary=False):
+        self.work = Path(tempfile.mkdtemp(prefix="dbt-test-"))
+        self.dir = self.work / "site"
+        plain = shutil.ignore_patterns("uploads", "instance", "tests", ".git", "__pycache__", "*.pyc", "venv", ".venv", "node_modules")
+        fixed = {"s1.md", "s1_phonology.md"}                      # the sections of the grammar that the tests are written for: a section the author adds since is not theirs
+        shutil.copytree(ROOT, self.dir, ignore=lambda d, names: set(plain(d, names)) | ({n for n in names if n.endswith(".md")} - fixed if Path(d).name == "grammar" and Path(d).parent.name == "project" else set()))
+        (self.dir / "uploads").mkdir(exist_ok=True)
+        if not real_dictionary:                          # the checks are written for the eight entries the dictionary began with: the pronouns the author added since (and the etymology of 3pl) are left out
+            from lxml import etree as _et
+            f = self.dir / "project" / "dictionary.xml"; t = _et.parse(str(f))
+            for el in list(t.getroot().iter("EntréeLexicale")):
+                if el.get("identifiant") != "3pl" and el.findtext("ClasseGrammaticale") == "pro." and el.get("identifiant") not in ("art", "poss"):
+                    el.getparent().remove(el)
+                elif el.get("identifiant") == "3pl":
+                    for e_ in el.findall("Étymologie"): el.remove(e_)
+            t.write(str(f), xml_declaration=True, encoding="UTF-8")
+        if project_override is not None:
+            self.file("project/project.json").write_text(json.dumps(project_override, ensure_ascii=False, indent=2), encoding="utf-8")
+        if setup_mode:                                   # a fresh clone: no project yet, so the first-run setup is offered
+            shutil.rmtree(self.dir / "project", ignore_errors=True)
+        if drop_pages:
+            shutil.rmtree(self.dir / "project" / "pages", ignore_errors=True)
+        if pages_override is not None:
+            for name, content in pages_override.items():
+                self.file(f"project/pages/{name}.json").write_text(json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8")
+        if orthography_override is not None:
+            self.file("project/orthography.json").write_text(json.dumps(orthography_override, ensure_ascii=False, indent=2), encoding="utf-8")
+        if prepare is not None:                          # shape the folder before the server first sees it
+            prepare(self.dir)
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0)); self.port = s.getsockname()[1]
+        self.env = dict(os.environ, AUTHOR_PASSWORD=PASSWORD, PORT=str(self.port), DBT_DEBUG="0", PYTHONUNBUFFERED="1", DBT_SNAPSHOT_DISABLE="1")      # no daily snapshot, except in the backup group
+        for k in env_unset: self.env.pop(k, None)
+        self.env.update(extra_env or {})
+        self.url = f"http://127.0.0.1:{self.port}/"
+        SITE_URLS.append(self.url)
+        self.started = self._launch(expect_failure)
+
+    def _launch(self, expect_failure=False):
+        """Start the server and wait for it. With expect_failure, return False when it stops by itself."""
+        self.log = open(self.work / "server.log", "a")
+        self.proc = subprocess.Popen([sys.executable, "app.py"], cwd=self.dir, env=self.env, stdout=self.log, stderr=subprocess.STDOUT)
+        for _ in range(100):
+            try:
+                urllib.request.urlopen(self.url, timeout=1); return True
+            except Exception:
+                if self.proc.poll() is not None: break
+                time.sleep(0.3)
+        if expect_failure and self.proc.poll() is not None:
+            return False
+        raise RuntimeError("the site did not start:\n" + (self.work / "server.log").read_text())
+
+    def log_text(self):
+        return (self.work / "server.log").read_text(encoding="utf-8")
+
+    def restart(self):
+        """Stop the server and start it again on the same folder."""
+        self.proc.terminate()
+        try: self.proc.wait(5)
+        except Exception: self.proc.kill()
+        mark = len(self.log_text())
+        self._launch()
+        return self.log_text()[mark:]                    # what the new run printed
+
+    def setup_code(self):
+        m = re.search(r"Setup code \(asked there\):\s+(\S+)", (self.work / "server.log").read_text(encoding="utf-8"))
+        return m.group(1) if m else ""
+
+    def wait_restart(self, timeout=40):
+        """After the setup the server restarts itself: wait until the new one answers."""
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            time.sleep(0.7)
+            try:
+                if urllib.request.urlopen(self.url + "api/auth/status", timeout=2).status == 200: return True
+            except Exception: pass
+        return False
+
+    def stop(self):
+        self.proc.terminate()
+        try: self.proc.wait(5)
+        except Exception: self.proc.kill()
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def file(self, rel):  return self.dir / rel
+    def read(self, rel):  return (self.dir / rel).read_text(encoding="utf-8")
+    def json(self, rel):
+        try: return json.loads(self.read(rel))
+        except Exception: return {}
+
+# ───────────────────────── browser helpers ─────────────────────────
+def noise(msg):
+    return "fonts.g" in msg or "ERR_NAME" in msg or "ERR_INTERNET" in msg or "Failed to load resource" in msg
+
+def new_context(browser, site, width=1280, author=False, height=900):
+    ctx = browser.new_context(viewport={"width": width, "height": height})
+    # never depend on the outside world (web fonts, CDNs): anything that is not the site itself is refused at once
+    own = site.url
+    ctx.route("**/*", lambda route: route.continue_() if route.request.url.startswith(own) else route.abort())
+    if author:
+        r = ctx.request.post(site.url + "api/auth/login", data=json.dumps({"password": PASSWORD}), headers={"Content-Type": "application/json"})
+        assert r.ok, "author login failed"
+    return ctx
+
+def watch(page, errors):
+    page.on("pageerror", lambda e: errors.append("PAGEERROR: " + str(e)))
+    page.on("console", lambda m: errors.append("console: " + m.text) if m.type == "error" and not noise(m.text) else None)
+    page.on("dialog", lambda d: d.accept())
+    def bad_response(r):
+        if r.status >= 400 and not r.url.endswith("/favicon.ico") and any(r.url.startswith(u) for u in SITE_URLS):
+            errors.append(f"HTTP {r.status} {r.url}")
+    page.on("response", bad_response)
+
+def open_page(page, site, path, selector=None, wait=1500):
+    page.goto(site.url + path, wait_until="domcontentloaded")
+    if selector:
+        try: page.wait_for_selector(selector, timeout=10000)
+        except Exception: pass
+    page.wait_for_timeout(wait)
+
+# Flags that make Chromium draw the same pixels every time (no GPU, no sub-pixel text positioning or
+# LCD anti-aliasing, no threaded compositing): screenshots must not vary from one run to the next.
+CHROMIUM_ARGS = ["--disable-gpu", "--disable-lcd-text", "--font-render-hinting=none", "--disable-font-subpixel-positioning",
+                 "--force-color-profile=srgb", "--disable-skia-runtime-opts"]
+
+FREEZE = ("*{animation:none!important;transition:none!important;caret-color:transparent!important}"
+          "html{scrollbar-width:none!important} ::-webkit-scrollbar{display:none!important}")
+
+# ───────────────────────── 1. visual suite ─────────────────────────
+VISITOR_PAGES = [
+    ("home",              "index.html",                      None),
+    ("about",             "about.html",                      None),
+    ("grammar",           "grammar.html",                    "#sections-container .grammar-section"),
+    ("dictionary-koro",   "dictionary.html?lang=Koro",       "#dict-content .entry"),
+    ("dictionary-nume",   "dictionary.html?lang=Nume",       "#dict-content .entry"),
+    ("texts-recordings",  "texts.html",                      "#texts-grid .text-card"),
+    ("viewer-fieldnotes", "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase"),
+    ("viewer-papers",     "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase"),
+    ("viewer-recording",  "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase"),
+    ("references",        "references.html",                 ".ref-entry"),
+    ("dictionary-senses", "dictionary.html?lang=Koro&mode=senses", ".sense-group"),
+    ("concordance",       "concordance.html?q=Q%C5%8Dn%CC%84&width=3", ".cc-hit"),
+    ("concordance-ngrams", "concordance.html?view=ngrams&n=2&q=t%C4%93&source=fieldnotes", ".cc-ng:not(.head)"),
+]
+AUTHOR_PAGES = [
+    ("author-grammar",           "grammar.html",                    "#sections-container .grammar-section"),
+    ("author-dictionary-koro",   "dictionary.html?lang=Koro",       "#dict-content .entry"),
+    ("author-viewer-fieldnotes", "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase"),
+    ("author-viewer-recording",  "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase"),
+    ("author-references",        "references.html",                 ".ref-entry"),
+]
+
+def settle(page, quiet_ms=900, timeout_ms=15000):
+    """Wait until the page is truly quiet: no network activity, and neither its content nor its height
+    changes for quiet_ms (pages fill themselves in step by step: sections, dictionary links, wrapping)."""
+    try: page.wait_for_load_state("networkidle", timeout=timeout_ms)
+    except Exception: pass
+    last, still, waited = None, 0, 0
+    while waited < timeout_ms:
+        state = page.evaluate("() => document.body.innerHTML.length + '|' + document.documentElement.scrollHeight + '|' + document.documentElement.scrollWidth")
+        still = still + 150 if state == last else 0
+        if still >= quiet_ms: return
+        last = state; page.wait_for_timeout(150); waited += 150
+
+SHOT_HEIGHT = 2400
+
+def screenshot(page, path, max_height=SHOT_HEIGHT):
+    page.add_style_tag(content=FREEZE)
+    settle(page)
+    # let fonts and the layout settle: two animation frames after the fonts are ready
+    # the four styles of Charis SIL are loaded before the picture is taken, so that it never depends on which of them a page happened to need first
+    page.evaluate("""Promise.all(['400 1em "Charis SIL"', 'italic 400 1em "Charis SIL"', '700 1em "Charis SIL"', 'italic 700 1em "Charis SIL"'].map(f => document.fonts.load(f, 'a'))).catch(() => 0)
+                      .then(() => document.fonts.ready).then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))""")
+    page.wait_for_timeout(300)
+    page.evaluate("document.activeElement && document.activeElement.blur && document.activeElement.blur()")
+    h = min(page.evaluate("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)"), max_height)
+    w = page.viewport_size["width"]
+    page.screenshot(path=str(path), full_page=False, clip={"x": 0, "y": 0, "width": w, "height": h})
+
+def compare_png(cur, base, tolerance):
+    from PIL import Image, ImageChops
+    a, b = Image.open(cur).convert("RGB"), Image.open(base).convert("RGB")
+    if a.size != b.size:
+        return False, f"size changed {b.size} -> {a.size}", None
+    diff = ImageChops.difference(a, b)
+    if diff.getbbox() is None:
+        return True, "identical", None
+    # a colour that differs by 1 or 2 levels of 255 is not a difference anyone can see: it is the rounding of the rasteriser on antialiased edges
+    r_, g_, b_ = diff.split()
+    mask = ImageChops.lighter(ImageChops.lighter(r_, g_), b_).point(lambda v: 255 if v > 2 else 0)
+    n = mask.histogram()[255]
+    if n == 0:
+        return True, "identical (differences of 2 levels or less, below what can be seen, are ignored)", None
+    frac = n / (a.size[0] * a.size[1])
+    return frac <= tolerance, f"{n} pixels differ ({frac:.3%}), region {diff.getbbox()}", mask
+
+def visual_one(browser, site, args, name, path, selector, width, author, shots=None):
+    # a tall viewport from the start: a full-page screenshot would resize it at the last moment and re-flow the page
+    ctx = new_context(browser, site, width, author, height=SHOT_HEIGHT)
+    page = ctx.new_page(); errs = []; watch(page, errs)
+    open_page(page, site, path, selector, wait=1800)
+    if shots: shots(page)
+    out = OUTPUT / "visual" / f"{name}@{width}.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    screenshot(page, out)
+    ctx.close()
+    base = BASELINE / "visual" / out.name
+    if args.update_baseline:
+        base.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(out, base)
+        check("visual", f"{name} @{width}px  (baseline recorded)", not errs, "; ".join(errs[:1]))
+        return
+    if not base.exists():
+        check("visual", f"{name} @{width}px", False, "no baseline yet: run with --update-baseline"); return
+    ok, detail, mask = compare_png(out, base, args.tolerance)
+    if mask is not None and not ok:
+        (OUTPUT / "diff").mkdir(parents=True, exist_ok=True); mask.save(OUTPUT / "diff" / out.name)
+    check("visual", f"{name} @{width}px", ok and not errs, detail if not errs else "; ".join(errs[:1]))
+
+def suite_visual(browser, site, args):
+    section("visual: every page, pixel by pixel")
+    for name, path, sel in VISITOR_PAGES:
+        for width in (1280, 600):
+            visual_one(browser, site, args, name, path, sel, width, False)
+    # the Texts page has two tabs
+    def click_fieldnotes_tab(page):
+        page.click('.tab-btn[data-tab="fieldnotes"]'); page.wait_for_timeout(1500)
+    for width in (1280, 600):
+        visual_one(browser, site, args, "texts-fieldnotes", "texts.html", "#texts-grid .text-card", width, False, click_fieldnotes_tab)
+    for name, path, sel in AUTHOR_PAGES:
+        visual_one(browser, site, args, name, path, sel, 1280, True)
+    def open_settings(page):
+        page.click("#settings-btn"); page.wait_for_timeout(1200)
+    visual_one(browser, site, args, "author-settings-dialog", "dictionary.html?lang=Koro", "#dict-content .entry", 1280, True, open_settings)
+    def open_edit(page):
+        page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(900)
+    visual_one(browser, site, args, "author-edit-entry-dialog", "dictionary.html?lang=Koro", "#dict-content .entry", 1280, True, open_edit)
+    def open_reference_form(page):
+        page.click('[data-edit="francois2026b"]'); page.wait_for_selector("#ref-modal.visible"); page.wait_for_function("document.getElementById('rf-prev-text').textContent.includes('2026b')"); page.wait_for_timeout(600)
+    visual_one(browser, site, args, "author-reference-form", "references.html", ".ref-entry", 1280, True, open_reference_form)
+
+# ───────────────────────── 2. API suite ─────────────────────────
+PUBLIC_API = [
+    ("auth-status-visitor", "api/auth/status"),
+    ("dictionary-xml", "api/dictionary/xml"),
+    ("dictionary-entries", "api/dictionary/entries"),
+    ("dictionary-examples-initial", "api/dictionary/examples"),
+    ("transcriptions-list", "api/transcriptions/list"),
+    ("transcription-farfadets", "api/transcription/crdo-WWO_FARFADETS.xml"),
+    ("fieldnotes-groups", "api/fieldnotes/groups"),
+    ("fieldnotes-group-0", "api/fieldnotes/group/0"),
+    ("fieldnotes-text-0", "api/fieldnotes/tx/0"),
+    ("papers-groups", "api/papers/groups"),
+    ("papers-text-0", "api/papers/tx/0"),
+    ("grammar-list", "api/grammar"),
+    ("grammar-s1", "api/grammar/s1"),
+    ("colors-js", "colors.js"),
+    ("project-js", "project.js"),
+    ("dictionary-cited-examples", "api/dictionary/cited-examples"),
+    ("concordance-info", "api/concordance/info"),
+    ("concordance-qon", "api/concordance?q=Q%C5%8Dn%CC%84&width=3"),
+    ("ngrams-te", "api/ngrams?q=t%C4%93&n=2&limit=40"),
+    ("texts-stats", "api/texts/stats"),
+    ("references", "api/references"),
+    ("references-bibtex", "api/references/export/bibtex"),
+    ("references-endnote", "api/references/export/endnote"),
+]
+AUTHOR_API = [
+    ("dictionary-settings", "api/dictionary/settings"),
+    ("dictionary-proposed-initial", "api/dictionary/proposed"),
+    ("dictionary-orthography-preview", "api/dictionary/orthography"),
+    ("latex-export", "api/grammar/export/latex"),
+]
+
+def canonical(text, content_type):
+    if "json" in (content_type or ""):
+        try: return json.dumps(json.loads(text), indent=1, sort_keys=True, ensure_ascii=False)
+        except Exception: pass
+    return text
+
+def suite_api(browser, site, args):
+    section("api: what the server returns")
+    anon = new_context(browser, site, author=False); auth = new_context(browser, site, author=True)
+    for ctx, items in ((anon, PUBLIC_API), (auth, AUTHOR_API)):
+        for name, path in items:
+            r = ctx.request.get(site.url + path)
+            if r.status != 200:
+                check("api", f"{name}", False, f"HTTP {r.status}"); continue
+            text = canonical(r.text(), r.headers.get("content-type"))
+            out = OUTPUT / "api" / f"{name}.txt"; out.parent.mkdir(parents=True, exist_ok=True); out.write_text(text, encoding="utf-8")
+            base = BASELINE / "api" / out.name
+            if args.update_baseline:
+                base.parent.mkdir(parents=True, exist_ok=True); base.write_text(text, encoding="utf-8"); check("api", f"{name}  (baseline recorded)", True)
+            elif not base.exists():
+                if args.record_missing:
+                    base.parent.mkdir(parents=True, exist_ok=True); base.write_text(text, encoding="utf-8"); check("api", f"{name}  (new: baseline recorded)", True)
+                else:
+                    check("api", name, False, "no baseline yet")
+            else:
+                same = base.read_text(encoding="utf-8") == text
+                check("api", name, same, "" if same else f"differs from the baseline (see {out})")
+    # what a visitor must NOT be able to do
+    for method, path in (("get", "api/dictionary/settings"), ("post", "api/dictionary/entry"), ("get", "api/dictionary/orthography")):
+        r = getattr(anon.request, method)(site.url + path)
+        check("api", f"visitor refused: {method.upper()} /{path}", r.status in (401, 403), f"HTTP {r.status}")
+    r = anon.request.get(site.url + "api/grammar/export/latex")        # public on purpose: the grammar itself is public
+    check("api", "the LaTeX export is public, like the grammar", r.status == 200, f"HTTP {r.status}")
+    anon.close(); auth.close()
+
+# ───────────────────────── 3. functional suite ─────────────────────────
+def entry_sig(site, eid):
+    from lxml import etree
+    root = etree.parse(str(site.file("project/dictionary.xml"))).getroot()
+    el = root.find(f'.//EntréeLexicale[@identifiant="{eid}"]')
+    return None if el is None else hashlib.md5(etree.tostring(el, method="c14n")).hexdigest()
+
+def entry_el(site, eid):
+    from lxml import etree
+    return etree.parse(str(site.file("project/dictionary.xml"))).getroot().find(f'.//EntréeLexicale[@identifiant="{eid}"]')
+
+def rgb(h):
+    h = h.lstrip("#"); return f"rgb({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)})"
+
+def suite_functional(browser, site, args):
+    S = "functional"
+    errors = []
+    ctx = new_context(browser, site, 1280, author=True); page = ctx.new_page(); watch(page, errors)
+    api, H = ctx.request, {"Content-Type": "application/json"}
+
+    section("functional: the dictionary")
+    open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1500)
+    ids = page.locator("#dict-content .entry").evaluate_all("els => els.map(e => e.id)")
+    check(S, "the eight original entries are there", len(ids) == 8, f"{len(ids)} entries")
+    bad = []
+    for eid in ids:
+        before = entry_sig(site, eid)
+        page.locator(f'[id="ea-{eid}"] >> text=Edit').click(); page.wait_for_timeout(350)
+        page.click("#em-submit"); page.wait_for_timeout(500)
+        if entry_sig(site, eid) != before: bad.append(eid)
+    check(S, "open + save every entry without a change leaves it byte-identical", not bad, str(bad))
+    know = entry_el(site, "know")
+    check(S, "the entries got their phonetic forms at start-up (the originals confirmed)",
+          know is not None and know.find('Lemme/FormePhonétique[@langue="kro"]') is not None
+          and know.find('Lemme/FormePhonétique[@langue="kro"]').text == "rɔŋ" and know.find('Lemme/FormePhonétique[@langue="kro"]').get("statut") is None)
+    hw = page.locator('[id="know"] .entry-headword').inner_text(); ipa = page.locator('[id="know"] .entry-ipa').inner_text()
+    check(S, "the headword is shown with its IPA in [ ]", (hw, ipa) == ("ron̄", "[rɔŋ]"), f"{hw!r} {ipa!r}")
+
+    # add an entry: senses, IPA suggestion, the author's own IPA, homonym
+    page.click("#add-entry-btn"); page.wait_for_timeout(300)
+    page.fill("#ef-kro", "tuqa"); page.wait_for_timeout(900)
+    check(S, "typing an orthographic form suggests its IPA", page.input_value("#ef-ipa-kro") == "tuk͡pʷa", page.input_value("#ef-ipa-kro"))
+    page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("a test word")
+    page.click("#em-submit"); page.wait_for_timeout(1500)
+    el = entry_el(site, "tuqa")
+    fp = None if el is None else el.find('Lemme/FormePhonétique[@langue="kro"]')
+    check(S, "the new entry is saved with a provisional (auto) IPA", fp is not None and fp.text == "tuk͡pʷa" and fp.get("statut") == "auto")
+    page.locator('[id="tuqa"] .ipa-badge').click(); page.wait_for_timeout(700)
+    fp = entry_el(site, "tuqa").find('Lemme/FormePhonétique[@langue="kro"]')
+    check(S, "clicking the ? confirms the IPA", fp.get("statut") is None)
+    page.locator('[id="ea-tuqa"] >> text=Delete').click(); page.wait_for_timeout(1200)
+    check(S, "an entry can be deleted", entry_el(site, "tuqa") is None)
+
+    # settings
+    page.reload(wait_until="domcontentloaded"); page.wait_for_timeout(1500)
+    page.click("#settings-btn"); page.wait_for_timeout(900)
+    rows = page.locator("#st-rows tr")
+    sounds = lambda o: [rows.nth(i).locator('[data-f="ipa"]').input_value() for i in range(rows.count()) if rows.nth(i).locator('[data-f="orth"]').input_value() == o]
+    check(S, "settings: the orthography table is the author's (q = k͡pʷ only, m̄ = ŋʷ only)", sounds("q") == ["k͡pʷ"] and sounds("m\u0304") == ["ŋʷ"], f"{sounds('q')} {sounds('m' + chr(0x304))}")
+    page.fill("#st-try-orth", "tuqa"); page.fill("#st-try-ipa-in", "ŋʷa"); page.wait_for_timeout(700)
+    check(S, "settings: the try-it box converts both ways", page.inner_text("#st-try-ipa") == "[tuk͡pʷa]" and page.inner_text("#st-try-orth-out") == "m̄a")
+    check(S, "settings: five language colours in east-to-west order", page.locator(".st-color label").all_inner_texts() == ["Nume", "Dorig", "Koro", "Olrat", "Lakon"])
+    page.locator('.st-color input[data-hex][data-c="num"]').fill("#0066cc"); page.click("#st-save"); page.wait_for_timeout(2500)
+    page.goto(site.url + "about.html", wait_until="domcontentloaded"); page.wait_for_timeout(800)
+    got = page.locator(".lang-section h3").first.evaluate("e => getComputedStyle(e).color")
+    check(S, "a colour chosen in the settings is used on other pages", got == rgb("#0066cc"), got)
+    page.goto(site.url + "dictionary.html?lang=Koro", wait_until="domcontentloaded"); page.wait_for_timeout(1500)
+    page.click("#settings-btn"); page.wait_for_timeout(800); page.click("#st-colors-reset"); page.click("#st-save"); page.wait_for_timeout(2500)
+    page.goto(site.url + "about.html", wait_until="domcontentloaded"); page.wait_for_timeout(800)
+    got = page.locator(".lang-section h3").first.evaluate("e => getComputedStyle(e).color")
+    check(S, "'Default colours' restores them", got == rgb("#2e5c8a"), got)
+    r = api.post(site.url + "api/dictionary/settings", headers=H, data=json.dumps({"correspondences": api.get(site.url + "api/dictionary/settings").json()["correspondences"], "colors": {"num": "red"}}))
+    check(S, "a colour that is not #rrggbb is refused", r.status == 400, f"HTTP {r.status}")
+    page.goto(site.url + "dictionary.html?lang=Koro", wait_until="domcontentloaded"); page.wait_for_timeout(1500)
+    page.click("#ortho-btn"); page.wait_for_timeout(900)
+    check(S, "the IPA→orthography tool finds nothing left to convert", "Nothing to convert" in page.inner_text("#ortho-desc"), page.inner_text("#ortho-desc")[:60])
+
+    section("functional: texts (fieldnotes, recordings, papers)")
+    def gloss_first_plain_box(pg, sid, word):
+        ph = pg.locator(f'[id="{sid}"]')
+        box = ph.locator("input.fn-col-gloss:visible").first
+        col = box.evaluate("e => [...e.closest('tr').children].indexOf(e.closest('td')) - 1")
+        box.fill(word); box.press("Tab"); pg.wait_for_timeout(1000)
+        return ph, col
+
+    # fieldnotes
+    sid = "d01.Road:09"
+    open_page(page, site, "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase", 2000)
+    ph, col = gloss_first_plain_box(page, sid, "first")
+    st = site.json("project/texts/glosses/fieldnotes_0.json").get(sid, {})
+    check(S, "fieldnotes: a gloss typed in a column is saved there", (st.get("glosses") or [""] * 99)[col] == "first", str(st.get("glosses"))[:60])
+    check(S, "fieldnotes: all five languages are saved with the sentence", sorted((st.get("tokens") or {}).keys()) == ["drg", "kro", "lkn", "num", "olr"])
+    page.locator(f'[id="{sid}"] .gloss-badge').click(); page.wait_for_timeout(1300)
+    check(S, "fieldnotes: the badge turns ? into ✓ right after the first gloss", page.locator(f'[id="{sid}"] .gloss-badge').inner_text() == "✓")
+    t = page.locator(f'[id="{sid}"] .tx-transl-input'); t.fill("Edited translation."); t.press("Tab"); page.wait_for_timeout(900)
+    page.locator(f'[id="{sid}"] .fn-edit-btn').click(); page.wait_for_timeout(400)
+    cells = page.locator(f'[id="{sid}"] .fn-editor input[data-lang]'); n_before = cells.count()
+    cells.first.fill("EDITED"); page.locator(f'[id="{sid}"] .fn-editor .fn-editor-actions .primary').click(); page.wait_for_timeout(1200)
+    st = site.json("project/texts/glosses/fieldnotes_0.json").get(sid, {})
+    check(S, "fieldnotes: the alignment editor edits and saves", st.get("tokens", {}).get("num", [""])[0] == "EDITED" and n_before >= 2)
+    check(S, "fieldnotes: the translation survives glossing and realigning", st.get("translation") == "Edited translation.", str(st.get("translation")))
+    page.set_viewport_size({"width": 600, "height": 900}); page.reload(wait_until="domcontentloaded"); page.wait_for_timeout(2300)
+    over = page.evaluate("""() => [...document.querySelectorAll('.tx-phrase')].filter(p => { const f = p.querySelector('.fn-interlinear'); return f && f.scrollWidth > f.clientWidth + 1; }).length
+                              + (document.documentElement.scrollWidth > window.innerWidth + 1 ? 1000 : 0)""")
+    check(S, "fieldnotes: long sentences wrap on a narrow screen (no sideways scrolling)", over == 0, f"{over}")
+    page.set_viewport_size({"width": 1280, "height": 900})
+
+    # a recording
+    rid = "en_fr_Drg_Farfadets_02"
+    open_page(page, site, "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase", 2000)
+    code = page.locator(f'[id="{rid}"] td.fn-form-cell').first.get_attribute("data-lang")
+    check(S, "recording: words carry the dictionary's language code (wwo → drg)", code == "drg", str(code))
+    ph, col = gloss_first_plain_box(page, rid, "testgloss")
+    word = page.locator(f'[id="{rid}"] td.fn-form-cell').nth(col).inner_text()
+    stored = site.json("project/texts/glosses/crdo-WWO_FARFADETS_xml.json").get(rid, {})
+    check(S, "recording: glosses are saved in the shared format {code: tokens}", isinstance(stored.get("tokens"), dict) and (stored.get("glosses") or [""] * 99)[col] == "testgloss")
+    page.locator(f'[id="{rid}"] .gloss-badge').click(); page.wait_for_timeout(1400)
+    prop = api.get(site.url + "api/dictionary/proposed").json()
+    forms = [v.get("forms", {}) for v in prop.values()]
+    check(S, "recording: confirming proposes the word to the dictionary, in the right language", any(f.get("drg") == word for f in forms), f"{word!r} in {forms[:2]}")
+    page.goto(site.url + "dictionary.html?lang=Dorig", wait_until="domcontentloaded"); page.wait_for_timeout(2000)
+    ghost = page.locator(".entry.proposed", has_text="testgloss")
+    check(S, "dictionary: the proposed entry is shown", ghost.count() >= 1)
+
+    # glosses saved at the same moment (the author tabbing quickly from box to box) all take effect, and none fails
+    import concurrent.futures as _cf
+    cookie = "; ".join(f"{c['name']}={c['value']}" for c in ctx.cookies())
+    def _save(n):
+        req = urllib.request.Request(site.url + "api/fieldnotes/tx/0/glosses", data=json.dumps({"sentence_id": f"zz.conc:{n}", "gloss": {"tokens": [f"w{n}"], "glosses": [f"g{n}"]}}).encode(), headers={"Content-Type": "application/json", "Cookie": cookie})
+        try: return urllib.request.urlopen(req, timeout=20).status
+        except urllib.error.HTTPError as e: return e.code
+    with _cf.ThreadPoolExecutor(max_workers=30) as ex:
+        codes = list(ex.map(_save, range(30)))
+    kept = api.get(site.url + "api/fieldnotes/tx/0/glosses").json()
+    check(S, "30 gloss saves sent at the same moment all succeed, and every one of them is kept (none lost, none a server error)", codes == [200] * 30 and all(f"zz.conc:{n}" in kept for n in range(30)), f"{sorted(set(codes))} kept {sum(1 for n in range(30) if f'zz.conc:{n}' in kept)}")
+
+    # the proposals are the author's worklist: a visitor neither sees them nor can fetch them
+    vctx = new_context(browser, site, 1280); vpage = vctx.new_page(); verrs = []; watch(vpage, verrs); asked = []
+    vpage.on("request", lambda r: asked.append(r.url))
+    open_page(vpage, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1500); vpage.wait_for_timeout(600)
+    check(S, "dictionary: a visitor does not see the proposed entries (while the author has some waiting), and the page does not even ask for them",
+          vpage.locator(".entry.proposed").count() == 0 and not vpage.locator("#proposed-section").is_visible() and "Proposed entries" not in vpage.locator("#dict-content").inner_text()
+          and not [u for u in asked if "/api/dictionary/proposed" in u] and not verrs, f"{verrs[:2]} {[u for u in asked if 'proposed' in u]}")
+    check(S, "dictionary: the API refuses the proposals to a visitor (401), and gives them to the author", vctx.request.get(site.url + "api/dictionary/proposed").status == 401 and api.get(site.url + "api/dictionary/proposed").status == 200)
+    check(S, "dictionary: the proposals do not appear in what a visitor can read of the page's data either", "testgloss" not in vctx.request.get(site.url + "dictionary.html").text() and "testgloss" not in vctx.request.get(site.url + "api/dictionary/xml").text())
+    vpage.click(".login-btn"); vpage.fill("#login-pw", PASSWORD); vpage.click("#login-submit"); vpage.wait_for_selector(".entry.proposed", timeout=8000)
+    check(S, "dictionary: logging in shows the proposed entries at once, without a reload", vpage.locator(".entry.proposed", has_text="testgloss").count() >= 1 and vpage.locator("#proposed-section").is_visible())
+    vpage.click(".logout-btn"); vpage.wait_for_function("document.querySelectorAll('.entry.proposed').length === 0", timeout=8000)
+    check(S, "dictionary: logging out takes them away again, and nothing of them is left in the page", not vpage.locator("#proposed-section").is_visible() and vpage.locator("#proposed-entries").inner_html() == "" and vpage.locator(".proposed-badge, .proposed-actions, .proposed-example, [data-col-key]").count() == 0)
+    vctx.close()
+    ghost.first.locator("text=Add to dictionary").click(); page.wait_for_timeout(2200)
+    from lxml import etree
+    added = [e for e in etree.parse(str(site.file("project/dictionary.xml"))).getroot().findall(".//EntréeLexicale") if e.get("identifiant", "").startswith("proposed_")]
+    ok = bool(added) and added[0].find('Lemme/ReprésentationDeForme[@langue="drg"]') is not None and added[0].find('Lemme/FormePhonétique[@langue="drg"]') is not None
+    check(S, "dictionary: 'Add to dictionary' creates the entry with its IPA", ok)
+
+    # the paper example feeds the dictionary
+    open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+    page.locator(".gloss-badge").first.click(); page.wait_for_timeout(1500)
+    ex = api.get(site.url + "api/dictionary/examples").json()
+    check(S, "papers: confirming the example attaches it to the eight dictionary entries",
+          all(k in ex for k in ("3pl", "nondum1", "know", "properly", "nondum2", "art", "speech", "poss")), str(sorted(ex)))
+    page.goto(site.url + "dictionary.html?lang=Koro", wait_until="domcontentloaded"); page.wait_for_timeout(2000)
+    lab = page.locator('[id="know"] .example-source').all_inner_texts()
+    check(S, "dictionary: an example begins with the source it comes from, without brackets and without a label such as “Example · paper”",
+          any("Examples from papers" in l and "negation_example_01" in l for l in lab) and not any("[" in l or "]" in l or l.upper().startswith("EXAMPLE ·") for l in lab)
+          and page.locator('[id="know"] .example-label, [id="know"] .ex-ref').count() == 0, str(lab))
+
+    section("functional: the grammar and the export")
+    src = ("## Test\n\n{{cite: fieldnotes#0#d01.Road:09}}\n\n{{cite: papers#negation_example_01}}\n\n"
+           "{{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}\n\n{{entry: nondum1}}\n")
+    r = api.post(site.url + "api/grammar/zz_regression", headers=H, data=json.dumps({"source": src}))
+    html = r.json().get("html", "") if r.ok else ""
+    check(S, "grammar: fieldnotes, paper and recording citations render as aligned tables", html.count("cite-fn-table") >= 3, f"{html.count('cite-fn-table')} tables")
+    check(S, "grammar: a citation uses the edited translation", "Edited translation." in html)
+    check(S, "grammar: a citation of a recording shows the gloss the author typed", "testgloss" in html)
+    check(S, "grammar: the entry chip shows the entry's forms in the five languages", "vitis" in html and "sowse" in html)
+    tex = api.get(site.url + "api/grammar/export/latex").text()
+    check(S, "LaTeX export: the five language colours are defined", all(f"{n}Color" in tex for n in ("Nume", "Dorig", "Koro", "Olrat", "Lakon")))
+    check(S, "LaTeX export: citations come out as glossed tables", "tabular" in tex and "testgloss" in tex)
+    api.delete(site.url + "api/grammar/zz_regression")
+    check(S, "grammar: a section can be deleted", api.get(site.url + "api/grammar/zz_regression").status == 404)
+
+    check(S, "no page raised a JavaScript error during all of the above", not errors, "; ".join(errors[:2]))
+    ctx.close()
+
+
+# ───────────────────────── 4. generality suite: the code knows no language ─────────────────────────
+CODE_FILES = ["app.py", "security.py", "references.py", "concordance.py", "concordance.html", "ttr.js", "phonotable.py", "phonotable.js", "setup.html", "auth.js", "style.css", "index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html"]
+PROJECT_WORDS = re.compile(r"\b(Nume|Dorig|Koro|Olrat|Lakon|Gaua|Vanuatu|Banks Islands|Meroni|Fran[cç]ois)\b")
+NOT_SERVED = ["app.py", "references.py", "concordance.py", "phonotable.py", "project/references.json", "starter/references.json", "dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "project/project.json",
+              "project/orthography.json", "project/dictionary.xml", "project/fieldnotes.xml", "project/grammar/s1.md",
+              "project/texts/crdo-WWO_FARFADETS.xml", "uploads/dictionary_settings.json", "tests/run_tests.py", "grammar_content/s1.md",
+              ".gitignore", "requirements.txt", "transcribed_narratives/crdo-WWO_FARFADETS.xml", "%2e%2e/app.py", "../app.py"]
+ALT_LANGS = [("num", "Alpha", "Al", "#112233"), ("drg", "Beta", "Be", "#445566"), ("kro", "Gamma", "Ga", "#778899"),
+             ("olr", "Delta", "De", "#aa00aa"), ("lkn", "Epsilon", "Ep", "#00aa66")]
+
+def suite_generality(browser, site, args):
+    S = "generality"
+    section("generality: the code knows no language, the project does")
+    # 1. what is served
+    anon = new_context(browser, site, author=False); api = anon.request
+    bad = [p for p in NOT_SERVED if api.get(site.url + p).status != 404]
+    check(S, "source code and data files are not served (app.py, XML, JSON, uploads, project, tests ...)", not bad, str(bad))
+    pages = ["index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html", "references.html", "concordance.html"]
+    assets = ["style.css", "auth.js", "ttr.js", "phonotable.js", "images/gaua_map.png", "etymograph_icon.png"]
+    check(S, "the site's pages and images are served", all(api.get(site.url + p).status == 200 for p in pages + assets))
+    left = [p for p in pages if "{{project." in api.get(site.url + p).text()]
+    check(S, "no project marker is left unexpanded in any page", not left, str(left))
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    home = api.get(site.url + "index.html").text()
+    check(S, "the title, brand and top-bar label come from the project", proj["homeTitle"] in home and f"◬ {proj['name']}" in home and proj["nav"]["home"] in home)
+    pj = api.get(site.url + "project.js").text()
+    check(S, "/project.js lists the project's languages", all(f'"{l["code"]}"' in pj and l["name"] in pj for l in proj["languages"]))
+    r = api.get(site.url + "gaua.html", max_redirects=0)
+    check(S, "the old page name still works: /gaua.html redirects to /about.html", r.status == 301 and r.headers.get("location", "").endswith("/about.html"), f"{r.status} {r.headers.get('location')}")
+    anon.close()
+    pg = new_context(browser, site, 1280).new_page(); perrs = []; watch(pg, perrs)
+    open_page(pg, site, "index.html", ".lang-strip", 1000)
+    cells = pg.locator(".lang-strip .lang-cell")
+    check(S, "home: the language strip is generated from the project's languages", cells.count() == len(proj["languages"]) and [c for c in cells.evaluate_all("els => els.map(e => e.getAttribute('href'))")] == [f"about.html#{l['name'].lower()}" for l in proj["languages"]])
+    check(S, "home: the map section, the three cards and the footer come from the project", pg.locator(".map-section .map-desc").count() == 2 and pg.locator(".dbt-card").count() == 3 and "Documentation:" in pg.locator("footer").inner_text())
+    open_page(pg, site, "about.html", ".lang-section", 1000)
+    check(S, "about: one section per language, a table of contents with a line for each", pg.locator(".lang-section").count() == len(proj["languages"]) and pg.locator(".about-toc li.sub").count() == len(proj["languages"]) and pg.locator(".about-toc li:not(.sub)").count() == 4)
+    check(S, "about: the infobox and the four sections come from the project", pg.locator(".infobox tr").count() == 7 and pg.locator(".about-main h2").count() == 4)
+    check(S, "home and about: no JavaScript or loading error", not perrs, "; ".join(perrs[:2]))
+    pg.context.close()
+    # 2. no Gaua wording left in the code
+    dirty = {}
+    for f in CODE_FILES:
+        hits = PROJECT_WORDS.findall((ROOT / f).read_text(encoding="utf-8"))
+        if hits: dirty[f] = sorted(set(h if isinstance(h, str) else h[0] for h in hits))
+    check(S, "no language or project name appears in the code (app.py, every page, css)", not dirty, str(dirty))
+
+    # 3. a different project, on the same code
+    alt = json.loads(json.dumps(proj))
+    alt["name"], alt["titleSuffix"], alt["homeTitle"] = "Alt DBT", "Alt DBT Languages", "Alt Trilogy: a test project"
+    alt["nav"] = {"home": "Alt home label", "about": "Alt about label", "dictionary": "Alt Lexicon · {n} Tongues", "grammar": "Alt Grammar · {n} Tongues", "texts": "Alt Corpus"}
+    alt["languages"] = [dict(l, name=n, abbr=a, color=c) for l, (code, n, a, c) in zip(proj["languages"], ALT_LANGS)]
+    alt["headwordLanguage"] = "drg"
+    alt["recordings"] = {"author": "A. Tester", "year": "1999"}
+    alt["latex"] = {"title": "Alt Grammar", "subtitle": "Nowhere", "author": "Alt Author"}
+    alt["footer"] = "Alt footer text"
+    alt_pages = {
+        "home": {"byline": "Alt byline", "intro": ["Alt intro: {languages.count} tongues, {languages.list}."],
+                 "cards": {"grammar": "Alt grammar card", "texts": "Alt texts card", "dictionary": "Alt dictionary card"},
+                 "map": {"title": "Alt map title", "text": ["Alt map paragraph"], "credit": "Alt map credit", "image": "etymograph_icon.png", "imageAlt": "Alt map", "moreLabel": "More about Alt →"}},
+        "about": {"tabTitle": "About Alt", "title": "Alt page title", "subtitle": "Alt page subtitle", "sidebarImage": "etymograph_icon.png", "sidebarImageAlt": "Alt",
+                  "infobox": {"caption": "Alt at a glance", "rows": [["Row", "Value"]]},
+                  "sections": [{"id": "first", "title": "Alt first section", "tocLabel": "First", "infobox": True, "text": ["Alt first paragraph."]},
+                               {"id": "tongues", "title": "Alt tongues", "text": ["Alt tongues paragraph."], "languageSections": True}],
+                  "languages": {"num": {"badge": "~1 speaker", "meta": ["Alt meta one", "Alt meta two"], "text": ["Alt language paragraph."]}}}}
+    asite = Site(project_override=alt, orthography_override={"name": "Alt orthography", "longVowelDoubling": False, "rows": []}, pages_override=alt_pages)
+    try:
+        ctx = new_context(browser, asite, 1280, author=True); page = ctx.new_page(); errs = []; watch(page, errs); api = ctx.request
+        d = api.get(asite.url + "dictionary.html").text()
+        check(S, "other project: the page title and brand follow the project", "Comparative Dictionary — Alt DBT Languages" in d and "◬ Alt DBT" in d and "Alt Lexicon · 5 Tongues" in d)
+        open_page(page, asite, "dictionary.html", "#dict-content .entry", 1500)
+        pills = page.locator(".hw-lang-pill").all_inner_texts()
+        check(S, "other project: the language buttons carry its names", [p.strip().lower() for p in pills] == [n.lower() for _, n, _, _ in ALT_LANGS], str(pills))
+        bg = page.locator(".hw-lang-pill").first.evaluate("e => getComputedStyle(e).backgroundColor")
+        check(S, "other project: …and its colours", bg == rgb("#112233"), bg)
+        from lxml import etree
+        stored_drg = etree.parse(str(asite.file("project/dictionary.xml"))).getroot().find('.//EntréeLexicale[@identifiant="know"]/Lemme/ReprésentationDeForme[@langue="drg"]').text
+        check(S, "other project: the dictionary opens on the project's headword language (Beta)", page.locator('[id="know"] .entry-headword').inner_text() == stored_drg, stored_drg)
+        page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(500)
+        labels = page.locator("#em-lang-grid label").all_inner_texts()
+        check(S, "other project: the entry editor has a row per language of the project (the headword and its cognates, as the labels say)", [x.split(" · ")[0] for x in labels] == [n for _, n, _, _ in ALT_LANGS] and sum("headword" in x for x in labels) == 1, str(labels))
+        page.click("#em-cancel")
+        open_page(page, asite, "grammar.html", "#sections-container .grammar-section", 1800)
+        abbr = page.locator("#s1 .cite-fn-table").first.locator(".cite-fn-abbr").all_inner_texts()
+        check(S, "other project: grammar citations use its abbreviations", abbr == [a for _, _, a, _ in ALT_LANGS], str(abbr))
+        open_page(page, asite, "texts.html", "#texts-grid .text-card", 1500)
+        opts = page.locator("#filter-lang option").all_inner_texts()
+        check(S, "other project: the Texts filter lists its languages", opts[1:] == [n for _, n, _, _ in ALT_LANGS], str(opts))
+        card = page.locator(".text-card").first.inner_text()
+        check(S, "other project: a recording shows its credit", "A. Tester" in card and "1999" in card, card.replace("\n", " ")[:80])
+        open_page(page, asite, "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase", 1800)
+        meta = page.locator(".tx-meta").inner_text().replace("\n", " ")
+        check(S, "other project: the viewer shows the language name and credit", "beta" in meta.lower() and "recorded 1999 · a. tester" in meta.lower(), meta)
+        open_page(page, asite, "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase", 1800)
+        rows = page.locator('[id="d01.Road:09"] .fn-lang-abbr').all_inner_texts()
+        check(S, "other project: fieldnotes rows are labelled with its abbreviations (on every line of a wrapped sentence)",
+              rows[:5] == [a for _, _, a, _ in ALT_LANGS] and len(rows) % 5 == 0, str(rows))
+        tex = api.get(asite.url + "api/grammar/export/latex").text()
+        check(S, "other project: the LaTeX export carries its title, author and colours",
+              "{Alt Grammar" in tex and "Alt Author" in tex and "\\definecolor{AlphaColor}{HTML}{112233}" in tex and "NumeColor" not in tex)
+        open_page(page, asite, "index.html", ".lang-strip", 1000)
+        home_txt = page.locator("body").inner_text()
+        check(S, "other project: its home page shows its own wording (byline, intro with the language list, cards, map, footer)",
+              all(x.lower() in home_txt.lower() for x in ("Alt byline", "Alt intro: five tongues, Alpha, Beta, Gamma, Delta, and Epsilon.", "Alt grammar card", "Alt map title", "Alt map credit", "More about Alt", "Alt footer text")), home_txt[:120].replace("\n", " "))
+        check(S, "other project: …and its language strip", page.locator(".lang-strip .lname").all_inner_texts() == [n for _, n, _, _ in ALT_LANGS] and page.locator(".lang-strip a").first.get_attribute("href") == "about.html#alpha")
+        open_page(page, asite, "about.html", ".lang-section", 1000)
+        check(S, "other project: its about page: title, sections, table of contents, language sections",
+              page.title() == "About Alt — Alt DBT Languages" and page.locator("h1.page-title").inner_text() == "Alt page title" and page.locator(".infobox tr").count() == 1
+              and page.locator(".about-toc li:not(.sub)").all_inner_texts() == ["First", "Alt tongues"] and page.locator(".lang-section").count() == 5)
+        check(S, "other project: a language with content shows its badge and notes, one without shows just its links",
+              page.locator("#alpha .speaker-badge").inner_text() == "~1 speaker" and page.locator("#alpha .lang-meta span").count() == 2 and page.locator("#beta .lang-meta").count() == 0 and page.locator("#beta .lang-link").count() == 3)
+        served = " ".join(api.get(asite.url + p).text() for p in ("index.html", "about.html", "dictionary.html", "grammar.html", "texts.html", "transcription.html"))
+        left = sorted(set(PROJECT_WORDS.findall(served)))
+        check(S, "other project: no trace of the first project's names in any page it serves, home and about included", not left, str(left))
+        check(S, "other project: no JavaScript or loading error on any of those pages", not errs, "; ".join(errs[:2]))
+        ctx.close()
+    finally:
+        asite.stop()
+
+
+# ───────────────────────── 5. languages suite: one language, eight languages, a language added later ─────────────────────────
+EXTRA_LANGS = [{"code": "aaa", "name": "Zeta", "abbr": "Ze", "color": "#ff0000", "aliases": []},
+               {"code": "bbb", "name": "Eta", "abbr": "Et", "color": "#00aa00", "aliases": []},
+               {"code": "ccc", "name": "Theta", "abbr": "Th", "color": "#0000ff", "aliases": []}]
+
+def variant(langs, **extra):
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    proj["languages"] = langs
+    proj["headwordLanguage"] = langs[0]["code"]
+    proj.update(extra)
+    return proj
+
+def first_plain_gloss(page, sid, word):
+    ph = page.locator(f'[id="{sid}"]')
+    box = ph.locator("input.fn-col-gloss:visible").first
+    col = box.evaluate("e => [...e.closest('tr').children].indexOf(e.closest('td')) - 1")
+    box.fill(word); box.press("Tab"); page.wait_for_timeout(1000)
+    return col
+
+def suite_languages(browser, args):
+    from lxml import etree
+    S = "languages"
+    base = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    five = base["languages"]
+    xml_langs = lambda s, eid: {n.get("langue"): n.text for n in etree.parse(str(s.file("project/dictionary.xml"))).getroot().find(f'.//EntréeLexicale[@identifiant="{eid}"]').findall("Lemme/ReprésentationDeForme")}
+
+    # ── a project with ONE language ──
+    section("languages: a project with a single language")
+    one_lang = [dict(l) for l in five if l["code"] == "kro"]
+    nav = dict(base["nav"], dictionary="Lexicon · {languages}")
+    site = Site(project_override=variant(one_lang, nav=nav)); errs = []
+    try:
+        ctx = new_context(browser, site, 1280, author=True); page = ctx.new_page(); watch(page, errs); api = ctx.request
+        open_page(page, site, "dictionary.html", "#dict-content .entry", 1500)
+        check(S, "one language: the dictionary opens with its entries", page.locator("#dict-content .entry").count() == 8)
+        check(S, "one language: the nav label says '1 Language' (singular)", "Lexicon · 1 Language<" in api.get(site.url + "dictionary.html").text())
+        check(S, "one language: there are no language buttons to choose between", not page.locator(".sidebar-head").is_visible())
+        check(S, "one language: no row of other languages' forms under a headword", page.locator(".entry-equivs").count() == 0)
+        page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(500)
+        check(S, "one language: the entry editor has a single language row", page.locator("#em-lang-grid label").count() == 1)
+        page.click("#em-cancel")
+        page.click("#add-entry-btn"); page.wait_for_timeout(300)
+        page.fill("#ef-kro", "zzz"); page.wait_for_timeout(700); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("one-language test")
+        page.click("#em-submit"); page.wait_for_timeout(1500)
+        check(S, "one language: an entry can be added", xml_langs(site, "zzz") == {"kro": "zzz"}, str(xml_langs(site, "zzz")) if True else "")
+        open_page(page, site, "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase", 1800)
+        labels = page.locator('[id="d01.Road:09"] .fn-lang-abbr').all_inner_texts()
+        check(S, "one language: the text view shows one row per line and no language label", len(labels) >= 1 and all(l == "" for l in labels), str(labels))
+        col = first_plain_gloss(page, "d01.Road:09", "onelang")
+        st = site.json("project/texts/glosses/fieldnotes_0.json").get("d01.Road:09", {})
+        check(S, "one language: a gloss is saved with that single language only", list((st.get("tokens") or {}).keys()) == ["kro"] and st["glosses"][col] == "onelang", str(list((st.get("tokens") or {}).keys())))
+        page.locator('[id="d01.Road:09"] .gloss-badge').click(); page.wait_for_timeout(1200)
+        keys = list(site.json("project/texts/confirmed_glosses.json").keys())
+        check(S, "one language: confirmed glosses are keyed with one slot", bool(keys) and all("|" not in k for k in keys), str(keys[:2]))
+        html = api.post(site.url + "api/grammar/zz_one", headers={"Content-Type": "application/json"}, data=json.dumps({"source": "{{cite: fieldnotes#0#d01.Road:09}}"})).json().get("html", "")
+        abbr = re.findall(r'cite-fn-abbr[^>]*>([^<]*)<', html)
+        check(S, "one language: a grammar citation has one row and no language label", len(abbr) == 1 and abbr[0] == "", str(abbr))
+        api.delete(site.url + "api/grammar/zz_one")
+        open_page(page, site, "grammar.html", "#sections-container .grammar-section", 1500)
+        check(S, "one language: the grammar has no language toggles", not page.locator(".lang-pills-wrap").first.is_visible())
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1500)
+        check(S, "one language: the Texts page has no language filter", not page.locator(".filter-row-lang").is_visible())
+        open_page(page, site, "about.html", ".lang-section", 1000)
+        check(S, "one language: the about page has one language section and one line under Languages in the contents", page.locator(".lang-section").count() == 1 and page.locator(".about-toc li.sub").count() == 1)
+        open_page(page, site, "index.html", ".lang-strip", 1000)
+        check(S, "one language: the home page's language strip has one cell", page.locator(".lang-strip .lang-cell").count() == 1)
+        tex = api.get(site.url + "api/grammar/export/latex").text()
+        check(S, "one language: the LaTeX export defines one colour", tex.count("\\definecolor") == 1, str(tex.count("\\definecolor")))
+        check(S, "one language: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        ctx.close()
+    finally:
+        site.stop()
+
+    # ── a project with EIGHT languages ──
+    section("languages: a project with eight languages")
+    eight = [dict(l) for l in five] + EXTRA_LANGS
+    site = Site(project_override=variant(eight)); errs = []
+    try:
+        ctx = new_context(browser, site, 1280, author=True); page = ctx.new_page(); watch(page, errs); api = ctx.request
+        open_page(page, site, "dictionary.html", "#dict-content .entry", 1500)
+        check(S, "eight languages: eight language buttons", page.locator(".hw-lang-pill").count() == 8)
+        check(S, "eight languages: an entry that names no cognates lists none of the seven other forms", page.locator('[id="know"] .entry-equivs').count() == 0, str(page.locator('[id="know"] .entry-equivs').count()))
+        page.locator('[id="ea-know"] >> text=Edit').click(); page.wait_for_timeout(500)
+        check(S, "eight languages: eight language rows are built in the entry editor, the headword's showing, and seven cognate ticks are offered",
+              page.locator("#em-lang-grid label").count() == 8 and page.locator("#em-cog-ticks input").count() == 7 and page.evaluate("[...document.querySelectorAll('.em-lang-row')].filter(r => getComputedStyle(r).display !== 'none').length") == 1)
+        page.click("#em-cancel")
+        page.click("#add-entry-btn"); page.wait_for_timeout(300)
+        page.select_option("#em-hw-lang", eight[-1]["name"]); page.fill("#ef-ccc", "zzzc"); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("eighth-language test")
+        page.click("#em-submit"); page.wait_for_timeout(1500)
+        check(S, "eight languages: an entry with a form only in the eighth language is saved", xml_langs(site, "zzzc") == {"ccc": "zzzc"}, str(xml_langs(site, "zzzc")) if True else "")
+        page.click("#settings-btn"); page.wait_for_timeout(900)
+        check(S, "eight languages: eight colour choices in the Settings", page.locator(".st-color").count() == 8)
+        page.click("#st-cancel")
+        open_page(page, site, "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase", 1800)
+        labels = page.locator('[id="d01.Road:09"] .fn-lang-abbr').all_inner_texts()
+        check(S, "eight languages: the text view shows eight rows, labelled, on every line", len(labels) % 8 == 0 and labels[:8] == [l["abbr"] for l in eight], str(labels[:9]))
+        col = first_plain_gloss(page, "d01.Road:09", "eightgloss")
+        page.locator('[id="d01.Road:09"] .gloss-badge').click(); page.wait_for_timeout(1300)
+        keys = list(site.json("project/texts/confirmed_glosses.json").keys())
+        check(S, "eight languages: confirmed glosses are keyed with eight slots", bool(keys) and all(len(k.split("|")) == 8 for k in keys), str([len(k.split("|")) for k in keys]))
+        html = api.post(site.url + "api/grammar/zz_eight", headers={"Content-Type": "application/json"}, data=json.dumps({"source": "{{cite: fieldnotes#0#d01.Road:09}}"})).json().get("html", "")
+        abbr = re.findall(r'cite-fn-abbr[^>]*>([^<]*)<', html)
+        check(S, "eight languages: a grammar citation has eight labelled rows", abbr == [l["abbr"] for l in eight], str(abbr))
+        api.delete(site.url + "api/grammar/zz_eight")
+        tex = api.get(site.url + "api/grammar/export/latex").text()
+        check(S, "eight languages: the LaTeX export defines eight colours", tex.count("\\definecolor") == 8, str(tex.count("\\definecolor")))
+        open_page(page, site, "about.html", ".lang-section", 1000)
+        check(S, "eight languages: eight sections on the about page, and eight lines in its contents", page.locator(".lang-section").count() == 8 and page.locator(".about-toc li.sub").count() == 8)
+        open_page(page, site, "index.html", ".lang-strip", 1000)
+        check(S, "eight languages: eight cells in the home page's language strip", page.locator(".lang-strip .lang-cell").count() == 8)
+        page.set_viewport_size({"width": 600, "height": 900})
+        over = []
+        for name, path, sel in (("dictionary", "dictionary.html", "#dict-content .entry"), ("text view", "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase"), ):
+            open_page(page, site, path, sel, 1800)
+            over += [name for _ in [0] if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")]
+        check(S, "eight languages: nothing scrolls sideways on a narrow screen", not over, str(over))
+        open_page(page, site, "index.html", ".lang-strip", 1000)
+        check(S, "eight languages: the home page's language strip fits a narrow screen", page.evaluate("(() => { const s = document.querySelector('.lang-strip'); return s.scrollWidth <= s.clientWidth + 1; })()"))
+        check(S, "eight languages: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        ctx.close()
+    finally:
+        site.stop()
+
+    # ── a project whose codes and names share nothing with the first one, with awkward characters ──
+    section("languages: other codes, other names (an apostrophe, a hyphen, an ampersand)")
+    odd = [{"code": "x1", "name": "Ma'a", "abbr": "Ma", "color": "#aa3300", "aliases": []},
+           {"code": "lt-2", "name": "Lo-Toga", "abbr": "LT", "color": "#0033aa", "aliases": []},
+           {"code": "ab_3", "name": "A&B", "abbr": "A&B", "color": "#00aa33", "aliases": []}]
+    site = Site(project_override=variant(odd)); errs = []
+    try:
+        ctx = new_context(browser, site, 1280, author=True); page = ctx.new_page(); watch(page, errs); api = ctx.request
+        open_page(page, site, "dictionary.html", "#dict-content .entry", 1500)
+        pills = page.locator(".hw-lang-pill").all_inner_texts()
+        check(S, "odd names: the language buttons show the names as written", [p.strip().lower() for p in pills] == ["ma'a", "lo-toga", "a&b"], str(pills))
+        for nm in ("Lo-Toga", "A&B", "Ma'a"):
+            page.locator(".hw-lang-pill", has_text=nm).first.click(); page.wait_for_timeout(500)
+        check(S, "odd names: every language can be chosen as the headword language", "active" in (page.locator(".hw-lang-pill", has_text="Ma'a").first.get_attribute("class") or ""))
+        page.click("#add-entry-btn"); page.wait_for_timeout(300)
+        page.select_option("#em-hw-lang", "Lo-Toga"); page.fill("#ef-lt-2", "toga"); page.fill("#ef-pos", "n."); page.locator(".em-sense").first.locator('[data-f="definition"]').fill("odd-code test")
+        page.click("#em-submit"); page.wait_for_timeout(1500)
+        check(S, "odd names: an entry in a language with a hyphenated code is saved", xml_langs(site, "toga") == {"lt-2": "toga"}, str(xml_langs(site, "toga")) if True else "")
+        page.reload(wait_until="domcontentloaded"); page.wait_for_timeout(1500)
+        page.locator('[id="ea-toga"] >> text=Edit').click(); page.wait_for_timeout(500)
+        check(S, "odd names: the editor shows the saved form in the right row", page.input_value("#ef-lt-2") == "toga")
+        page.click("#em-cancel")
+        page.click("#settings-btn"); page.wait_for_timeout(900)
+        check(S, "odd names: the Settings list the three languages", page.locator(".st-color label").all_inner_texts() == ["Ma'a", "Lo-Toga", "A&B"])
+        page.click("#st-cancel")
+        for name, path, sel in (("grammar", "grammar.html", "#sections-container .grammar-section"), ("texts", "texts.html", "#texts-grid .text-card"),
+                                ("fieldnotes view", "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase"),
+                                ("recording view", "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", ".tx-phrase")):
+            open_page(page, site, path, sel, 1500)
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1200)
+        opts = page.locator("#filter-lang option").all_inner_texts()
+        check(S, "odd names: the Texts filter lists them", opts[1:] == ["Ma'a", "Lo-Toga", "A&B"], str(opts))
+        r = api.post(site.url + "api/grammar/zz_odd", headers={"Content-Type": "application/json"}, data=json.dumps({"source": "{{cite: fieldnotes#0#d01.Road:09}}\n\n{{entry: know}}"}))
+        check(S, "odd names: a citation and an entry chip render without a server error", r.status == 200, f"HTTP {r.status}")
+        tex = api.get(site.url + "api/grammar/export/latex")
+        body = tex.text().split("\\begin{document}")[-1] if tex.status == 200 else ""
+        check(S, "odd names: the LaTeX export defines a colour for each language", tex.status == 200 and tex.text().count("\\definecolor") == 3, f"HTTP {tex.status}")
+        check(S, "odd names: an ampersand in a language abbreviation is escaped in LaTeX (A\\&B, never a raw &)", "A\\&B" in body and not re.search(r"(?<!\\)A&B", body))
+        api.delete(site.url + "api/grammar/zz_odd")
+        check(S, "odd names: no JavaScript or loading error on any page", not errs, "; ".join(errs[:3]))
+        ctx.close()
+    finally:
+        site.stop()
+
+    # ── a project that has not written its home and about pages (yet) ──
+    section("languages: a project without page content")
+    site = Site(project_override=variant([dict(l) for l in five], footer=""), drop_pages=True); errs = []
+    try:
+        ctx = new_context(browser, site, 1280, author=False); page = ctx.new_page(); watch(page, errs); api = ctx.request
+        open_page(page, site, "index.html", ".lang-strip", 1000)
+        hrefs = page.locator(".lang-strip a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
+        check(S, "no page content: the home page still works, without a map section or footer", page.locator(".map-section").count() == 0 and page.locator("footer").count() == 0 and page.locator(".dbt-card").count() == 3)
+        check(S, "no page content: the language strip points to the dictionary", hrefs == [f"dictionary.html?lang={l['name']}" for l in five], str(hrefs[:2]))
+        check(S, "no page content: there is no about page", api.get(site.url + "about.html").status == 404 and api.get(site.url + "gaua.html").status in (301, 404))
+        check(S, "no page content: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        ctx.close()
+    finally:
+        site.stop()
+
+    # ── a language added later: column keys stored under five slots ──
+    section("languages: a language added after data was stored")
+    six = [dict(l) for l in five] + EXTRA_LANGS[:1]
+    site = Site(project_override=variant(six)); errs = []
+    try:
+        (site.dir / "project" / "texts" / "confirmed_glosses.json").write_text(json.dumps({"A|B|c|d|e": ["OLD"]}), encoding="utf-8")
+        ctx = new_context(browser, site, 1280, author=True); page = ctx.new_page(); watch(page, errs)
+        open_page(page, site, "transcription.html?fieldnotes=1&index=0&title=D01", ".tx-phrase", 1800)
+        keys = page.evaluate("Object.keys(textsConcordance)")
+        check(S, "a language added later: keys stored under five slots are read with six (and lower-cased)", "a|b|c|d|e|" in keys, str(keys[:3]))
+        check(S, "a language added later: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        ctx.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 6. security suite: the password and the keys ─────────────────────────
+def _login(api, site, pw):
+    return api.post(site.url + "api/auth/login", data=json.dumps({"password": pw}), headers={"Content-Type": "application/json"})
+
+def suite_security(browser, site, args):
+    S = "security"
+    section("security: the password and the keys")
+    needles = ["gaua" + "2026", "dev-secret" + "-change"]
+    hits = {}
+    for f in ROOT.rglob("*"):
+        rel = f.relative_to(ROOT)
+        if not f.is_file() or any(p in ("tests", ".git", "instance", "uploads", "__pycache__", "venv", ".venv") for p in rel.parts): continue
+        try: txt = f.read_text(encoding="utf-8")
+        except Exception: continue
+        found = [n for n in needles if n in txt]
+        if found: hits[str(rel)] = found
+    check(S, "no password and no signing key is written in any file of the project", not hits, str(hits))
+    gi = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    check(S, ".gitignore keeps instance/ (the secrets) and uploads/ out of git", "instance/" in gi and "uploads/" in gi)
+
+    anon = new_context(browser, site, author=False); api = anon.request
+    bad = [p for p in ("security.py", "setup.html", "setup", "instance/author.json", "starter/project.json", "starter/dictionary.xml") if api.get(site.url + p).status != 404]
+    check(S, "the secrets, the security code, the starter files and the setup page are not served once the DBT is set up", not bad, str(bad))
+    check(S, "login: a wrong password is refused", _login(api, site, "not the password").status == 401)
+    check(S, "login: the password that was once published is refused", _login(api, site, "gaua" + "2026").status == 401)
+    check(S, "login: the right password is accepted", _login(api, site, PASSWORD).status == 200)
+    anon.close()
+
+    # too many wrong passwords
+    s2 = Site()
+    try:
+        c = new_context(browser, s2, author=False); a = c.request
+        codes = [_login(a, s2, f"wrong-{i}").status for i in range(5)]
+        r = _login(a, s2, PASSWORD)
+        check(S, "login: after five wrong passwords the address is locked out, even for the right password", codes == [401] * 5 and r.status == 429, f"{codes} then {r.status}")
+        check(S, "login: the refusal says how long to wait", "Try again" in r.json().get("error", ""), str(r.json()))
+        c.close()
+    finally:
+        s2.stop()
+
+    # changing the password: stored hashed, the file wins over the environment, a forged cookie is useless
+    s3 = Site()
+    try:
+        c = new_context(browser, s3, author=True); a = c.request; H = {"Content-Type": "application/json"}
+        chg = lambda cur, new: a.post(s3.url + "api/auth/password", data=json.dumps({"current": cur, "new": new}), headers=H)
+        check(S, "password change: refused when the current password is wrong", chg("nope", "Brand-new-pass-77").status == 403)
+        check(S, "password change: refused when the new one is too short", chg(PASSWORD, "short").status == 400)
+        check(S, "password change: refused for the password that was once published", chg(PASSWORD, "gaua" + "2026").status == 400)
+        check(S, "password change: accepted with the current password", chg(PASSWORD, "Brand-new-pass-77").status == 200)
+        raw = (s3.dir / "instance" / "author.json").read_text(encoding="utf-8")
+        data = json.loads(raw)
+        check(S, "the password is stored only as a hash (never in clear)", data.get("passwordHash", "").startswith(("scrypt:", "pbkdf2:")) and "Brand-new-pass-77" not in raw and PASSWORD not in raw)
+        check(S, "the signing key is random, long, and kept in instance/", len(data.get("secretKey", "")) >= 64)
+        c2 = new_context(browser, s3, author=False)
+        check(S, "after the change the new password works and the old one does not", _login(c2.request, s3, "Brand-new-pass-77").status == 200 and _login(c2.request, s3, PASSWORD).status == 401)
+        # a login cookie forged with the key that used to be written in the code
+        from flask import Flask
+        from flask.sessions import SecureCookieSessionInterface
+        fake = Flask("forger"); fake.secret_key = "dev-secret" + "-change-in-production"
+        cookie = SecureCookieSessionInterface().get_signing_serializer(fake).dumps({"author": True})
+        c3 = new_context(browser, s3, author=False)
+        r = c3.request.get(s3.url + "api/dictionary/settings", headers={"Cookie": f"session={cookie}"})
+        check(S, "a login cookie forged with the old key in the code does not work", r.status == 401, f"HTTP {r.status}")
+        c.close(); c2.close(); c3.close()
+    finally:
+        s3.stop()
+
+    # no password set at all, and the command-line tool
+    s4 = Site(env_unset=["AUTHOR_PASSWORD"])
+    try:
+        c = new_context(browser, s4, author=False); a = c.request
+        r = _login(a, s4, "anything")
+        check(S, "no password set: nobody can log in, and the message says what to do", r.status == 403 and "--set-password" in r.json().get("error", ""), f"{r.status} {r.json()}")
+        cli = lambda text: subprocess.run([sys.executable, "app.py", "--set-password"], cwd=s4.dir, input=text, capture_output=True, text=True, timeout=60)
+        check(S, "--set-password: two different passwords change nothing", (lambda r: r.returncode == 1 and not ((s4.dir / "instance" / "author.json").exists() and "passwordHash" in (s4.dir / "instance" / "author.json").read_text(encoding="utf-8")))(cli("Valid-pass-123\nOther-pass-456\n")))
+        check(S, "--set-password: the published password is refused", cli("gaua" + "2026\n" + "gaua" + "2026\n").returncode == 1)
+        ok = cli("Valid-pass-123\nValid-pass-123\n")
+        data = json.loads((s4.dir / "instance" / "author.json").read_text(encoding="utf-8"))
+        check(S, "--set-password: stores the hash of a good password", ok.returncode == 0 and "Valid-pass-123" not in json.dumps(data) and data.get("passwordHash"), ok.stdout + ok.stderr)
+        check(S, "--set-password: the running server accepts it at once, without a restart", _login(a, s4, "Valid-pass-123").status == 200)
+        c.close()
+    finally:
+        s4.stop()
+
+    # the Settings dialog
+    s5 = Site()
+    try:
+        c = new_context(browser, s5, 1280, author=True); page = c.new_page(); errs = []; watch(page, errs)
+        open_page(page, s5, "dictionary.html?lang=Koro", "#dict-content .entry", 1500)
+        page.click("#settings-btn"); page.wait_for_timeout(800)
+        page.locator(".st-pw summary").click()
+        def attempt(cur, new, new2):
+            page.fill("#pw-current", cur); page.fill("#pw-new", new); page.fill("#pw-new2", new2); page.click("#pw-change"); page.wait_for_timeout(1200)
+            return page.inner_text("#pw-msg")
+        check(S, "Settings: two different new passwords are refused", "differ" in attempt(PASSWORD, "Another-pass-1", "Another-pass-2"))
+        check(S, "Settings: a wrong current password is refused", "not right" in attempt("nope", "Another-pass-1", "Another-pass-1"))
+        check(S, "Settings: the password can be changed from the page", "Password changed" in attempt(PASSWORD, "Another-pass-1", "Another-pass-1"))
+        real = [e for e in errs if "api/auth/password" not in e]          # the 403 / 400 answers to the wrong attempts above are expected
+        check(S, "Settings: no JavaScript or loading error", not real, "; ".join(real[:2]))
+        c.close()
+    finally:
+        s5.stop()
+
+# ───────────────────────── 7. setup suite: the first run of a new project ─────────────────────────
+def suite_setup(browser, args):
+    from lxml import etree
+    S = "setup"
+    section("setup: the first run of a new project")
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code()
+        check(S, "the server prints a setup code in its console", len(code) >= 8, code)
+        ctx = new_context(browser, site, 1280); page = ctx.new_page(); errs = []; watch(page, errs); api = ctx.request
+        r = api.get(site.url, max_redirects=0)
+        check(S, "before the setup, every page leads to the setup page", r.status == 302 and r.headers.get("location", "").endswith("/setup"), f"{r.status} {r.headers.get('location')}")
+        check(S, "before the setup, the data is not available and other addresses lead to the setup page",
+              api.get(site.url + "api/dictionary/entries").status == 503 and api.get(site.url + "dictionary.html", max_redirects=0).status == 302)
+        H = {"Content-Type": "application/json"}
+        post = lambda body: api.post(site.url + "api/setup", data=json.dumps(body), headers=H)
+        good = dict(name="Mini DBT", mode="own", password="a-good-password-1", setupCode=code,
+                    languages=[{"name": "A", "code": "aa", "abbr": "A", "color": "#112233"}])
+        check(S, "setup: a wrong setup code is refused", post(dict(good, setupCode="nope")).status == 403)
+        check(S, "setup: the published password is refused", post(dict(good, password="gaua" + "2026")).status == 400)
+        check(S, "setup: a project needs a name", post(dict(good, name=" ")).status == 400)
+        check(S, "setup: a language code must be lower case letters and digits", post(dict(good, languages=[dict(good["languages"][0], code="1Bad")])).status == 400)
+        check(S, "setup: two languages cannot share a code", post(dict(good, languages=[good["languages"][0], dict(good["languages"][0], name="B")])).status == 400)
+        af = site.dir / "instance" / "author.json"          # (the signing key is created at start-up; the password must not be)
+        check(S, "setup: nothing is written when the request is refused", not (site.dir / "project" / "project.json").exists() and not (af.exists() and "passwordHash" in af.read_text(encoding="utf-8")))
+
+        # the page itself, and a project with the author's own languages
+        open_page(page, site, "setup", "#setup", 800)
+        page.fill("#name", "Mini DBT")
+        page.locator('#langs [data-f="name"]').first.fill("Mwotlap")
+        first = (page.locator('#langs [data-f="abbr"]').first.input_value(), page.locator('#langs [data-f="code"]').first.input_value())
+        check(S, "the setup page suggests an abbreviation and a code from the name", first == ("Mwo", "mwo"), str(first))
+        page.click("#add-lang"); page.locator('#langs [data-f="name"]').nth(1).fill("Lo-Toga")
+        page.click("#add-lang"); page.locator('#langs [data-f="name"]').nth(2).fill("Third")
+        page.locator("#langs [data-del]").nth(2).click()
+        check(S, "the setup page can add and remove languages", page.locator("#langs tr").count() == 2)
+        page.click("#mode-starter"); hidden = not page.locator("#langs-box").is_visible(); page.click("#mode-own")
+        check(S, "the setup page hides the language table when the example is chosen", hidden and page.locator("#langs-box").is_visible())
+        page.fill("#pw", "a-good-password-1"); page.fill("#pw2", "different-password"); page.fill("#code", code); page.click("#go"); page.wait_for_timeout(600)
+        check(S, "the setup page refuses two different passwords", "differ" in page.inner_text("#msg"))
+        page.fill("#pw2", "a-good-password-1"); page.fill("#code", "wrong"); page.click("#go"); page.wait_for_timeout(1000)
+        check(S, "the setup page shows the server's refusal of a wrong code", "setup code is not right" in page.inner_text("#msg"))
+        page.fill("#code", code); page.click("#go")
+        try:
+            page.wait_for_url(site.url, timeout=45000); landed = True
+        except Exception:
+            landed = False
+        check(S, "after the setup the page waits for the restart and opens the new site", landed, page.url)
+        page.wait_for_timeout(1500)
+        proj = json.loads((site.dir / "project" / "project.json").read_text(encoding="utf-8"))
+        check(S, "the project file holds the name and the languages that were typed", proj["name"] == "Mini DBT" and [l["code"] for l in proj["languages"]] == ["mwo", "lot"] and [l["name"] for l in proj["languages"]] == ["Mwotlap", "Lo-Toga"], str(proj["languages"]))
+        check(S, "the password is stored hashed, not in the project", "a-good-password-1" not in json.dumps(proj) and (site.dir / "instance" / "author.json").exists())
+        check(S, "the site now carries the project's name", "◬ Mini DBT" in api.get(site.url + "index.html").text() and api.get(site.url + "setup").status == 404)
+        # the author logs in and adds a first entry to the empty dictionary
+        a2 = new_context(browser, site, 1280); r = _login(a2.request, site, "a-good-password-1")
+        check(S, "the author can log in with the password chosen at the setup", r.status == 200)
+        p2 = a2.new_page(); e2 = []; watch(p2, e2)
+        open_page(p2, site, "dictionary.html", "#dict-content", 1500)
+        check(S, "the dictionary starts empty, with a button per language", p2.locator(".hw-lang-pill").count() == 2 and p2.locator("#dict-content .entry").count() == 0)
+        p2.click(".auth-btn.login-btn") if p2.locator(".auth-btn.login-btn").is_visible() else None
+        p2.fill("#login-pw", "a-good-password-1") if p2.locator("#login-pw").is_visible() else None
+        if p2.locator("#login-submit").is_visible(): p2.click("#login-submit"); p2.wait_for_timeout(900)
+        p2.click("#add-entry-btn"); p2.wait_for_timeout(300)
+        p2.select_option("#em-hw-lang", "Lo-Toga"); p2.fill("#ef-lot", "toga"); p2.fill("#ef-pos", "n."); p2.locator(".em-sense").first.locator('[data-f="definition"]').fill("first entry")
+        p2.click("#em-submit"); p2.wait_for_timeout(1500)
+        d = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+        check(S, "the first entry is saved into the project's own dictionary file", len(d.findall(".//EntréeLexicale")) == 1 and d.find('.//Lemme/ReprésentationDeForme[@langue="lot"]').text == "toga")
+        rj = json.loads((site.dir / "project" / "references.json").read_text(encoding="utf-8"))
+        open_page(p2, site, "references.html", "#refs-list", 800)
+        check(S, "a new project gets an empty list of references, and its References page says so", rj == {"references": []} and "No references yet" in p2.locator("#refs-list").inner_text())
+        real = [e for e in errs + e2 if "/api/setup" not in e and "/api/auth/status" not in e]    # the refusals and the wait for the restart are expected
+        check(S, "no JavaScript or loading error", not real, "; ".join(real[:2]))
+        ctx.close(); a2.close()
+    finally:
+        site.stop()
+
+    # the small starter example
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        r = api.post(site.url + "api/setup", data=json.dumps(dict(name="Starter DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers={"Content-Type": "application/json"})
+        check(S, "starter: the setup is accepted", r.status == 200 and r.json().get("restart") == "auto", str(r.text())[:100])
+        check(S, "starter: the server restarts by itself", site.wait_restart())
+        page = ctx.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "index.html", ".lang-strip", 1000)
+        check(S, "starter: the home page shows the project's name and its language", "Starter DBT" in page.title() and page.locator(".lang-strip .lname").all_inner_texts() == ["Example"])
+        open_page(page, site, "dictionary.html", "#dict-content .entry", 1500)
+        check(S, "starter: the dictionary has its four entries, with no automatic IPA (no table is defined)", page.locator("#dict-content .entry").count() == 4 and page.locator(".ipa-badge").count() == 0)
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1500)
+        card = page.locator(".text-card").first.inner_text()
+        check(S, "starter: the Texts page lists the example text, in the project's language", "A first example text" in card and "Example" in card, card.replace("\n", " ")[:80])
+        open_page(page, site, "transcription.html?key=example-text.xml&title=x&lang=ex", ".tx-phrase", 1500)
+        check(S, "starter: the text opens with its four phrases", page.locator(".tx-phrase").count() == 4)
+        open_page(page, site, "grammar.html", "#sections-container .grammar-section", 2000)
+        body = page.locator("#sections-container").inner_text()
+        check(S, "starter: the grammar cites the text and shows the entry", "Tamo neme" in body and "The house is good" in body and "tamo" in body.lower())
+        cites = page.locator("#sections-container .source-cite").all_inner_texts()
+        check(S, "starter: the grammar cites its references (with a page; narrative with two authors)", cites == ["Smith, 2020, p. 14", "Smith and Rivera (2021)"] and not page.locator("#sections-container .shortcode-error").count(), str(cites))
+        open_page(page, site, "references.html", ".ref-entry", 800)
+        check(S, "starter: the References page lists its two invented references in APA style", [x.strip() for x in page.locator(".ref-text").all_inner_texts()] == [
+            "Smith, J. (2020). A sketch of the Example language. Example University Press.",
+            "Smith, J., & Rivera, A. (2021). Reduplication in Example. Journal of Invented Languages, 12(3), 201–224. https://doi.org/10.0000/jil.2021.12.3.201"])
+        a3 = new_context(browser, site, author=False)
+        check(S, "starter: the password chosen at the setup works, the old published one does not", _login(a3.request, site, "a-good-password-1").status == 200 and _login(a3.request, site, "gaua" + "2026").status == 401)
+        check(S, "starter: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        ctx.close(); a3.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 8. migration suite: live data moves into the project folder ─────────────────────────
+_LIVE_ENTRY = ('<EntréeLexicale identifiant="zzlive"><Lemme><ReprésentationDeForme langue="kro">zzlive</ReprésentationDeForme></Lemme>'
+               '<ClasseGrammaticale>n.</ClasseGrammaticale><Sens identifiant="zzliveⓢ1"><NuméroDeSens>1</NuméroDeSens>'
+               '<Glose langue="eng">a live entry</Glose><gloss>live</gloss></Sens></EntréeLexicale>')
+
+def _live_state(d):
+    """The folder as it is when the new code lands on a LIVE installation: the data edited in the browser is at the
+    OLD places, while the shipped copies are at the NEW ones (as after a git pull)."""
+    proj = d / "project"
+    xml = (proj / "dictionary.xml").read_text(encoding="utf-8")
+    (d / "dbt_dictionary.xml").write_text(xml.replace("</Dictionnaire>", _LIVE_ENTRY + "</Dictionnaire>"), encoding="utf-8")
+    shutil.copy(proj / "fieldnotes.xml", d / "AlexFrancois_Questionnaire_Gaua-languages.xml")
+    (d / "grammar_content").mkdir()
+    (d / "grammar_content" / "s1.md").write_text((proj / "grammar" / "s1.md").read_text(encoding="utf-8") + "\n\nLIVE EDIT paragraph.\n", encoding="utf-8")
+    (d / "grammar_content" / "live-only.md").write_text("## Live only\n\nA section written in the browser.\n", encoding="utf-8")
+    tn = d / "transcribed_narratives"; (tn / "glosses").mkdir(parents=True)
+    shutil.copy(proj / "texts" / "crdo-WWO_FARFADETS.xml", tn / "crdo-WWO_FARFADETS.xml")
+    (tn / "Live_only.xml").write_text('<?xml version="1.0" encoding="utf-8"?>\n<TEXT xml:lang="wwo" id="live-only"><HEADER><TITLE xml:lang="en">A live text</TITLE></HEADER>'
+                                      '<S id="lo1"><FORM>Tuar.</FORM><TRANSL xml:lang="en">Once.</TRANSL></S></TEXT>', encoding="utf-8")
+    g = json.loads((proj / "texts" / "glosses" / "fieldnotes_0.json").read_text(encoding="utf-8"))
+    g["d01.Road:01"]["glosses"][0] = "LIVEMORNING"
+    (tn / "glosses" / "fieldnotes_0.json").write_text(json.dumps(g), encoding="utf-8")
+    (d / "images").mkdir(); (d / "images" / "live.png").write_bytes(b"\x89PNG live")
+
+def _only_legacy(d):
+    """Only the old places hold data (the new code was pulled, but not the data folders)."""
+    _live_state(d)
+    proj = d / "project"
+    for rel in ("dictionary.xml", "fieldnotes.xml"): (proj / rel).unlink()
+    for rel in ("grammar", "texts", "images"): shutil.rmtree(proj / rel)
+
+def _blocked(d):
+    """A move that cannot be completed: the new place of the dictionary is a folder."""
+    _live_state(d)
+    (d / "project" / "dictionary.xml").unlink(); (d / "project" / "dictionary.xml").mkdir()
+
+def suite_migration(browser, args):
+    S = "migration"
+    section("migration: live data moves into the project folder")
+    OLD = ("dbt_dictionary.xml", "AlexFrancois_Questionnaire_Gaua-languages.xml", "grammar_content", "transcribed_narratives", "images")
+
+    def check_live(site, label):
+        d = site.dir / "project"
+        check(S, f"{label}: the server says what it moved", "Your data now lives in the project folder" in site.log_text())
+        left = [p for p in OLD if (site.dir / p).exists()]
+        check(S, f"{label}: the old locations are gone", not left, str(left))
+        check(S, f"{label}: the dictionary is the live one (an entry added in the browser survives)", "zzlive" in (d / "dictionary.xml").read_text(encoding="utf-8"))
+        check(S, f"{label}: the live grammar edits, the section written in the browser, the live-only text, the glosses and the images are all there",
+              "LIVE EDIT" in (d / "grammar" / "s1.md").read_text(encoding="utf-8") and (d / "grammar" / "live-only.md").exists()
+              and (d / "texts" / "Live_only.xml").exists() and "LIVEMORNING" in (d / "texts" / "glosses" / "fieldnotes_0.json").read_text(encoding="utf-8")
+              and (d / "images" / "live.png").exists() and (d / "fieldnotes.xml").exists())
+        bk = list((site.dir / "uploads" / "backups").glob("legacy-layout-*"))
+        check(S, f"{label}: a full backup of the old locations was made first",
+              len(bk) == 1 and "zzlive" in (bk[0] / "dbt_dictionary.xml").read_text(encoding="utf-8") and (bk[0] / "grammar_content" / "live-only.md").exists()
+              and (bk[0] / "transcribed_narratives" / "Live_only.xml").exists() and (bk[0] / "images" / "live.png").exists())
+        mk = site.json("uploads/layout-migrated.json")
+        check(S, f"{label}: the move is recorded (so that it happens only once)", len(mk.get("moved", [])) == 5, str(mk)[:80])
+        ctx = new_context(browser, site, 1280); page = ctx.new_page(); errs = []; watch(page, errs); api = ctx.request
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1500)
+        check(S, f"{label}: the dictionary shows the live entry and the others (nine entries)", page.locator("#dict-content .entry").count() == 9 and "zzlive" in page.locator("#dict-content").inner_text())
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1500)
+        check(S, f"{label}: the Texts page lists the live-only text", "A live text" in page.locator("#texts-grid").inner_text())
+        html = api.get(site.url + "api/grammar/s1").json().get("html", "")
+        check(S, f"{label}: the grammar shows the live edit and the live gloss", "LIVE EDIT" in html and 'data-gloss="LIVEMORNING"' in html)
+        check(S, f"{label}: the picture saved in the browser is served", api.get(site.url + "images/live.png").status == 200)
+        check(S, f"{label}: no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        ctx.close()
+
+    # 1. live data at the old places, shipped copies at the new ones (what a git pull leaves)
+    site = Site(prepare=_live_state)
+    try:
+        check_live(site, "live data beside shipped copies")
+        stale = (site.dir / "project" / "dictionary.xml").read_text(encoding="utf-8").replace(_LIVE_ENTRY, "")
+        (site.dir / "dbt_dictionary.xml").write_text(stale, encoding="utf-8")          # an old file comes back (e.g. through git)
+        out = site.restart()
+        check(S, "a second start does not move anything again: a returning old file cannot overwrite live data",
+              "Your data now lives" not in out and (site.dir / "dbt_dictionary.xml").exists() and "zzlive" in (site.dir / "project" / "dictionary.xml").read_text(encoding="utf-8"))
+    finally:
+        site.stop()
+
+    # 2. only the old places hold data
+    site = Site(prepare=_only_legacy)
+    try:
+        check_live(site, "live data only")
+    finally:
+        site.stop()
+
+    # 3. a move that cannot be completed deletes nothing
+    site = Site(prepare=_blocked, expect_failure=True)
+    try:
+        check(S, "a move that cannot be completed stops the server with a message", not site.started and "Could not move the data" in site.log_text())
+        check(S, "…and deletes nothing: the live data is still where it was",
+              "zzlive" in (site.dir / "dbt_dictionary.xml").read_text(encoding="utf-8") and (site.dir / "grammar_content" / "live-only.md").exists()
+              and (site.dir / "transcribed_narratives" / "Live_only.xml").exists() and (site.dir / "images" / "live.png").exists())
+        check(S, "…and records nothing as moved, so the next start tries again", not (site.dir / "uploads" / "layout-migrated.json").exists())
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 9. references suite: the bibliography, APA 7, citations, exports ─────────────────────────
+FRANCOIS_APA = ("François, A. (2026b). Negation in Dorig. In M. Miestamo & L. Veselinova (Eds.), Negation in the world’s languages III: "
+                "Papunesia, Australia, and the Americas (pp. 73–128). Language Science Press. https://doi.org/10.5281/zenodo.18234067")
+_H = {"Content-Type": "application/json"}
+
+def _jcall(api, method, url, data=None):
+    kw = {"headers": _H, "data": json.dumps(data)} if data is not None else {}
+    r = getattr(api, method)(url, **kw)
+    try: return r.status, r.json()
+    except Exception: return r.status, r.text()
+
+def _P(f, g=""): return {"family": f, "given": g} if g else {"family": f}
+
+# each example below is a template or example of the UTS "APA 7th referencing guide" (expected = the guide's reference-list line)
+_APA_CASES = [
+    ("journal article, one author", dict(type="article", authors=[_P("Alderton", "Z.")], year="2014", title="“Snapewives” and “Snapeism”: A fiction-based religion within the Harry Potter fandom", container="Religions", volume="5", issue="1", pages="219-267", doi="10.3390/rel5010219"),
+     "Alderton, Z. (2014). “Snapewives” and “Snapeism”: A fiction-based religion within the Harry Potter fandom. Religions, 5(1), 219–267. https://doi.org/10.3390/rel5010219"),
+    ("journal article, three authors", dict(type="article", authors=[_P("Gursoy", "A."), _P("Wickett", "K."), _P("Feinberg", "M.")], year="2018", title="Understanding tag functions in a moderated, user-generated metadata ecosystem", container="Journal of Documentation", volume="74", issue="3", pages="490-508", doi="10.1108/JD-09-2017-0134"),
+     "Gursoy, A., Wickett, K., & Feinberg, M. (2018). Understanding tag functions in a moderated, user-generated metadata ecosystem. Journal of Documentation, 74(3), 490–508. https://doi.org/10.1108/JD-09-2017-0134"),
+    ("edited book, two editors", dict(type="edited", authors=[_P("Burley", "J."), _P("Harris", "J.")], year="2008", title="A companion to genetics", edition="2", publisher="John Wiley & Sons"),
+     "Burley, J., & Harris, J. (Eds.). (2008). A companion to genetics (2nd ed.). John Wiley & Sons."),
+    ("chapter: edition, volume, pages, title ending in ?", dict(type="chapter", authors=[_P("Slee", "R.")], year="2014", title="Inclusive schooling as an apprenticeship in democracy?", editors=[_P("Florian", "L.")], container="The SAGE handbook of special education", edition="2", volume="1", pages="217-229", publisher="SAGE Publications"),
+     "Slee, R. (2014). Inclusive schooling as an apprenticeship in democracy? In L. Florian (Ed.), The SAGE handbook of special education (2nd ed., Vol. 1, pp. 217–229). SAGE Publications."),
+    ("doctoral dissertation from a database", dict(type="thesis", authors=[_P("Hollander", "M.")], year="2017", title="Resistance to authority: Methodological innovations and new lessons from the Milgram experiment", number="Publication No. 10289373", level="Doctoral dissertation", institution="University of Wisconsin-Madison", publisher="ProQuest Dissertations and Theses Global"),
+     "Hollander, M. (2017). Resistance to authority: Methodological innovations and new lessons from the Milgram experiment (Publication No. 10289373) [Doctoral dissertation, University of Wisconsin-Madison]. ProQuest Dissertations and Theses Global."),
+    ("conference paper with a date range", dict(type="conference", authors=[_P("Campbell", "K.")], year="2019", dateText="October 28-29", title="An information behaviours view of first in family students before and during university", container="Research Applications in Information and Library Studies", place="Canberra, ACT, Australia"),
+     "Campbell, K. (2019, October 28–29). An information behaviours view of first in family students before and during university [Paper presentation]. Research Applications in Information and Library Studies, Canberra, ACT, Australia."),
+    ("data set by an organisation, retrieved", dict(type="dataset", authors=[{"org": "Pew Research Center"}], year="2018", title="American trends panel Wave 26", accessed="October 21, 2019", url="https://www.pewsocialtrends.org/dataset/american-trends-panel-wave-26/"),
+     "Pew Research Center. (2018). American trends panel Wave 26 [Data set]. Retrieved October 21, 2019, from https://www.pewsocialtrends.org/dataset/american-trends-panel-wave-26/"),
+    ("unpublished manuscript", dict(type="unpublished", authors=[_P("Yoo", "J."), _P("Miyamoto", "Y."), _P("Rigotti", "A."), _P("Ryff", "C.")], year="2016", title="Linking positive affect to blood lipids: A cultural perspective", publisher="Department of Psychology, University of Wisconsin-Madison"),
+     "Yoo, J., Miyamoto, Y., Rigotti, A., & Ryff, C. (2016). Linking positive affect to blood lipids: A cultural perspective [Unpublished manuscript]. Department of Psychology, University of Wisconsin-Madison."),
+    ("web page, organisation (site name omitted when it is the author)", dict(type="web", authors=[{"org": "World Health Organization"}], year="2022", dateText="July 14", title="Immunization coverage", container="World Health Organization", url="https://www.who.int/news-room/fact-sheets/detail/immunization-coverage"),
+     "World Health Organization. (2022, July 14). Immunization coverage. https://www.who.int/news-room/fact-sheets/detail/immunization-coverage"),
+]
+
+def suite_references(browser, args):
+    S = "references"
+    section("references: the bibliography in APA 7, {{source: …}} citations, BibTeX and EndNote")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_references.py")], capture_output=True, text=True, timeout=120)
+    last = [l for l in unit.stdout.strip().split("\n") if l][-1] if unit.stdout.strip() else unit.stderr[-200:]
+    check(S, "the formatting engine passes its own direct tests (APA 7 templates, initials, year letters, order, in-text, exports)", unit.returncode == 0, last + ("" if unit.returncode == 0 else "\n" + unit.stdout[-600:]))
+    site = Site(prepare=_one_reference)           # the group starts from one known reference, whatever the project holds
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+
+        # ── the page, the navigation and what a visitor sees ──
+        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "transcription.html", "references.html", "concordance.html"]
+        missing = [p for p in pages if 'href="references.html"' not in va.get(site.url + p).text()]
+        check(S, "every page has the References link in its top bar", not missing, str(missing))
+        check(S, "no project marker is left unexpanded on the References page", "{{project." not in va.get(site.url + "references.html").text())
+        pg = vis.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "references.html", ".ref-entry", 800)
+        check(S, "a visitor sees the project's reference in APA 7, exactly as the guide and the author write it", [x.strip() for x in pg.locator(".ref-text").all_inner_texts()] == [FRANCOIS_APA], pg.locator(".ref-text").first.inner_text()[:90])
+        check(S, "the title of the book is in italics, the DOI is a link", pg.locator(".ref-text em").all_inner_texts() == ["Negation in the world’s languages III: Papunesia, Australia, and the Americas"] and pg.locator('.ref-text a[href="https://doi.org/10.5281/zenodo.18234067"]').count() == 1)
+        check(S, "the list has a hanging indent", pg.evaluate("parseFloat(getComputedStyle(document.querySelector('.ref-text')).textIndent) < 0"))
+        check(S, "a visitor has no author tools (no Add, Edit, Delete, key or hint) but can export", not any(pg.locator(s).first.is_visible() for s in ("#ref-add", "[data-edit]", "[data-del]", ".ref-meta", ".refs-hint")) and pg.locator('a[href="/api/references/export/bibtex"]').is_visible() and pg.locator('a[href="/api/references/export/endnote"]').is_visible())
+        check(S, "the top-bar label comes from the project", "Bibliography" in pg.locator(".topnav-right").inner_text() and pg.title().startswith("References"))
+        check(S, "the page has no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+
+        # ── the formatting, through the real server (the guide's own examples) ──
+        bad = []
+        for name, data, want in _APA_CASES:
+            st, j = _jcall(aa, "post", site.url + "api/references/preview", data)
+            got = j["view"]["text"] if st == 200 and j.get("ok") else str(j)
+            if got != want: bad.append(f"{name}: {got[:90]}")
+        check(S, f"{len(_APA_CASES)} templates of the APA guide are reproduced to the letter (article, edited book, chapter, thesis, conference paper, data set, manuscript, web page ...)", not bad, " | ".join(bad))
+        names = ["Kalnay", "Kanamitsu", "Kistler", "Collins", "Deaven", "Gandin", "Iredell", "Saha", "White", "Woollen", "Zhu", "Chelliah", "Ebisuzaki", "Higgins", "Janowial", "Mo", "Ropelewski", "Wang", "Leetmaa", "Reynolds", "Jenne", "Joseph"]
+        st, j = _jcall(aa, "post", site.url + "api/references/preview", dict(type="article", authors=[_P(n, n[0]) for n in names], year="1996", title="The NCEP/NCAR 40-year reanalysis project", container="Bulletin of the American Meteorological Society", volume="77", issue="3", pages="437-471"))
+        tx = j["view"]["text"]
+        check(S, "21 or more authors: the first 19, an ellipsis and the last, as the guide says", tx.startswith("Kalnay, K., ") and "Leetmaa, L., … Joseph, J. (1996)." in tx and "Reynolds" not in tx, tx[-150:-60])
+        for k, (data, why) in {"title": (dict(type="book", year="2020"), "no title"), "type": (dict(title="x", year="2020"), "no type"), "year": (dict(type="book", title="x", year="soon"), "a year that is not a year"),
+                               "url": (dict(type="book", title="x", year="2020", url="javascript:alert(1)"), "a script URL"), "key": (dict(type="book", title="x", year="2020", id="Bad Key!"), "a key with spaces")}.items():
+            st, _ = _jcall(aa, "post", site.url + "api/references", data)
+            check(S, f"a reference with {why} is refused", st == 400)
+
+        # ── who may change the bibliography ──
+        st = [_jcall(va, "post", site.url + "api/references", dict(type="book", title="x", year="2020"))[0], _jcall(va, "put", site.url + "api/references/francois2026b", dict(type="book", title="x", year="2020"))[0],
+              _jcall(va, "delete", site.url + "api/references/francois2026b")[0], _jcall(va, "post", site.url + "api/references/preview", dict(type="book", title="x", year="2020"))[0]]
+        check(S, "a visitor cannot add, change, delete or preview a reference (401)", st == [401] * 4, str(st))
+
+        # ── create, update, rename, delete ──
+        def add(data): return _jcall(aa, "post", site.url + "api/references", data)
+        cm = dict(type="article", authors=[_P("Collier", "K."), _P("McManus", "J.")], year="2005", container="J", volume="1")
+        st, a1 = add(dict(cm, title="Setting up learning partnerships in vocational education and training: Lessons learnt"))
+        bridging = dict(cm, title="Bridging the gap: The use of learning partnerships to enhance workplace learning")
+        st_ask, ask = add(bridging)                                  # the same authors and year as the first: the author is asked, nothing is saved yet
+        st2, a2 = add(dict(bridging, letters={"collier2005": "b", "collier2005-2": "a"}))      # the author chooses (here, the order of the titles)
+        lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
+        years = {r["id"]: r["yearDisplay"] for r in lst}
+        check(S, "a key is made from the author and the year when none is given", a1.get("id") == "collier2005" and a2.get("id") == "collier2005-2" and st_ask == 409 and [m["id"] for m in ask["needsLetters"][0]["members"]] == ["collier2005", "collier2005-2"], f"{a1} {a2} {st_ask}")
+        check(S, "two works by the same authors in the same year have the letters the author chose (here a and b in the order of their titles, guide 11.08)", years == {"francois2026b": "2026b", "collier2005": "2005b", "collier2005-2": "2005a"}, str(years))
+        check(S, "the list is in alphabetical order of the first author", [r["id"] for r in lst] == ["collier2005-2", "collier2005", "francois2026b"], str([r["id"] for r in lst]))
+        check(S, "a key that is already used is refused (409)", add(dict(cm, title="t", id="collier2005"))[0] == 409)
+        st, _ = _jcall(aa, "put", site.url + "api/references/collier2005", dict(cm, title="Setting up learning partnerships: A new title", id="collier2005"))
+        check(S, "a reference can be changed", st == 200 and "A new title" in [r for r in _jcall(aa, "get", site.url + "api/references")[1]["references"] if r["id"] == "collier2005"][0]["text"])
+        gdir = site.dir / "project" / "grammar"
+        (gdir / "zz_rename.md").write_text("## §8 Rename\n\nSee {{source: collier2005, p. 4}} and {{source: francois2026b; collier2005}}, or {{source: COLLIER2005, narrative}}. Other: {{source: francois2026b}}.\n", encoding="utf-8")
+        st, j = _jcall(aa, "put", site.url + "api/references/collier2005", dict(cm, title="Setting up learning partnerships: A new title", id="collier-mcmanus-b"))
+        txt = (gdir / "zz_rename.md").read_text(encoding="utf-8")
+        check(S, "changing a key updates the citations in the grammar (and only that key)", st == 200 and j.get("updatedGrammarSections") == ["zz_rename"] and "{{source: collier-mcmanus-b, p. 4}}" in txt and "{{source: francois2026b; collier-mcmanus-b}}" in txt and "{{source: collier-mcmanus-b, narrative}}" in txt and "{{source: francois2026b}}" in txt, txt)
+        st, j = _jcall(aa, "put", site.url + "api/references/collier-mcmanus-b", dict(cm, title="t", id="francois2026b"))
+        check(S, "a key cannot be changed to one that is taken (409)", st == 409)
+        lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
+        check(S, "the list says where each reference is cited", {r["id"]: r["citedIn"] for r in lst}["collier-mcmanus-b"] == ["zz_rename"] and {r["id"]: r["citedIn"] for r in lst}["francois2026b"] == ["zz_rename"])
+        st, j = _jcall(aa, "delete", site.url + "api/references/collier-mcmanus-b")
+        check(S, "deleting a cited reference says where it was cited", st == 200 and j.get("citedIn") == ["zz_rename"], str(j))
+        check(S, "deleting a reference that does not exist is a 404", _jcall(aa, "delete", site.url + "api/references/nothing")[0] == 404 and _jcall(aa, "put", site.url + "api/references/nothing", dict(cm, title="t"))[0] == 404)
+        _jcall(aa, "delete", site.url + "api/references/collier2005-2")
+        stored = json.loads((site.dir / "project" / "references.json").read_text(encoding="utf-8"))
+        check(S, "the references are kept in project/references.json, written whole", [r["id"] for r in stored["references"]] == ["francois2026b"] and not list((site.dir / "project").glob("references.json.tmp")))
+
+        # ── {{source: …}} in the grammar ──
+        src = ("## §9 Sources\n\nA page: {{source: francois2026b, p. 128}}. A bare number: {{source: francois2026b, 128}}. A range: {{source: francois2026b, 73-128}}. Narrative: {{source: francois2026b, narrative}}.\n\n"
+               "Unknown: {{source: nobody2000}}. Mixed case: {{source: Francois2026B}}.\n\n| a | b |\n|---|---|\n| {{source: francois2026b}} | x |\n")
+        st, j = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": src})
+        h = j.get("html", "")
+        links = [html_lib.unescape(x) for x in re.findall(r'<a class="source-cite"[^>]*>(.*?)</a>', h)]
+        check(S, "{{source: key}} gives (Author, Year); a page, a bare number and a range give p. 128, p. 128 and pp. 73–128; narrative gives Author (Year)",
+              links[:4] == ["François, 2026b, p. 128", "François, 2026b, p. 128", "François, 2026b, pp. 73–128", "François (2026b)"], str(links))
+        check(S, "the citation links to the reference and carries the whole APA entry for the hover", 'href="references.html#francois2026b"' in h and "Language Science Press" in h and "&lt;em&gt;Negation in the world" in h)
+        check(S, "an unknown key shows an error in place of the citation, and no shortcode is left in the text", "Reference not found: nobody2000" in h and "{{source" not in h)
+        check(S, "keys are not case-sensitive, and a citation works inside a table", links.count("François, 2026b") == 2 and "<td><span" not in h and "<td>(<a" in h, str(links))
+        st, j = _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Smith", "A."), _P("Jones", "B.")], year="2016", title="Two authors", publisher="P", id="smithjones2016"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Black", "A.")], year="2017", title="Black", publisher="P", id="black2017"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Lupin", "R."), _P("Potter", "H."), _P("Weasley", "R.")], year="2018", title="Three", publisher="P", id="lupin2018"))
+        st, j = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": "## §9 Sources\n\n{{source: smithjones2016}} {{source: smithjones2016, narrative}} {{source: lupin2018}} {{source: lupin2018, narrative}} {{source: lupin2018; black2017; francois2026b, p. 3}}\n"})
+        links = [html_lib.unescape(x) for x in re.findall(r'<a class="source-cite"[^>]*>(.*?)</a>', j.get("html", ""))]
+        check(S, "two authors: & in brackets and “and” in the sentence; three or more: et al.; several works: alphabetical, separated by semicolons",
+              links == ["Smith & Jones, 2016", "Smith and Jones (2016)", "Lupin et al., 2018", "Lupin et al. (2018)", "Black, 2017", "François, 2026b, p. 3", "Lupin et al., 2018"], str(links))
+
+        # ── citing by author and year, as one writes it in a text ──
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Miestamo", "Matti")], year="2020", title="Negation", publisher="P", id="miestamo2020"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Alpha first", publisher="P", id="roepoe-a"))
+        _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Roe", "A."), _P("Poe", "B.")], year="2010", title="Beta second", publisher="P", id="roepoe-b", letters={"roepoe-a": "a", "roepoe-b": "b"}))
+        src = ("## §9 Forms\n\nOne {{source: François 2026b}}. Two {{source: François 2026b; Miestamo 2020}}. Three {{source: François 2026b, narrative}}. "
+               "Four {{source: François, 2026b, p. 128}}. Five {{source: Francois 2026}}. Six {{source: Miestamo 2020, narrative, p. 4}}. Seven {{source: Nobody 2000}}. "
+               "Eight {{source: Roe & Poe 2010}}. Nine {{source: Roe & Poe 2010a}}.\n")
+        st, j = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": src})
+        h = j.get("html", ""); plain = html_lib.unescape(re.sub(r"<[^>]+>", "", h))
+        check(S, "the three forms are written as one writes them in a text: (François, 2026b)  (François, 2026b; Miestamo, 2020)  François (2026b)",
+              "One (François, 2026b)." in plain and "Two (François, 2026b; Miestamo, 2020)." in plain and "Three François (2026b)." in plain, plain[plain.find("One"):plain.find("Four")])
+        check(S, "a comma between author and year, a page, no accent and no letter all work", "Four (François, 2026b, p. 128)." in plain and "Five (François, 2026b)." in plain and "Six Miestamo (2020, p. 4)." in plain, plain[plain.find("Four"):plain.find("Seven")])
+        check(S, "the citation by author and year links to the reference, like one made with its key", h.count('href="references.html#francois2026b"') >= 5 and 'href="references.html#miestamo2020"' in h)
+        check(S, "an unknown author and year says so, with what was typed", "Reference not found: Nobody 2000" in h)
+        check(S, "works of the same authors and year are refused when the letter is missing, and the message names the letters; with the letter it works",
+              "Ambiguous reference: Roe &amp; Poe 2010 (2010a, 2010b): add the letter" in h and "Nine (Roe & Poe, 2010a)." in plain, plain[plain.find("Eight"):])
+        lst = {r["id"]: r for r in _jcall(aa, "get", site.url + "api/references")[1]["references"]}
+        check(S, "a citation by author and year counts as cited in the list (and when deleting)", "zz_sources" in lst["francois2026b"]["citedIn"] and lst["miestamo2020"]["citedIn"] == ["zz_sources"], str((lst["francois2026b"]["citedIn"], lst["miestamo2020"]["citedIn"])))
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "LaTeX: the same citations, and the References section lists the works found by author and year", "One (François, 2026b)." in tex and "Two (François, 2026b; Miestamo, 2020)." in tex and "Three François (2026b)." in tex and "Miestamo, M. (2020). \\emph{Negation}." in tex, tex[tex.find("One"):tex.find("One") + 160])
+        for rid in ("miestamo2020", "roepoe-a", "roepoe-b"): _jcall(aa, "delete", site.url + "api/references/" + rid)
+        (gdir / "zz_sources.md").unlink(missing_ok=True)
+
+        # ── hostile input ──
+        evil = dict(type="article", authors=[{"family": "<b>Evil</b>", "given": "<i>x</i>"}], year="2020", title="<img src=x onerror=alert(1)> & \"quotes\" <script>alert(2)</script>", container="J<script>", id="evil2020")
+        st, j = _jcall(aa, "post", site.url + "api/references", evil)
+        lst = _jcall(aa, "get", site.url + "api/references")[1]["references"]
+        e = [r for r in lst if r["id"] == "evil2020"][0]
+        st, g = _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": "## §9\n\n{{source: evil2020}}"})
+        check(S, "HTML typed into a reference is escaped in the list, in the hover text and in the preview", "<img" not in e["html"] and "<script" not in e["html"] and "&lt;img" in e["html"] and "<img" not in g["html"] and "<script" not in g["html"], e["html"][:100])
+        pge = au.new_page(); ee = []; watch(pge, ee)
+        pge.on("dialog", lambda d: ee.append("DIALOG " + d.message))
+        open_page(pge, site, "references.html", ".ref-entry", 800)
+        check(S, "…and nothing runs when the page shows it", not pge.locator(".ref-text img, .ref-text script").count() and not [x for x in ee if "DIALOG" in x or "PAGEERROR" in x], str(ee[:2]))
+        _jcall(aa, "delete", site.url + "api/references/evil2020")
+
+        # ── LaTeX ──
+        (gdir / "zz_rename.md").unlink()
+        st, j = _jcall(aa, "post", site.url + "api/references", dict(type="book", authors=[_P("Fish & Chips", "A.")], year="2001", title="100% of C_x # costs", publisher="R&D Press", id="fish2001"))
+        _jcall(aa, "post", site.url + "api/grammar/zz_sources", {"source": "## §9 Sources\n\nOne {{source: francois2026b, p. 128}} and {{source: fish2001}} and {{source: smithjones2016, narrative}}.\n"})
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "LaTeX: the citations are written as text, escaped", "One (François, 2026b, p. 128) and (Fish \\& Chips, 2001) and Smith and Jones (2016)." in tex, tex[tex.find("One"):tex.find("One") + 120] if "One" in tex else "")
+        refs_part = tex[tex.find("\\section*{References}"):]
+        check(S, "LaTeX: a References section lists the cited works only, in APA style, titles in italics, hanging indent",
+              "\\section*{References}" in tex and "\\hangindent=1.27cm" in refs_part and "\\emph{Negation in the world’s languages III: Papunesia, Australia, and the Americas}" in refs_part
+              and "\\url{https://doi.org/10.5281/zenodo.18234067}" in refs_part and "Smith, A., \\& Jones, B. (2016)" in refs_part and "Black" not in refs_part and "Lupin" not in refs_part, refs_part[:200])
+        check(S, "LaTeX: special characters in a reference are escaped (& % _ #)", "Fish \\& Chips, A. (2001). \\emph{100\\% of C\\_x \\# costs}. R\\&D Press." in refs_part, refs_part[refs_part.find("Fish"):refs_part.find("Fish") + 120])
+        for fn in ("zz_sources.md",): (gdir / fn).unlink(missing_ok=True)
+        tex2 = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "LaTeX: with no citation in the grammar there is no References section", "\\section*{References}" not in tex2)
+
+        # ── exports ──
+        _jcall(aa, "post", site.url + "api/references", dict(type="dataset", authors=[{"org": "Pew Research Center"}], year="2018", title="American trends panel Wave 26", url="https://example.org/pew", id="pew2018"))
+        bib = va.get(site.url + "api/references/export/bibtex"); enw = va.get(site.url + "api/references/export/endnote")
+        check(S, "a visitor can download both exports, with a file name made from the project", bib.status == 200 and enw.status == 200 and 'filename="gaua-references.bib"' in bib.headers.get("content-disposition", "") and 'filename="gaua-references.enw"' in enw.headers.get("content-disposition", ""), bib.headers.get("content-disposition", ""))
+        try:
+            import bibtexparser
+            lib = bibtexparser.parse_string(bib.text())
+            ent = {e.key: {k: v.value for k, v in e.fields_dict.items()} | {"_type": e.entry_type} for e in lib.entries}
+            check(S, "BibTeX: a real BibTeX parser reads the whole file without a failure", not lib.failed_blocks and len(lib.entries) == len(_jcall(aa, "get", site.url + "api/references")[1]["references"]), str(lib.failed_blocks)[:100])
+            f = ent["francois2026b"]
+            check(S, "BibTeX: the chapter is an @incollection with author, editors, book title, pages (--), the year without its letter, publisher and DOI",
+                  f["_type"] == "incollection" and f["author"] == "François, Alexandre" and f["editor"] == "Miestamo, M. and Veselinova, L." and f["booktitle"].startswith("Negation in the world") and f["pages"] == "73--128"
+                  and f["year"] == "2026" and f["publisher"] == "Language Science Press" and f["doi"] == "10.5281/zenodo.18234067" and f["title"] == "{Negation in Dorig}", str(f)[:200])
+            check(S, "BibTeX: special characters are escaped, an organisation is kept whole in braces", ent["fish2001"]["title"] == "{100\\% of C\\_x \\# costs}" and ent["fish2001"]["author"] == "Fish \\& Chips, A." and ent["pew2018"]["author"] == "{Pew Research Center}" and ent["pew2018"]["_type"] == "misc", str(ent["pew2018"]))
+        except ImportError:
+            check(S, "BibTeX: a real parser (pip install bibtexparser) reads the file", True, "skipped: bibtexparser is not installed")
+        records = [r for r in enw.text().strip().split("\n\n") if r.strip()]
+        fr = [r for r in records if "%F francois2026b" in r][0].split("\n")
+        check(S, "EndNote: one record per reference, separated by blank lines, each starting with its type", len(records) == len(_jcall(aa, "get", site.url + "api/references")[1]["references"]) and all(r.startswith("%0 ") for r in records))
+        check(S, "EndNote: the chapter is a Book Section with author, one line per editor, title, book title, year, pages, publisher and DOI",
+              fr[0] == "%0 Book Section" and "%A François, Alexandre" in fr and "%E Miestamo, M." in fr and "%E Veselinova, L." in fr and "%T Negation in Dorig" in fr and "%D 2026" in fr and "%P 73–128" in fr and "%I Language Science Press" in fr and "%R 10.5281/zenodo.18234067" in fr, str(fr))
+        pew = [r for r in records if "%F pew2018" in r][0].split("\n")
+        check(S, "EndNote: an organisation keeps its name whole (a trailing comma stops EndNote splitting it), a data set is a Dataset", "%0 Dataset" in pew and "%A Pew Research Center," in pew, str(pew))
+        for rid in ("smithjones2016", "black2017", "lupin2018", "fish2001", "pew2018"): _jcall(aa, "delete", site.url + "api/references/" + rid)
+
+        # ── the author's form, in a browser ──
+        pa = au.new_page(); errs = []; watch(pa, errs)
+        open_page(pa, site, "references.html", ".ref-entry", 800)
+        check(S, "the author sees Add, Edit, Delete, the key of each reference and a hint about the shortcode", pa.locator("#ref-add").is_visible() and pa.locator("[data-edit]").first.is_visible() and pa.locator(".ref-key").first.inner_text() == "francois2026b" and "{{source: Smith 2020}}" in pa.locator(".refs-hint").inner_text() and "key" in pa.locator(".refs-hint").inner_text())
+        pa.click("#ref-add"); pa.wait_for_selector("#ref-modal.visible")
+        check(S, "the form opens on a journal article, with the fields of an article only", pa.locator("#rf-container").is_visible() and pa.locator("#rf-issue").is_visible() and not pa.locator("#rf-editors-box").is_visible() and not pa.locator("#rf-level").is_visible())
+        def fill_person(row, fam, giv):
+            pa.locator(f"#rf-authors .rf-person:nth-child({row}) [data-f=family]").fill(fam); pa.locator(f"#rf-authors .rf-person:nth-child({row}) [data-f=given]").fill(giv)
+        fill_person(1, "Roe", "Jane Q."); pa.click("#rf-add-author"); fill_person(2, "Doe", "Richard")
+        pa.fill("#rf-year", "2014"); pa.fill("#rf-title-in", "A study of tests"); pa.fill("#rf-container", "Journal of Tests"); pa.fill("#rf-volume", "3"); pa.fill("#rf-issue", "2"); pa.fill("#rf-pages", "1-9"); pa.fill("#rf-doi", "10.1000/xyz123")
+        pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.includes('Journal of Tests')"); pa.wait_for_timeout(300)
+        check(S, "while the author types, the form shows the reference as it will appear, and how to cite it", pa.inner_text("#rf-prev-ref") == "Roe, J. Q., & Doe, R. (2014). A study of tests. Journal of Tests, 3(2), 1–9. https://doi.org/10.1000/xyz123" and pa.inner_text("#rf-prev-text").replace("\u00a0", " ").split("·")[0].strip() == "(Roe & Doe, 2014)", pa.inner_text("#rf-prev-text"))
+        check(S, "the key is suggested from the first author and the year", pa.input_value("#rf-id") == "roe2014", pa.input_value("#rf-id"))
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-mv="-1"]').click(); pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.startsWith('Doe, R., & Roe')")
+        check(S, "the authors can be moved up and down, and the preview follows", pa.input_value("#rf-id") == "doe2014")
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-mv="-1"]').click(); pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.startsWith('Roe, J. Q., & Doe')")
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-f=org]').check(); pa.fill('#rf-authors .rf-person:nth-child(2) [data-f=family]', "Doe Institute")
+        pa.wait_for_function("document.getElementById('rf-prev-ref').textContent.includes('Doe Institute')")
+        check(S, "an organisation is one name, with no given names", pa.locator('#rf-authors .rf-person:nth-child(2) [data-f=given]').is_disabled() and pa.inner_text("#rf-prev-ref").startswith("Roe, J. Q., & Doe Institute. (2014)"), pa.inner_text("#rf-prev-ref")[:60])
+        pa.locator('#rf-authors .rf-person:nth-child(2) [data-rm]').click()
+        pa.select_option("#rf-type", "chapter"); pa.wait_for_timeout(200)
+        check(S, "choosing another type changes the fields: a chapter asks for the editors and the title of the book", pa.locator("#rf-editors-box").is_visible() and pa.locator('label[data-f="container"] .lbl').inner_text() == "Title of the book" and not pa.locator("#rf-issue").is_visible())
+        pa.select_option("#rf-type", "web"); pa.wait_for_timeout(200)
+        check(S, "…and a web page asks for the website and the date", pa.locator('label[data-f="container"] .lbl').inner_text() == "Name of the website" and pa.locator("#rf-dateText").is_visible() and pa.locator("#rf-accessed").is_visible())
+        pa.select_option("#rf-type", "article")
+        pa.fill("#rf-title-in", ""); pa.click("#rf-save"); pa.wait_for_timeout(700)
+        check(S, "saving without a title shows the reason in the form and keeps it open", "title" in pa.inner_text("#rf-msg") and pa.locator("#ref-modal.visible").count() == 1, pa.inner_text("#rf-msg"))
+        pa.fill("#rf-title-in", "A study of tests"); pa.wait_for_timeout(500); pa.click("#rf-save")
+        pa.wait_for_selector("#roe2014", timeout=8000)
+        check(S, "saving adds the reference to the list, in its alphabetical place", pa.locator(".ref-entry").evaluate_all("els => els.map(e => e.id)") == ["francois2026b", "roe2014"], str(pa.locator(".ref-entry").evaluate_all("els => els.map(e => e.id)")))
+        check(S, "…with its text in APA style", pa.locator("#roe2014 .ref-text").inner_text().strip() == "Roe, J. Q. (2014). A study of tests. Journal of Tests, 3(2), 1–9. https://doi.org/10.1000/xyz123")
+        pa.click('[data-key="roe2014"]'); pa.wait_for_timeout(200)
+        check(S, "clicking a key copies its shortcode", "copied: {{source: roe2014}}" in pa.locator('[data-key="roe2014"]').inner_text())
+        pa.click('[data-edit="roe2014"]'); pa.wait_for_selector("#ref-modal.visible")
+        check(S, "Edit opens the form filled in, with its key", pa.input_value("#rf-title-in") == "A study of tests" and pa.input_value("#rf-container") == "Journal of Tests" and pa.input_value("#rf-pages") == "1-9" and pa.input_value("#rf-id") == "roe2014" and pa.locator("#rf-heading").inner_text() == "Edit the reference")
+        pa.fill("#rf-title-in", "A second study of tests"); pa.click("#rf-save"); pa.wait_for_function("document.querySelector('#roe2014 .ref-text').textContent.includes('A second study')", timeout=8000)
+        check(S, "an edited reference is updated in the list", "A second study of tests" in pa.locator("#roe2014 .ref-text").inner_text())
+        pa.fill("#refs-search", "dorig"); pa.wait_for_timeout(200)
+        shown = pa.locator(".ref-entry").count(); pa.fill("#refs-search", "zzzzz"); pa.wait_for_timeout(200)
+        check(S, "the search box narrows the list, and says when nothing matches", shown == 1 and "Nothing matches" in pa.locator("#refs-list").inner_text() and "shown" in pa.locator("#refs-count").inner_text())
+        pa.fill("#refs-search", ""); pa.wait_for_timeout(200)
+        pa.click('[data-del="roe2014"]'); pa.wait_for_function("!document.getElementById('roe2014')", timeout=8000)
+        check(S, "Delete removes it (after a confirmation)", pa.locator(".ref-entry").count() == 1)
+        open_page(pa, site, "references.html#francois2026b", ".ref-entry", 700)
+        check(S, "a link to references.html#key highlights that reference", pa.evaluate("getComputedStyle(document.getElementById('francois2026b')).backgroundColor") == "rgb(251, 241, 214)")
+        real = [e for e in errs if not ("HTTP 400" in e and e.endswith("/api/references"))]          # the refusal of an empty title is expected
+        check(S, "the form and the list raised no JavaScript or loading error", not real, "; ".join(real[:2]))
+
+        # ── the citation in the grammar page, with its hover ──
+        (gdir / "zz_page.md").write_text("## §9 Sources\n\nThe negator is described by {{source: francois2026b, p. 128}}.\n", encoding="utf-8")
+        pg = au.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "grammar.html", "#sections-container .source-cite", 1500)
+        cite = pg.locator(".source-cite").first
+        cite.scroll_into_view_if_needed(); cite.hover(); pg.wait_for_timeout(300)
+        tip = pg.evaluate("""() => { const d = [...document.querySelectorAll('body > div')].filter(e => getComputedStyle(e).position === 'fixed' && getComputedStyle(e).display !== 'none' && e.textContent.includes('Language Science Press')).pop(); return d ? {text: d.innerText, html: d.innerHTML} : null; }""") or {"text": "", "html": ""}
+        check(S, "in the grammar the citation reads (François, 2026b, p. 128) and, on hover, shows the whole reference with its italics", cite.inner_text() == "François, 2026b, p. 128" and "Negation in Dorig" in tip["text"] and "Language Science Press" in tip["text"] and "<em>" in tip["html"], tip["text"][:60])
+        pg.evaluate("window.scrollTo(0, 0)")
+        pg.evaluate("document.querySelector('.edit-tab.section-edit').click()"); pg.wait_for_selector(".editor-toolbar-btn", timeout=8000)
+        pg.evaluate("[...document.querySelectorAll('.editor-toolbar-btn')].find(b => b.textContent.includes('{{source}}')).click()")
+        check(S, "the grammar editor has a {{source}} button that inserts a citation, and lists it among the shortcodes", "{{source: Author 2020, p. 12}}" in pg.locator("textarea").first.input_value() and "cite a reference" in pg.locator(".shortcode-ref").first.inner_text().lower(), pg.locator("textarea").first.input_value()[-40:])
+        cite.click(); pg.wait_for_url("**/references.html#francois2026b", timeout=8000)
+        check(S, "…and clicking it goes to that reference", pg.url.endswith("references.html#francois2026b"))
+        check(S, "the grammar page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        (gdir / "zz_page.md").unlink()
+
+        # ── narrow screens ──
+        for w in (600, 390, 320):
+            c = new_context(browser, site, w, author=True); p = c.new_page()
+            wide = []
+            for fn in pages:
+                open_page(p, site, fn, None, 500)
+                nav = p.evaluate("(() => { const n = document.querySelector('.topnav'); return n ? n.scrollWidth - n.clientWidth : 0; })()")
+                if nav > 0: wide.append(f"{fn} nav +{nav}px")
+            open_page(p, site, "references.html", ".ref-entry", 500)
+            page_w = p.evaluate("document.documentElement.scrollWidth")
+            p.click("#ref-add"); p.wait_for_selector("#ref-modal.visible"); box = p.locator("#ref-modal .ref-form").bounding_box()
+            check(S, f"at {w}px the top bar of every page fits, the References page does not scroll sideways and its form stays inside the screen", not wide and page_w <= w and box["x"] >= 0 and box["x"] + box["width"] <= w + 1, f"{wide} page {page_w}px form {box}")
+            c.close()
+        pg.context.close(); pa.context.close(); vis.close(); au.close()
+    finally:
+        site.stop()
+
+    # ── a project with no references yet ──
+    site = Site(prepare=lambda d: (d / "project" / "references.json").unlink())
+    try:
+        c = new_context(browser, site, 1280); p = c.new_page(); errs = []; watch(p, errs)
+        open_page(p, site, "references.html", "#refs-list", 700)
+        d = c.request.get(site.url + "api/references").json()
+        check(S, "with no references.json the page says there are none, the API returns an empty list and the exports are empty", "No references yet" in p.locator("#refs-list").inner_text() and d["references"] == [] and c.request.get(site.url + "api/references/export/bibtex").text() == "" and not errs, "; ".join(errs[:2]))
+        a = new_context(browser, site, 1280, author=True)
+        st, j = _jcall(a.request, "post", site.url + "api/references", dict(type="book", authors=[_P("First", "A.")], year="2020", title="The first one", publisher="P"))
+        check(S, "the author can add the first reference to a project that had none (the file is created)", st == 200 and (site.dir / "project" / "references.json").exists() and j.get("id") == "first2020", str(j))
+        c.close(); a.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 10. dictionary suite: entries in the headword language, cognates, senses per language, the Senses list ─────────────────────────
+ALLC = ["num", "drg", "kro", "olr", "lkn"]
+
+def _entry_xml(site, eid):
+    root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+    found = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == eid]
+    return found[0] if found else None
+
+def _entry_by_form(site, code, form):
+    root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+    for e in root.iter("EntréeLexicale"):
+        if any(f.get("langue") == code and (f.text or "") == form for f in e.findall("Lemme/ReprésentationDeForme")):
+            return e
+    return None
+
+def _dict_with_languages(d):
+    """speech: its etymology applies to Dorig and Lakon only; sense 1 is for Dorig, Olrat and Lakon, sense 2 for Nume and Koro.
+    multi: three senses, for Dorig / Dorig and Koro / Koro. knowtoo shares the gloss “know” with the entry know.
+    art already has no Olrat and no Lakon form."""
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
+    sp.find("Étymologie/Étymon").set("langues", "drg lkn")
+    sp.find("Sens").set("langues", "drg olr lkn")
+    sp.append(etree.fromstring('<Sens identifiant="speechⓢ2" langues="num kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">noise, sound</Glose>'
+                               '<Définition><ReprésentationDeTexte langue="eng">noise, sound</ReprésentationDeTexte></Définition><gloss>noise</gloss></Sens>'))
+    dic = root.find(".//Dictionnaire")
+    dic.append(etree.fromstring(
+        '<EntréeLexicale identifiant="multi"><Lemme><ReprésentationDeForme langue="drg">mltdrg</ReprésentationDeForme><ReprésentationDeForme langue="kro">mltkro</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale>'
+        '<Sens identifiant="multiⓢ1" langues="drg"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">alpha</Glose><gloss>alpha</gloss></Sens>'
+        '<Sens identifiant="multiⓢ2" langues="drg kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">beta</Glose><gloss>beta</gloss></Sens>'
+        '<Sens identifiant="multiⓢ3" langues="kro"><NuméroDeSens>3</NuméroDeSens><Glose langue="eng">gamma</Glose><gloss>gamma</gloss></Sens></EntréeLexicale>'))
+    dic.append(etree.fromstring(
+        '<EntréeLexicale identifiant="knowtoo"><Lemme><ReprésentationDeForme langue="drg">knwdrg</ReprésentationDeForme><ReprésentationDeForme langue="kro">knwkro</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>v.tr.</ClasseGrammaticale>'
+        '<Sens identifiant="knowtooⓢ1"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">be aware</Glose><Définition><ReprésentationDeTexte langue="eng">be aware of</ReprésentationDeTexte></Définition><gloss>know</gloss></Sens></EntréeLexicale>'))
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_examples(d):
+    """The user's case: qon (Qōn̄) is afternoon in Dorig, Koro and Lakon, night in Nume, Dorig and Lakon, day in Nume; only the
+    sense afternoon chose the example “Good afternoon” (fieldnotes#0#d01.Road:02). speech has two senses, neither glossed
+    like the word in the paper example; know has a second sense."""
+    _dict_with_languages(d)
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    root.find(".//Dictionnaire").append(etree.fromstring(
+        '<EntréeLexicale identifiant="qon"><Lemme><ReprésentationDeForme langue="num">Qōn̄</ReprésentationDeForme><ReprésentationDeForme langue="drg">Qōn̄</ReprésentationDeForme>'
+        '<ReprésentationDeForme langue="kro">Qōn̄</ReprésentationDeForme><ReprésentationDeForme langue="lkn">Qēn̄</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale><DomaineSémantique>Time</DomaineSémantique><Étymologie><Étymon langues="num drg kro lkn"/></Étymologie>'
+        '<Sens identifiant="qonⓢ1" langues="drg kro lkn"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">afternoon</Glose><gloss>afternoon</gloss><Exemples>{{cite: fieldnotes#0#d01.Road:02}}</Exemples></Sens>'
+        '<Sens identifiant="qonⓢ2" langues="num drg lkn"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">night</Glose><gloss>night</gloss></Sens>'
+        '<Sens identifiant="qonⓢ3" langues="num"><NuméroDeSens>3</NuméroDeSens><Glose langue="eng">day</Glose><gloss>day</gloss></Sens></EntréeLexicale>'))
+    for xml in (
+        '<EntréeLexicale identifiant="spk"><Lemme><ReprésentationDeForme langue="num">spknum</ReprésentationDeForme><ReprésentationDeForme langue="drg">spkdrg</ReprésentationDeForme>'
+        '<ReprésentationDeForme langue="kro">spkkro</ReprésentationDeForme><ReprésentationDeForme langue="olr">spkolr</ReprésentationDeForme><ReprésentationDeForme langue="lkn">spklkn</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale><Étymologie><Étymon langues="drg lkn"><Langue>POc</Langue><Forme>*spk</Forme><Glose langue="eng">voice</Glose></Étymon></Étymologie>'
+        '<Sens identifiant="spkⓢ1" langues="num drg olr lkn"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">speech</Glose><gloss>speech</gloss></Sens>'
+        '<Sens identifiant="spkⓢ2" langues="drg kro"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">noise</Glose><gloss>noise</gloss></Sens></EntréeLexicale>',
+        '<EntréeLexicale identifiant="nos"><Lemme><ReprésentationDeForme langue="drg">nosdrg</ReprésentationDeForme><ReprésentationDeForme langue="num">nosnum</ReprésentationDeForme></Lemme>'
+        '<ClasseGrammaticale>n.</ClasseGrammaticale><Sens identifiant="nosⓢ1" langues="num"><NuméroDeSens>1</NuméroDeSens><Glose langue="eng">only for Nume</Glose></Sens></EntréeLexicale>'):
+        root.find(".//Dictionnaire").append(etree.fromstring(xml))
+    kn = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "know"][0]
+    kn.append(etree.fromstring('<Sens identifiant="knowⓢ2"><NuméroDeSens>2</NuméroDeSens><Glose langue="eng">recognise</Glose><gloss>recognise</gloss></Sens>'))
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_two_groups(d):
+    """speech has two etymons: *qaliŋa- for Dorig and Lakon, *bbb for Nume and Koro."""
+    _dict_with_languages(d)
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
+    sp.find("Étymologie").append(etree.fromstring('<Étymon langues="num kro"><Langue>PNCV</Langue><Forme>*bbb</Forme><Glose langue="eng">other</Glose></Étymon>'))
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_domains(d):
+    """The project names its own grammatical domains (not 'Grammar'): Cognition, and 'function words' in any case or spacing."""
+    _dict_two_groups(d)
+    pj = d / "project" / "project.json"
+    p = json.loads(pj.read_text(encoding="utf-8")); p["grammaticalDomains"] = ["cognition", "FUNCTION WORDS"]
+    pj.write_text(json.dumps(p, ensure_ascii=False, indent=2), encoding="utf-8")
+    pth = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(pth)); root = tree.getroot()
+    [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "properly"][0].find("DomaineSémantique").text = "  Function Words "
+    tree.write(str(pth), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+def _dict_hostile(d):
+    p = d / "project" / "dictionary.xml"
+    tree = etree.parse(str(p)); root = tree.getroot()
+    sp = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "speech"][0]
+    et = sp.find("Étymologie/Étymon")
+    et.find("Forme").text = "<img src=x onerror=alert(1)>"
+    et.find("LienTLOPO").text = "javascript:alert(2)"
+    et.find("LienEtymograph").text = "https://example.org/ok"
+    etree.SubElement(sp.find("Sens"), "gloss").text = "<img src=x onerror=alert(3)>"
+    tree.write(str(p), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+
+_VIEW_JS = """(id) => { const e = document.getElementById(id); if (!e) return null;
+  const t = s => [...e.querySelectorAll(s)].map(x => x.innerText.trim());
+  const abbr = s => [...e.querySelectorAll(s + ' .étiquette_lang')].map(x => x.innerText.trim().toLowerCase());
+  const vis = el => !!el && getComputedStyle(el).display !== 'none';
+  return { etym: t('.etym-form'), pre: t('.etym-pre'), cogLabel: e.querySelectorAll('.cog-label').length, cognates: abbr('.entry-cognates'),
+           others: abbr('.entry-equivs:not(.entry-cognates)'), senses: t('.entry-gloss'), numbers: t('.sense-n'), nosense: e.querySelectorAll('.no-sense').length,
+           hidden: vis(e.querySelector('.entry-hidden-forms')) ? e.querySelector('.entry-hidden-forms').innerText.trim() : '',
+           links: [...e.querySelectorAll('.etym-badge a')].map(a => a.getAttribute('href')), imgs: e.querySelectorAll('.etym-badge img').length }; }"""
+
+def suite_dictionary(browser, args):
+    S = "dictionary"
+    section("dictionary: entries in the headword language, cognates, senses per language, the list of senses")
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    NAME = {l["code"]: l["name"] for l in proj["languages"]}
+    ABBR = {l["code"]: l["abbr"].lower() for l in proj["languages"]}
+    ET = "*[qa]liŋa- 'voice'"
+    CLOSED = "!document.getElementById('entry-modal').classList.contains('visible')"
+
+    def view(page, site, lang_code, eid, extra=""):
+        open_page(page, site, f"dictionary.html?lang={NAME[lang_code]}{extra}", "#dict-content .entry", 500)
+        return page.evaluate(_VIEW_JS, eid)
+
+    def editor(page, site, lang_code, eid):
+        open_page(page, site, f"dictionary.html?lang={NAME[lang_code]}", "#dict-content .entry", 500)
+        page.evaluate(f"openEditEntry('{eid}')"); page.wait_for_selector("#entry-modal.visible"); page.wait_for_timeout(250)
+
+    def rows(page): return page.evaluate("[...document.querySelectorAll('.em-lang-row')].filter(r => getComputedStyle(r).display !== 'none').map(r => r.dataset.lang)")
+    def cog_ticks(page): return page.evaluate("[...document.querySelectorAll('#em-cog-ticks input:checked')].map(c => c.dataset.lang)")
+    def save(page):
+        page.click("#em-submit"); page.wait_for_function(CLOSED, timeout=8000); page.wait_for_timeout(300)
+
+    # ── old data: an etymology for every language lists the others as cognates; an entry with none lists nothing ──
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); page = vis.new_page(); errs = []; watch(page, errs)
+        bad = []
+        for c in ALLC:
+            v = view(page, site, c, "speech")
+            if not (v and v["etym"] == [ET] and v["cogLabel"] == 1 and len(v["cognates"]) == 4 and v["others"] == []): bad.append(c)
+        check(S, "an etymology that names no languages applies to all of them: the other four forms are its cognates", not bad, str(bad))
+        bad = []
+        for c in ALLC:
+            v = view(page, site, c, "know")
+            if v and (v["cogLabel"] or v["cognates"] or v["others"] or v["etym"] or v["hidden"]): bad.append(c)
+        check(S, "an entry with no etymology lists no forms of the other languages (words that merely mean the same are not its parallels), and a visitor is not told about them", not bad, str(bad))
+        check(S, "…and a sense without a language list is shown in every language", all((view(page, site, c, "speech") or {}).get("senses", [""])[0].startswith("speech") for c in ALLC))
+        check(S, "no JavaScript or loading error on old data", not errs, "; ".join(errs[:2]))
+        r = page.evaluate("""() => ({ a: firstLetter('-gēn'), b: firstLetter('=ma'), c: firstLetter('gal'), d: ['-gēn','fa','-ba','gal'].sort(byForm) })""")
+        check(S, "a form beginning with a dash is filed under the first letter after the dash (-gēn under G), and sorted by it", r["a"] == "G" and r["b"] == "M" and r["c"] == "G" and r["d"] == ["-ba", "fa", "gal", "-gēn"], str(r))
+        page.evaluate("document.getElementById('dict-content').insertAdjacentHTML('beforeend','<table class=\"ex-table\"><tr><td class=\"ex-cell\">x</td></tr></table><div class=\"ex-transl\">t</div>')")
+        st = page.evaluate("[getComputedStyle(document.querySelector('.ex-table .ex-cell')).fontStyle, getComputedStyle(document.querySelector('.ex-transl')).fontStyle]")
+        check(S, "in the dictionary's examples the vernacular is in italics and the translation in roman", st == ["italic", "normal"], str(st))
+        vis.close()
+        au = new_context(browser, site, 1280, author=True); pa = au.new_page(); errs = []; watch(pa, errs)
+        v = view(pa, site, "kro", "know")
+        check(S, "the author is told which forms are not shown, with a way to set the cognates", v["hidden"].startswith("Not cognates, so not shown here:") and all(x in v["hidden"] for x in ("Num", "Drg", "Olr", "Lkn")) and "set cognates" in v["hidden"], v["hidden"][:90])
+        pa.locator("#know .hf-set").click(); pa.wait_for_selector("#entry-modal.visible")
+        check(S, "…and that link opens the entry's window", pa.locator("#em-title").inner_text() == "Edit entry")
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the display, language by language ──
+    site = Site(prepare=_dict_with_languages)
+    try:
+        vis = new_context(browser, site, 1280); page = vis.new_page(); errs = []; watch(page, errs)
+        v = view(page, site, "drg", "speech")
+        check(S, "Dorig: the etymology of the Dorig form, then its cognates (Lakon only), and nothing else from the other languages", v["etym"] == [ET] and [x.lower() for x in v["pre"]] == ["poc"] and v["cogLabel"] == 1 and v["cognates"] == [ABBR["lkn"]] and v["others"] == [], str(v))
+        check(S, "Dorig: only the senses ticked for Dorig (sense 1), not numbered when there is one", v["senses"] == ["speech, language, word"] and v["numbers"] == [], str(v["senses"]))
+        v = view(page, site, "lkn", "speech")
+        check(S, "Lakon: the same etymology, with Dorig as its cognate", v["etym"] == [ET] and v["cognates"] == [ABBR["drg"]] and v["others"] == [] and v["senses"] == ["speech, language, word"], str(v))
+        v = view(page, site, "num", "speech")
+        check(S, "Nume: no etymology and no cognates, and the Dorig, Koro, Olrat and Lakon words are not listed as parallels", v["etym"] == [] and v["cogLabel"] == 0 and v["cognates"] == [] and v["others"] == [], str(v))
+        check(S, "Nume: only sense 2 (“noise, sound”), the one ticked for Nume and Koro", v["senses"] == ["noise, sound"], str(v["senses"]))
+        k = view(page, site, "kro", "speech")["senses"]; o = view(page, site, "olr", "speech")
+        check(S, "Koro shows sense 2 and Olrat sense 1, each without the other's", k == ["noise, sound"] and o["senses"] == ["speech, language, word"] and o["etym"] == [] and o["others"] == [], f"{k} / {o['senses']}")
+        d = view(page, site, "drg", "multi"); k = view(page, site, "kro", "multi")
+        check(S, "senses are numbered 1, 2 … among those shown (Koro: stored senses 2 and 3 show as 1 and 2)", d["senses"] == ["alpha", "beta"] and d["numbers"] == ["1", "2"] and k["senses"] == ["beta", "gamma"] and k["numbers"] == ["1", "2"], f"{d} {k}")
+        counts = {}
+        for c in ALLC:
+            open_page(page, site, f"dictionary.html?lang={NAME[c]}", "#dict-content .entry", 400)
+            counts[c] = (page.locator("#dict-content .entry").count(), page.locator("#art").count(), page.locator("#result-bar").inner_text().split()[0])
+        check(S, "a language lists the entries that have a form in it: art (no Olrat, no Lakon form) is not listed under Olrat or Lakon", counts["olr"][1] == 0 and counts["lkn"][1] == 0 and all(counts[c][1] == 1 for c in ("num", "drg", "kro")), str(counts))
+        check(S, "…and the entry count follows (multi and knowtoo have forms in Dorig and Koro only)", [counts[c][0] for c in ALLC] == [8, 10, 10, 7, 7] and [counts[c][2] for c in ALLC] == ["8", "10", "10", "7", "7"], str(counts))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 400); page.fill("#search-input", "noise"); page.wait_for_timeout(500)
+        in_dorig = page.locator("#dict-content .entry").count()
+        open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 400); page.fill("#search-input", "noise"); page.wait_for_timeout(500)
+        in_nume = page.locator("#dict-content .entry").count()
+        check(S, "a word found only in a sense that is not shown for the language does not find the entry there (Dorig: 0, Nume: 1)", (in_dorig, in_nume) == (0, 1), f"{in_dorig}, {in_nume}")
+        open_page(page, site, "dictionary.html?lang=Dorig", "#speech", 400)
+        page.locator(f"#speech .étiquette_lang[data-lang='{NAME['lkn']}'] a").click(); page.wait_for_timeout(600)
+        v = page.evaluate(_VIEW_JS, "speech")
+        check(S, "the badge of a cognate switches to its language, where the entry shows the same etymology", NAME["lkn"] in page.locator("#result-bar").inner_text() and v["etym"] == [ET] and v["cognates"] == [ABBR["drg"]], str(v))
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+
+        # ── the list of senses ──
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 400)
+        labels = [x.strip() for x in page.locator(".sg-label").all_inner_texts()]
+        check(S, "Senses mode lists the senses of the headword language, in alphabetical order (3PL, ART, know … speech)", labels.index("3PL") < labels.index("ART") < labels.index("know") < labels.index("speech, language, word") and "noise" not in labels and {"alpha", "beta"} <= set(labels), str(labels))
+        check(S, "…with its count, and a sense for the headwords that share it (know: two entries)", page.inner_text("#result-bar").startswith(f"{len(labels)} senses") and page.locator(".sense-group", has=page.locator(".sg-label", has_text="know")).locator(".sg-hw").count() == 2)
+        open_page(page, site, "dictionary.html?lang=Nume&mode=senses", ".sense-group", 400)
+        nl = [x.strip() for x in page.locator(".sg-label").all_inner_texts()]
+        check(S, "…and it follows the language: Nume has “noise”, not the Dorig sense", "noise" in nl and "speech, language, word" not in nl and "alpha" not in nl, str(nl))
+        check(S, "the index in the sidebar lists the senses, each linking to its place", sorted(x.strip() for x in page.locator("#hw-index a").all_inner_texts()) == sorted(nl) and page.locator("#hw-index a").first.get_attribute("href").startswith("#sg-"))
+        page.fill("#search-input", "beta"); page.wait_for_timeout(400)
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 400); page.fill("#search-input", "beta"); page.wait_for_timeout(500)
+        check(S, "searching narrows the senses (beta: one sense, with its headword)", [x.strip() for x in page.locator(".sg-label").all_inner_texts()] == ["beta"] and page.locator(".sg-hw").count() == 1)
+        page.fill("#search-input", ""); page.wait_for_timeout(300)
+        page.locator(".sg-hw", has_text="mltdrg").first.click(); page.wait_for_selector("#multi", timeout=6000)
+        check(S, "a headword in the senses list opens its entry (the page goes back to Entries)", page.evaluate("viewMode") == "entries" and page.locator("#multi").count() == 1 and "mode=entries" in page.url)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 400)
+        page.click("#mode-switch [data-mode=senses]"); page.wait_for_selector(".sense-group", timeout=6000)
+        check(S, "the Entries / Senses switch changes the list and the address", "mode=senses" in page.url and page.locator("#dict-content .entry").count() == 0)
+        open_page(page, site, "dictionary.html?lang=Koro", ".sense-group", 400)
+        check(S, "…and the choice is remembered when the page is opened again without it", page.evaluate("viewMode") == "senses" and page.locator(".sense-group").count() > 0)
+        page.click("#mode-switch [data-mode=entries]"); page.wait_for_selector("#dict-content .entry", timeout=6000)
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 400)
+        check(S, "…and so is going back to Entries", page.evaluate("viewMode") == "entries" and page.locator(".sense-group").count() == 0)
+        check(S, "no JavaScript or loading error in the senses list", not errs, "; ".join(errs[:2]))
+        vis.close()
+
+        # ── the server, through the API ──
+        api = new_context(browser, site, 1280, author=False).request
+        ents = {e["id"]: e for e in api.get(site.url + "api/dictionary/entries").json()["entries"]}
+        check(S, "the entries API gives the languages of a restricted sense, and nothing for a free one", ents["speech"]["senses"][1].get("langs") == ["num", "kro"] and "langs" not in ents["know"]["senses"][0], str(ents["speech"]["senses"]))
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        def send(method, path, body): r = getattr(aa, method)(site.url + path, headers=_H, data=json.dumps(body)); return r.status, (r.json() if r.headers.get("content-type", "").startswith("application/json") else {})
+        base = dict(forms={"drg": "zzdrg", "lkn": "zzlkn", "num": "zznum"}, pos="n.", domain="")
+        st, j = send("post", "api/dictionary/entry", dict(base, senses=[{"ref": None, "definition": "one", "shortGloss": "one", "langs": ["drg", "lkn", "xx"]}, {"ref": None, "definition": "two", "shortGloss": "two", "langs": ALLC}, {"ref": None, "definition": "three", "shortGloss": "three", "langs": ["xx"]}],
+                  etyms=[{"ref": None, "lang": "POc", "form": "*aaa", "gloss": "x", "langs": ["drg", "lkn"]}, {"ref": None, "lang": "PNCV", "form": "*bbb", "gloss": "y", "langs": ["num", "drg"]}]))
+        eid = j.get("id"); el = _entry_xml(site, eid)
+        sens = [s.get("langues") for s in el.findall("Sens")]; ets = [(e.findtext("Forme"), e.get("langues")) for e in el.findall("Étymologie/Étymon")]
+        check(S, "the server writes the languages of a sense (unknown codes dropped; all of them, or none valid, means no attribute)", st == 200 and sens == ["drg lkn", None, None], f"{st} {sens}")
+        check(S, "…and of an etymon, keeping an explicit list; a language belongs to one etymon only (the first keeps Dorig)", ets == [("*aaa", "drg lkn"), ("*bbb", "num")], str(ets))
+        before = etree.tostring(el)
+        payload = dict(base, senses=[{"ref": i, "definition": d, "shortGloss": d, "langs": l} for i, (d, l) in enumerate([("one", ["drg", "lkn"]), ("two", ALLC), ("three", ALLC)])])
+        send("put", f"api/dictionary/entry/{eid}", payload)
+        check(S, "saving the same languages again leaves the entry byte for byte as it was (no etymons sent = left alone)", etree.tostring(_entry_xml(site, eid)) == before)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 1, "lang": "PNCV", "form": "*bbb", "gloss": "y2", "langs": ["num", "kro"]}]))
+        ets = [(e.findtext("Forme"), e.findtext("Glose"), e.get("langues")) for e in _entry_xml(site, eid).findall("Étymologie/Étymon")]
+        check(S, "an etymon is edited in place by its position, the others of the list are removed", ets == [("*bbb", "y2", "num kro")], str(ets))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 0, "lang": "", "form": "", "gloss": "", "langs": ["drg", "lkn"]}]))
+        e0 = _entry_xml(site, eid).find("Étymologie/Étymon")
+        check(S, "an etymon may name cognates without a proto-form: it keeps only its languages", e0.get("langues") == "drg lkn" and len(e0) == 0, etree.tostring(e0).decode()[:120])
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 0, "lang": "", "form": "", "gloss": "", "langs": ["drg"]}]))
+        check(S, "…but one language alone, with no proto-form, says nothing and is dropped", _entry_xml(site, eid).find("Étymologie") is None)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etym={"lang": "POc", "form": "*ccc", "gloss": "z"}))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[{"ref": 0, "lang": "POc", "form": "*ccc", "gloss": "z", "langs": ["num", "kro"]}]))
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etym={"lang": "POc", "form": "*ddd", "gloss": "z"}))
+        e1 = _entry_xml(site, eid).find("Étymologie/Étymon")
+        check(S, "an older caller that sends one etymology rewrites the first etymon and keeps its languages", e1.findtext("Forme") == "*ddd" and e1.get("langues") == "num kro" and len(_entry_xml(site, eid).findall("Étymologie/Étymon")) == 1)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, etyms=[]))
+        check(S, "an empty list removes the etymology", _entry_xml(site, eid).find("Étymologie") is None)
+        send("delete", f"api/dictionary/entry/{eid}", {})
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the author's window: the headword and its cognates ──
+    site = Site()
+    try:
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
+        editor(page, site, "drg", "speech")
+        check(S, "the window opens on the headword (Dorig) with a row for it and one for each cognate (an etymology for all languages: four)", sorted(rows(page)) == sorted(NAME.values()), str(rows(page)))
+        check(S, "the cognates are ticked, the headword language is not offered as a cognate", sorted(cog_ticks(page)) == sorted(n for n in NAME.values() if n != NAME["drg"]) and page.locator('#em-cog-ticks input[data-lang="Dorig"]').count() == 0)
+        check(S, "…and the proto-form of the etymology is there, the section open", page.locator('#em-etym-box [data-ef="form"]').input_value() == "*[qa]liŋa-" and page.locator("#em-etym-box").evaluate("e => e.open"))
+        page.fill('#em-etym-box [data-ef="tlopo"]', "https://tlopo.example/changed"); save(page)
+        et = _entry_xml(site, "speech").find("Étymologie/Étymon")
+        check(S, "changing only a link of an old etymology does not give it a language list", et.get("langues") is None and et.findtext("LienTLOPO") == "https://tlopo.example/changed")
+        editor(page, site, "drg", "speech")
+        for l in ("Nume", "Koro", "Olrat"): page.locator(f'#em-cog-ticks input[data-lang="{l}"]').uncheck()
+        check(S, "unticking a language removes its row from the window and lists its form in a note", rows(page) == [NAME["drg"], NAME["lkn"]] and all(x in page.inner_text("#em-others") for x in ("luwluw", "valvalaw", "ususraa")), page.inner_text("#em-others")[:100])
+        save(page)
+        sp = _entry_xml(site, "speech")
+        forms = {f.get("langue"): f.text for f in sp.findall("Lemme/ReprésentationDeForme")}
+        check(S, "unticking writes the languages of the cognates, and no form is lost: the Nume, Koro and Olrat forms are still in the entry", sp.find("Étymologie/Étymon").get("langues") == "drg lkn" and all(forms.get(c) for c in ALLC), str(forms))
+        check(S, "…so Dorig shows its cognate (Lakon) and not the others, and Nume still has its own entry-headword with no etymology",
+              view(page, site, "drg", "speech")["cognates"] == [ABBR["lkn"]] and view(page, site, "drg", "speech")["others"] == [] and view(page, site, "num", "speech")["etym"] == [] and view(page, site, "num", "speech")["senses"] != [])
+        # an entry that never declared its cognates
+        editor(page, site, "kro", "know")
+        check(S, "an entry with no etymology: only the headword row, no cognate ticked, and the other forms listed as not shown", rows(page) == [NAME["kro"]] and cog_ticks(page) == [] and all(x in page.inner_text("#em-others") for x in ("Nume", "Dorig", "Olrat", "Lakon")), page.inner_text("#em-others")[:110])
+        before = etree.tostring(_entry_xml(site, "know"))
+        page.locator('#em-cog-ticks input[data-lang="Olrat"]').check(); page.fill("#ef-olr", ""); page.click("#em-submit"); page.wait_for_timeout(500)
+        check(S, "a cognate ticked without its form is refused, with the reason, and nothing is written", "Write the Olrat form of the cognate, or untick Olrat." in page.inner_text("#em-msg") and etree.tostring(_entry_xml(site, "know")) == before, page.inner_text("#em-msg"))
+        page.locator('#em-cog-ticks input[data-lang="Olrat"]').uncheck()
+        page.locator('#em-cog-ticks input[data-lang="Dorig"]').check()
+        check(S, "ticking a language shows its row, filled with the form the entry already has", rows(page) == [NAME["drg"], NAME["kro"]] and page.input_value("#ef-drg") != "")
+        save(page)
+        e = _entry_xml(site, "know").find("Étymologie/Étymon")
+        check(S, "cognates without a proto-form are saved as an etymon with only its languages", e is not None and e.get("langues") == "drg kro" and len(e) == 0, etree.tostring(e).decode()[:120] if e is not None else "no etymon")
+        vk, vd = view(page, site, "kro", "know"), view(page, site, "drg", "know")
+        check(S, "…and each of the two languages lists the other as its cognate, with no etymology badge", vk["cognates"] == [ABBR["drg"]] and vd["cognates"] == [ABBR["kro"]] and vk["etym"] == [] and vk["others"] == [], f"{vk['cognates']} {vd['cognates']}")
+        editor(page, site, "kro", "know"); page.click("#em-etym-box summary"); page.fill('#em-etym-box [data-ef="form"]', "*kno"); page.fill('#em-etym-box [data-ef="gloss"]', "to know"); save(page)
+        e = _entry_xml(site, "know").find("Étymologie/Étymon")
+        check(S, "a proto-form typed later goes to the same etymon, which keeps its languages", e.findtext("Forme") == "*kno" and e.get("langues") == "drg kro" and len(_entry_xml(site, "know").findall("Étymologie/Étymon")) == 1)
+        # senses: the language ticks
+        editor(page, site, "drg", "know")
+        ticks = lambda sel: page.evaluate("(sel) => [...document.querySelectorAll(sel + ' input[type=checkbox]')].filter(c => c.checked).map(c => c.dataset.lang)", sel)
+        check(S, "the window offers, for each sense, a tick per language of the project (all ticked for an old sense)", len(page.locator(".em-sense .em-lang-tick").all()) == 5 and ticks(".em-sense") == list(NAME.values()))
+        before = etree.tostring(_entry_xml(site, "know"))
+        for l in NAME.values(): page.locator(f'.em-sense input[data-lang="{l}"]').uncheck()
+        page.click("#em-submit"); page.wait_for_timeout(500)
+        check(S, "a sense with no language ticked is refused, with the reason, and nothing is written", "Tick at least one language for sense 1" in page.inner_text("#em-msg") and etree.tostring(_entry_xml(site, "know")) == before)
+        page.locator('.em-sense input[data-lang="Koro"]').check(); page.locator('.em-sense input[data-lang="Olrat"]').check(); save(page)
+        check(S, "ticking some languages for a sense saves them", _entry_xml(site, "know").find("Sens").get("langues") == "kro olr")
+        v = view(page, site, "drg", "know")
+        check(S, "…in Dorig the entry is still listed (it has a Dorig form) but says it has no sense there", v["nosense"] == 1 and v["senses"] == ["No sense for Dorig yet."], str(v["senses"]))
+        # adding entries
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 500)
+        page.click("#add-entry-btn"); page.wait_for_selector("#entry-modal.visible")
+        check(S, "a new entry starts from the headword language being viewed, offers the other languages as cognates and asks for no parallels", page.input_value("#em-hw-lang") == NAME["kro"] and rows(page) == [NAME["kro"]] and cog_ticks(page) == [])
+        page.click("#em-submit"); page.wait_for_timeout(400)
+        check(S, "…and the headword is required", f"Please write the headword ({NAME['kro']})." in page.inner_text("#em-msg"))
+        page.fill("#ef-kro", "zzkoro"); page.locator('#em-cog-ticks input[data-lang="Dorig"]').check(); page.fill("#ef-drg", "zzdorig")
+        page.locator(".em-sense textarea").first.fill("a new word"); save(page)
+        ne = _entry_by_form(site, "kro", "zzkoro")
+        check(S, "a new entry with a headword and one cognate is saved as one entry whose etymon names the two languages", ne is not None and ne.find("Étymologie/Étymon").get("langues") == "drg kro" and {f.get("langue") for f in ne.findall("Lemme/ReprésentationDeForme")} == {"kro", "drg"})
+        check(S, "…and both languages list it, each with the other as cognate", view(page, site, "kro", ne.get("identifiant"))["cognates"] == [ABBR["drg"]] and view(page, site, "drg", ne.get("identifiant"))["cognates"] == [ABBR["kro"]])
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 500)
+        page.click("#add-entry-btn"); page.wait_for_selector("#entry-modal.visible"); page.select_option("#em-hw-lang", "Nume")
+        check(S, "choosing another headword language for a new entry moves the headword row to it", rows(page) == [NAME["num"]])
+        page.fill("#ef-num", "zznume"); page.locator(".em-sense textarea").first.fill("only in Nume"); save(page); page.wait_for_timeout(700)
+        check(S, "a new entry that has no form in the language being viewed: the page moves to a language where it exists, and a reload stays there", NAME["num"] in page.locator("#result-bar").inner_text() and page.locator("#zznume").count() == 1 and "lang=Nume" in page.url, page.url)
+        check(S, "the window and the list raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── two etymologies in one entry: a language belongs to one ──
+    site = Site(prepare=_dict_two_groups)
+    try:
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
+        editor(page, site, "drg", "speech")
+        check(S, "the window of Dorig shows the Dorig group only: its cognate (Lakon) and its proto-form, not the other etymology", rows(page) == [NAME["drg"], NAME["lkn"]] and cog_ticks(page) == [NAME["lkn"]] and page.locator('#em-etym-box [data-ef="form"]').input_value() == "*[qa]liŋa-")
+        page.locator('#em-cog-ticks input[data-lang="Koro"]').check()
+        check(S, "ticking Koro, which belongs to the other etymology, takes it from there", rows(page) == [NAME["drg"], NAME["kro"], NAME["lkn"]])
+        save(page)
+        ets = [(e.findtext("Forme"), e.get("langues")) for e in _entry_xml(site, "speech").findall("Étymologie/Étymon")]
+        check(S, "the other etymology is kept for its other language, the Dorig one has Koro", ets == [("*[qa]liŋa-", "drg kro lkn"), ("*bbb", "num")], str(ets))
+        n, k = view(page, site, "num", "speech"), view(page, site, "kro", "speech")
+        check(S, "Nume shows its etymology (now with no cognates); Koro shows the Dorig one with Dorig and Lakon as cognates", n["etym"] == ["*bbb 'other'"] and n["cognates"] == [] and k["etym"] == [ET] and k["cognates"] == [ABBR["drg"], ABBR["lkn"]], f"{n['etym']} {n['cognates']} {k['etym']} {k['cognates']}")
+        check(S, "the window raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the chips of the grammar: cognates for lexical material, every form for grammatical material ──
+    def chips(aa, site, ids):
+        src = "## §9 Chips\n\n" + "\n\n".join("{{entry: %s}}" % i for i in ids) + "\n"
+        r = aa.post(site.url + "api/grammar/zz_chips", headers=_H, data=json.dumps({"source": src}))
+        out = {}
+        for m in re.finditer(r'<a href="dictionary\.html#([^"]+)" class="entry-chip".*?</a>', r.json().get("html", ""), re.S):
+            out[m.group(1)] = [html_lib.unescape(x) for x in re.findall(r'class="chip-form"[^>]*>([^<]*)<', m.group(0))]
+        return out
+    def forms_of(site, eid, codes):
+        got = {f.get("langue"): (f.text or "").strip() for f in _entry_xml(site, eid).findall("Lemme/ReprésentationDeForme")}
+        return [got.get(c) or "—" for c in codes]
+    def latex_langs(aa, site, n):
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        groups = re.findall(r"\\textit\{[^}]*\} \[([^\]]*)\]", tex)[-n:]
+        return [re.findall(r"(\w+)\.~", g) for g in groups]
+    ids = ["speech", "know", "nondum1", "art", "properly", "3pl"]
+    for label, prep, expect in (
+        ("default domain", _dict_two_groups, {"speech": ["num", "drg", "kro", "lkn"], "know": ["kro"], "properly": ["kro"], "nondum1": ALLC, "art": ALLC, "3pl": ALLC}),
+        ("the project's own domains", _dict_domains, {"speech": ["num", "drg", "kro", "lkn"], "know": ALLC, "properly": ALLC, "nondum1": ["kro"], "art": ["kro"], "3pl": ["kro"]})):
+        site = Site(prepare=prep)
+        try:
+            au = new_context(browser, site, 1280, author=True); aa = au.request
+            got = chips(aa, site, ids)
+            bad = [i for i in ids if got.get(i) != forms_of(site, i, expect[i])]
+            check(S, f"{label}: a chip shows every form of grammatical material, the cognates of lexical material (the union of its etymons), or the headword language's form when none is named",
+                  not bad, "; ".join(f"{i}: {got.get(i)} vs {forms_of(site, i, expect[i])}" for i in bad[:2]))
+            abbr = {l["code"]: l["abbr"] for l in proj["languages"]}
+            lx = latex_langs(aa, site, len(ids))
+            check(S, f"{label}: the LaTeX export lists the same forms (a language with no form is left out there)",
+                  [x for x in lx] == [[abbr[c] for c in expect[i] if forms_of(site, i, [c])[0] != "—"] for i in ids], str(lx[:3]))
+            aa.delete(site.url + "api/grammar/zz_chips")
+            au.close()
+        finally:
+            site.stop()
+    site = Site()
+    try:
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        got = chips(aa, site, ["speech"])
+        check(S, "an etymology that names no languages (older data) covers all of them: its chip shows every form", got["speech"] == forms_of(site, "speech", ALLC))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the list of senses is as informative as the list of entries ──
+    ENTRY_JS = """() => [...document.querySelectorAll('#dict-content .entry')].map(e => ({ id: e.id,
+        hw: e.querySelector('.entry-headword')?.innerText.trim(), pos: e.querySelector('.entry-pos')?.innerText.trim(), domain: e.querySelector('.entry-domain')?.innerText.trim(),
+        ipa: e.querySelector('.ipa-wrap')?.innerText.trim() || '', etym: [...e.querySelectorAll('.etym-form')].map(x => x.innerText.trim()),
+        cog: [...e.querySelectorAll('.entry-cognates .étiquette_lang')].map(x => x.innerText.trim()), defs: [...e.querySelectorAll('.entry-gloss')].map(x => x.innerText.trim()),
+        notes: [...e.querySelectorAll('.entry-notes')].map(x => x.innerText.trim()).filter(Boolean), examples: e.querySelectorAll('.entry-example-block').length,
+        senses: e.querySelectorAll('.sense, .entry-gloss').length }))"""
+    ITEM_JS = """() => [...document.querySelectorAll('#dict-content .sg-item')].map(e => ({ id: e.dataset.entry, group: e.closest('.sense-group').querySelector('.sg-label').innerText.trim(),
+        hw: e.querySelector('.sg-hw')?.innerText.trim(), pos: e.querySelector('.entry-pos')?.innerText.trim(), domain: e.querySelector('.entry-domain')?.innerText.trim(),
+        ipa: e.querySelector('.ipa-wrap')?.innerText.trim() || '', etym: [...e.querySelectorAll('.etym-form')].map(x => x.innerText.trim()),
+        cog: [...e.querySelectorAll('.entry-cognates .étiquette_lang')].map(x => x.innerText.trim()), defs: [...e.querySelectorAll('.entry-gloss')].map(x => x.innerText.trim()),
+        notes: [...e.querySelectorAll('.entry-notes')].map(x => x.innerText.trim()).filter(Boolean), examples: e.querySelectorAll('.entry-example-block').length }))"""
+    site = Site(prepare=_dict_with_languages)
+    try:
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs); aa = au.request
+        open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        page.locator(".gloss-badge").first.click(); page.wait_for_timeout(1500)
+        ex = aa.get(site.url + "api/dictionary/examples").json()
+        check(S, "(set-up) the paper example is now attested for entries of the dictionary", all(ex.get(k) for k in ("speech", "know", "properly")), str(sorted(k for k, v in ex.items() if v)))
+        for code in ("drg", "kro", "num"):
+            open_page(page, site, f"dictionary.html?lang={NAME[code]}", "#dict-content .entry", 800)
+            entries = {e["id"]: e for e in page.evaluate(ENTRY_JS)}
+            open_page(page, site, f"dictionary.html?lang={NAME[code]}&mode=senses", ".sense-group", 800)
+            items = page.evaluate(ITEM_JS)
+            bad = []
+            for eid, e in entries.items():
+                mine = [i for i in items if i["id"] == eid]
+                if not mine:
+                    if e["defs"] and e["defs"] != ["No sense for %s yet." % NAME[code]]: bad.append(f"{eid}: no item")
+                    continue
+                for i in mine:
+                    for k in ("hw", "pos", "domain", "ipa", "etym", "cog"):
+                        if i[k] != e[k]: bad.append(f"{eid}.{k}: {i[k]!r} vs {e[k]!r}")
+                if sorted(d for i in mine for d in i["defs"]) != sorted(d for d in e["defs"] if d != "No sense for %s yet." % NAME[code]): bad.append(f"{eid}: definitions")
+                if sorted(n for i in mine for n in i["notes"]) != sorted(e["notes"]): bad.append(f"{eid}: notes")
+                if len(mine) == 1 and sum(i["examples"] for i in mine) != e["examples"]: bad.append(f"{eid}: examples {sum(i['examples'] for i in mine)} vs {e['examples']}")
+            with_ex = sum(1 for e in entries.values() if e["examples"])
+            check(S, f"{NAME[code]}: each sense in the list of senses says what its entry says: headword, IPA, part of speech, domain, definition, etymology, cognates, notes and the same examples", not bad and with_ex >= 3, f"{bad[:3]} (entries with examples: {with_ex})")
+        # the case of the user: Dorig, speech
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
+        g = page.locator(".sense-group", has=page.locator(".sg-label", has_text="speech, language, word")).first
+        it = g.locator(".sg-item").first
+        check(S, "the sense “speech, language, word” in Dorig shows its headword (a link), part of speech, definition, the etymology and the cognates", it.locator(".sg-hw").count() == 1 and it.locator(".entry-pos").inner_text().strip().lower() == "n." and it.locator(".entry-gloss").first.inner_text().strip() == "speech, language, word"
+              and it.locator(".etym-form").inner_text().strip() == ET and it.locator(".cog-label").count() == 1 and [x.lower() for x in it.locator(".entry-cognates .étiquette_lang").all_inner_texts()] == [ABBR["lkn"]], it.inner_text()[:120])
+        # navigation from inside the list of senses
+        it.locator(f".étiquette_lang[data-lang='{NAME['lkn']}'] a").click(); page.wait_for_timeout(700)
+        check(S, "a cognate badge in the list of senses switches the language and stays in that list", page.evaluate("viewMode") == "senses" and NAME["lkn"] in page.locator("#result-bar").inner_text() and page.locator(".sg-item[data-entry='speech']").count() == 1)
+        open_page(page, site, "dictionary.html?lang=Koro&mode=senses", ".sense-group", 800)
+        lex = page.locator(".sg-item a.lexlink:visible").first
+        target = lex.get_attribute("data-dict-id") or (lex.get_attribute("href") or "")[1:]
+        lex.click(); page.wait_for_timeout(700)
+        check(S, "a word link inside an example in the list of senses works, without leaving the list", page.evaluate("viewMode") == "senses" and page.locator(".sense-group").count() > 0 and bool(target), target)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 500)
+        page.click("#mode-switch [data-mode=senses]"); page.wait_for_selector(".sense-group", timeout=6000)
+        page.locator(".sg-hw").first.click(); page.wait_for_selector("#dict-content .entry", timeout=6000)
+        open_page(page, site, "dictionary.html?lang=Koro", ".sense-group, #dict-content .entry", 500)
+        check(S, "opening an entry from the list of senses does not change the list you chose: it is still the list of senses next time", page.evaluate("viewMode") == "senses")
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the examples of a sense: chosen by the author, never shown under another sense ──
+    EX_SENSES = """(id) => { const e = document.getElementById(id); if (!e) return null;
+      const per = [...e.querySelectorAll('.sense')].map(s => [(s.querySelector('.sense-gloss') || {innerText: ''}).innerText.trim(), s.querySelectorAll('.entry-example-block').length]);
+      return { per, total: e.querySelectorAll('.entry-example-block').length, other: e.querySelectorAll('.other-examples-label').length,
+               hint: [...e.querySelectorAll('.entry-hidden-forms')].filter(x => getComputedStyle(x).display !== 'none').map(x => x.innerText.trim()) }; }"""
+    site = Site(prepare=_dict_examples)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request; page = vis.new_page(); errs = []; watch(page, errs)
+        ce = va.get(site.url + "api/dictionary/cited-examples").json()
+        one = (ce.get("qon|0") or {}).get("examples") or [{}]
+        check(S, "the server resolves a {{cite: fieldnotes#0#d01.Road:02}} to the example, with the columns that hold the entry's word marked",
+              one[0].get("type") == "fieldnotes" and one[0].get("sentence_id") == "d01.Road:02" and one[0].get("tokens", {}).get("drg", [""])[0] == "Qōn̄" and one[0].get("match_cols") == [0] and "qon|1" not in ce, str(one[0])[:160])
+        for code, want in (("drg", [("afternoon", 1), ("night", 0)]), ("lkn", [("afternoon", 1), ("night", 0)])):
+            open_page(page, site, f"dictionary.html?lang={NAME[code]}", "#dict-content .entry", 500)
+            v = page.evaluate(EX_SENSES, "qon")
+            check(S, f"{NAME[code]}: “Good afternoon” is shown under the sense afternoon only, not under night", [tuple(x) for x in v["per"]] == want and v["total"] == 1, str(v))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 500); v = page.evaluate(EX_SENSES, "qon")
+        check(S, "Koro (where afternoon is the only sense): the example is shown", v["total"] == 1 and v["per"] == [], str(v))
+        open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 500); v = page.evaluate(EX_SENSES, "qon")
+        check(S, "Nume (night, day): no example, because none was chosen for those senses", v["total"] == 0 and [tuple(x) for x in v["per"]] == [("night", 0), ("day", 0)], str(v))
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 500)
+        grp = {g.locator(".sg-label").inner_text().strip(): g for g in page.locator(".sense-group").all()}
+        check(S, "the list of senses agrees: the example is under afternoon, not under night", grp["afternoon"].locator(".entry-example-block").count() == 1 and grp["night"].locator(".entry-example-block").count() == 0)
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        vis.close()
+
+        # ── the forms that are not cognates are told under the sense they are parallels for ──
+        ab = {l["code"]: l["abbr"] for l in proj["languages"]}
+        au2 = new_context(browser, site, 1280, author=True); pa = au2.new_page(); errs2 = []; watch(pa, errs2)
+        HID = """(id) => { const e = document.getElementById(id); if (!e) return null;
+          const norm = x => x.innerText.replace(/\\s+/g, ' ').trim();
+          return { perSense: [...e.querySelectorAll('.sense')].map(s => [(s.querySelector('.sense-gloss') || {innerText: ''}).innerText.trim(), [...s.querySelectorAll('.entry-hidden-forms')].map(norm)]),
+                   all: [...e.querySelectorAll('.entry-hidden-forms')].filter(x => getComputedStyle(x).display !== 'none').map(norm),
+                   entryLevel: [...e.children].filter(c => c.classList.contains('entry-hidden-forms') && c.innerText.includes('Not cognates')).length }; }"""
+        open_page(pa, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        h = pa.evaluate(HID, "spk")
+        tail = " ✎ set cognates"
+        check(S, "the author sees, under each sense, the forms of the languages that sense applies to and that are not cognates (speech: Nume and Olrat; noise: Koro), and none on the entry as a whole",
+              h["perSense"] == [["speech", [f"Not cognates, so not shown here: {ab['num']} spknum · {ab['olr']} spkolr{tail}"]], ["noise", [f"Not cognates, so not shown here: {ab['kro']} spkkro{tail}"]]] and h["entryLevel"] == 0, str(h))
+        open_page(pa, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
+        items = {g.locator(".sg-label").inner_text().strip(): g.locator(".entry-hidden-forms").all_inner_texts() for g in pa.locator(".sense-group").all() if g.locator(".sg-item[data-entry='spk']").count()}
+        check(S, "the list of senses says the same under each sense", [x.replace("\n", " ").strip() for x in items.get("speech", [])] == [f"Not cognates, so not shown here: {ab['num']} spknum · {ab['olr']} spkolr{tail}"] and [x.replace("\n", " ").strip() for x in items.get("noise", [])] == [f"Not cognates, so not shown here: {ab['kro']} spkkro{tail}"], str(items))
+        open_page(pa, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        h = pa.evaluate(HID, "nos")
+        check(S, "an entry with no sense for the language says so, and then lists the forms of the other languages that are not shown", bool(h["all"]) and h["all"][0].startswith(f"Not cognates, so not shown here: {ab['num']} nosnum") and pa.locator("#nos .no-sense").count() == 1, str(h))
+        pa.locator("#spk .hf-set").first.click(); pa.wait_for_selector("#entry-modal.visible")
+        check(S, "“set cognates” opens the entry in the author's window", pa.locator("#em-title").inner_text() == "Edit entry")
+        au2.close()
+        vis2 = new_context(browser, site, 1280); pv = vis2.new_page(); open_page(pv, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        check(S, "a visitor sees none of these lines", pv.evaluate(HID, "spk")["all"] == [])
+        vis2.close()
+
+        au = new_context(browser, site, 1280, author=True); aa = au.request; page = au.new_page(); errs = []; watch(page, errs)
+        def send(method, path, body): r = getattr(aa, method)(site.url + path, headers=_H, data=json.dumps(body)); return r.status, (r.json() if r.headers.get("content-type", "").startswith("application/json") else {})
+        base = dict(forms={"drg": "xxdrg", "kro": "xxkro"}, pos="n.", domain="")
+        st, j = send("post", "api/dictionary/entry", dict(base, senses=[{"ref": None, "definition": "one", "shortGloss": "one", "examples": "{{cite: fieldnotes#0#d01.Road:02}}\nnot a citation\n{{ cite : fieldnotes#0#d01.Road:02 }}\n{{cite: nonsense}}\n{{cite: papers#negation_example_01}} {{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}\n{{cite: fieldnotes#0#d99.None:1}}"},
+                                                                          {"ref": None, "definition": "two", "shortGloss": "two"}]))
+        eid = j["id"]; sens = _entry_xml(site, eid).findall("Sens")
+        check(S, "the server keeps the citations only: junk and repeated lines are dropped, one {{cite: …}} per line", sens[0].findtext("Exemples") == "{{cite: fieldnotes#0#d01.Road:02}}\n{{cite: papers#negation_example_01}}\n{{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}\n{{cite: fieldnotes#0#d99.None:1}}" and sens[1].find("Exemples") is None, str(sens[0].findtext("Exemples")))
+        ce = aa.get(site.url + "api/dictionary/cited-examples").json()[f"{eid}|0"]
+        kinds = [(x["type"], x["sentence_id"]) for x in ce["examples"]]
+        check(S, "all three kinds of citation resolve (fieldnotes, papers, a recording), and one that does not exist is reported", kinds == [("fieldnotes", "d01.Road:02"), ("papers", "negation_example_01"), ("narrative", "en_fr_Drg_Farfadets_02")] and ce["missing"] == ["fieldnotes#0#d99.None:1"], f"{kinds} {ce['missing']}")
+        before = etree.tostring(_entry_xml(site, eid))
+        payload = dict(base, senses=[{"ref": 0, "definition": "one", "shortGloss": "one", "examples": sens[0].findtext("Exemples")}, {"ref": 1, "definition": "two", "shortGloss": "two", "examples": ""}])
+        send("put", f"api/dictionary/entry/{eid}", payload)
+        check(S, "saving the same examples again leaves the entry byte for byte as it was", etree.tostring(_entry_xml(site, eid)) == before)
+        send("put", f"api/dictionary/entry/{eid}", dict(payload, senses=[dict(payload["senses"][0], examples=""), payload["senses"][1]]))
+        check(S, "an empty list removes the examples of the sense", _entry_xml(site, eid).find("Sens/Exemples") is None)
+        send("delete", f"api/dictionary/entry/{eid}", {})
+
+        # an example begins with its source
+        st, j = send("post", "api/dictionary/entry", dict(forms={"drg": "exsrc", "kro": "exsrc2"}, pos="n.", domain="", senses=[{"ref": None, "definition": "src", "shortGloss": "src", "examples": "{{cite: fieldnotes#0#d01.Road:02}}\n{{cite: papers#negation_example_01}}\n{{cite: crdo-WWO_FARFADETS.xml#en_fr_Drg_Farfadets_02}}"}]))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        srcs = page.locator(f"#{j['id']} .example-source").all_inner_texts(); hrefs = page.locator(f"#{j['id']} .example-source a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
+        check(S, "an example begins with its source, as the sentence is cited: Fieldnotes · title · sentence, and for the published examples and for a recording their title · sentence",
+              srcs[0] == "Fieldnotes · D01 ~ Trigeta i mit long rot · d01.Road:02" and srcs[1] == "Examples from papers · negation_example_01" and srcs[2].endswith(" · en_fr_Drg_Farfadets_02") and len(srcs[2]) > len(" · en_fr_Drg_Farfadets_02"), str(srcs))
+        check(S, "…with no brackets, no label such as “Example · fieldnotes”, and no second line of source below the example", not any("[" in s_ or "]" in s_ or s_.upper().startswith("EXAMPLE ·") for s_ in srcs) and page.locator(f"#{j['id']} .example-label, #{j['id']} .ex-ref").count() == 0)
+        check(S, "…and the source is the link to the sentence in its text", hrefs[0] == "transcription.html?fieldnotes=1&index=0&title=D01%20~%20Trigeta%20i%20mit%20long%20rot#d01.Road%3A02" and hrefs[1].startswith("transcription.html?papers=1&index=0") and hrefs[2].startswith("transcription.html?key=crdo-WWO_FARFADETS.xml"), str(hrefs))
+        send("delete", f"api/dictionary/entry/{j['id']}", {})
+
+        # which attested examples a sense shows when none was chosen
+        open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        page.locator(".gloss-badge").first.click(); page.wait_for_timeout(1500)
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 800)
+        kn, sp, pr = (page.evaluate(EX_SENSES, i) for i in ("know", "speech", "properly"))
+        check(S, "with no choice made, an attested example goes to the sense it is glossed as (know: sense 1, not recognise), and an entry with one sense shows all its examples", kn["per"] == [["know", 1], ["recognise", 0]] and pr["total"] >= 1 and not kn["other"], f"{kn} {pr}")
+        check(S, "an entry's examples are no longer gathered under “Other examples”", all(page.evaluate(EX_SENSES, i)["other"] == 0 for i in ("know", "speech", "qon", "multi", "art")))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        sp = page.evaluate(EX_SENSES, "speech")
+        check(S, "an attested example that matches no sense of its entry is shown under none; the author is told, with a way to choose", sp["total"] == 0 and any("attested example is not shown under any sense" in h for h in sp["hint"]), str(sp))
+        vis = new_context(browser, site, 1280); pv = vis.new_page(); open_page(pv, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800)
+        check(S, "…and a visitor is not told", pv.evaluate(EX_SENSES, "speech")["hint"] == [])
+        vis.close()
+
+        # choosing an example for the sense that the automatic rule leaves without one: it shows in both lists
+        sp_forms = {c: (_entry_xml(site, "speech").find(f'Lemme/ReprésentationDeForme[@langue="{c}"]').text or "") for c in ALLC}
+        send("put", "api/dictionary/entry/speech", dict(forms=sp_forms, pos="n.", domain="Language", senses=[
+            {"ref": 0, "definition": "speech, language, word", "shortGloss": "", "langs": ["drg", "olr", "lkn"], "examples": "{{cite: papers#negation_example_01}}"},
+            {"ref": 1, "definition": "noise, sound", "shortGloss": "noise", "langs": ["num", "kro"], "examples": ""}]))
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 800); e1 = page.evaluate(EX_SENSES, "speech")
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 800)
+        s1 = page.locator(".sense-group", has=page.locator(".sg-label", has_text="speech, language, word")).first.locator(".entry-example-block").count()
+        check(S, "once the author chooses the example for the sense “speech, language, word”, Dorig shows it in the entry and in the list of senses, and the hint is gone", e1["total"] == 1 and s1 == 1 and not any("attested example" in h for h in e1["hint"]), f"{e1} {s1}")
+
+        # the author's window: choosing the examples of a sense
+        editor(page, site, "kro", "know"); page.wait_for_selector(".em-corpus-row")
+        card = page.locator(".em-sense").first
+        check(S, "each sense card has an Examples box, and a button for each example attested for the entry (the paper example)", card.locator('textarea[data-f="examples"]').count() == 1 and card.locator(".em-ex-add").count() >= 1, card.locator(".em-attested").inner_text()[:90] if card.locator(".em-attested").count() else "no picker")
+        page.locator(".em-sense").nth(1).locator('textarea[data-f="examples"]').fill("see the first example")
+        page.click("#em-submit"); page.wait_for_timeout(500)
+        check(S, "a line that is not a citation is refused, with the reason, and nothing is written", "Sense 2" in page.inner_text("#em-msg") and "is not a citation" in page.inner_text("#em-msg") and _entry_xml(site, "know").find("Sens/Exemples") is None, page.inner_text("#em-msg"))
+        page.locator(".em-sense").nth(1).locator('textarea[data-f="examples"]').fill("")
+        key = page.locator(".em-sense").nth(1).locator(".em-corpus-row.other .em-ex-add").first.get_attribute("data-key")
+        page.locator(".em-sense").nth(1).locator(".em-corpus-row.other .em-ex-add").first.click()
+        check(S, "a button adds the example's {{cite: …}} to the sense, and is then disabled", "{{cite: %s}}" % key in page.locator(".em-sense").nth(1).locator('textarea[data-f="examples"]').input_value() and page.locator(".em-sense").nth(1).locator('.em-corpus-row .em-ex-add[data-key="%s"]' % key).is_disabled(), key)
+        save(page)
+        senses = _entry_xml(site, "know").findall("Sens")
+        check(S, "saving writes the choice to the second sense only", senses[0].find("Exemples") is None and senses[1].findtext("Exemples") == "{{cite: %s}}" % key)
+        v = view_ex = None
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 800); v = page.evaluate(EX_SENSES, "know")
+        check(S, "the example now shows under that sense, where the author put it, and no longer under sense 1 (what the author gives to a sense is that sense's)", v["per"] == [["know", 0], ["recognise", 1]], str(v))
+        send("put", "api/dictionary/entry/know", dict(forms={c: (_entry_xml(site, "know").find(f'Lemme/ReprésentationDeForme[@langue="{c}"]').text or "") for c in ALLC}, pos="v.tr.", domain="Cognition",
+                                                      senses=[{"ref": 0, "definition": "know, be familiar with", "shortGloss": "know", "examples": ""}, {"ref": 1, "definition": "recognise", "shortGloss": "recognise", "examples": "{{cite: fieldnotes#0#d99.None:1}}"}]))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 800); v = page.evaluate(EX_SENSES, "know")
+        check(S, "a chosen citation that does not exist shows nothing under its sense, and tells the author", v["per"] == [["know", 1], ["recognise", 0]] and any("Chosen example not found: fieldnotes#0#d99.None:1" in h for h in v["hint"]), str(v["hint"]))
+        check(S, "the window and the lists raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── what the author types is never run ──
+    site = Site(prepare=_dict_hostile)
+    try:
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        v = view(page, site, "drg", "speech")
+        check(S, "an etymology with markup in its form is shown as text; a link that is not http(s) is not made a link, a good one is", v["imgs"] == 1 and page.locator("#speech .etym-badge img[src=x]").count() == 0 and v["links"] == ["https://example.org/ok"] and "<img" in v["etym"][0], str(v["links"]))
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 500)
+        check(S, "…and so is a sense with markup in the senses list", page.locator(".sg-label img, .sense-group img[src='x']").count() == 0 and any("<img" in x for x in page.locator(".sg-label").all_inner_texts()))
+        check(S, "nothing ran", not [e for e in errs if "DIALOG" in e or "PAGEERROR" in e], str(errs[:2]))
+        c.close()
+    finally:
+        site.stop()
+
+    # ── a project with one language: nothing to tick ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        a = new_context(browser, site, 1280); _login(a.request, site, "a-good-password-1"); page = a.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html", "#dict-content .entry", 800)
+        page.evaluate("openEditEntry('house')"); page.wait_for_selector("#entry-modal.visible"); page.click("#em-etym-box summary")
+        page.fill('#em-etym-box [data-ef="form"]', "*one"); page.fill('#em-etym-box [data-ef="gloss"]', "dwelling")
+        check(S, "with one language the window shows no language ticks, no cognates and no headword-language choice", page.locator(".em-lang-tick").count() == 0 and not page.locator("#em-cog").is_visible() and not page.locator(".em-hw-row").is_visible())
+        save(page)
+        root = etree.parse(str(site.dir / "project" / "dictionary.xml")).getroot()
+        et = [e for e in root.iter("EntréeLexicale") if e.get("identifiant") == "house"][0].find("Étymologie/Étymon")
+        check(S, "…and an etymology added there carries no language list, and is shown", et is not None and et.get("langues") is None and page.locator("#house .etym-form").inner_text() == "*one 'dwelling'")
+        page.click("#mode-switch [data-mode=senses]"); page.wait_for_selector(".sense-group", timeout=6000)
+        check(S, "the senses list works for one language too", page.locator(".sense-group").count() >= 1 and page.locator(".sg-hw").count() >= 1)
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); a.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 11. concordance suite: search the texts for a string, with its context ─────────────────────────
+import csv as _csv
+import io as _io
+import unicodedata as _ud
+
+def _plain_fold(s, ignore_diacritics=False):
+    s = _ud.normalize("NFC", s).lower()
+    return "".join(c for c in _ud.normalize("NFD", s) if _ud.category(c) != "Mn") if ignore_diacritics else s
+
+def _fieldnote_lines(site):
+    """The sentences of the questionnaire, read here without the server's code: [(language code, text)]."""
+    root = etree.parse(str(site.dir / "project" / "fieldnotes.xml")).getroot()
+    out = []
+    for rfg in root.iter("rfGroup"):
+        grp = rfg.find("bslGroup") if rfg.find("bslGroup") is not None else rfg.find("frGroup")
+        if grp is None: continue
+        for code in ALLC:
+            text = " ".join(n.text.strip() for n in grp.findall(code) if n.text and n.text.strip())
+            if text and text != "—": out.append((code, text))
+    return out
+
+def _fieldnote_prompts(site):
+    root = etree.parse(str(site.dir / "project" / "fieldnotes.xml")).getroot()
+    out = []
+    for rfg in root.iter("rfGroup"):
+        grp = rfg.find("bslGroup") if rfg.find("bslGroup") is not None else rfg.find("frGroup")
+        if grp is None: continue
+        n = len([c for c in ALLC if " ".join(x.text.strip() for x in grp.findall(c) if x.text and x.text.strip()) not in ("", "—")])
+        out.append(((grp.findtext("bsl") or grp.findtext("fr") or "").strip(), n))
+    return out
+
+_REC = ('<?xml version="1.0" encoding="utf-8"?>\n<TEXT xml:lang="%s" id="%s"><HEADER><TITLE xml:lang="en">%s</TITLE></HEADER>'
+        '<S id="S1"><FORM>%s</FORM><TRANSL xml:lang="en">%s</TRANSL></S></TEXT>')
+
+def suite_concordance(browser, args):
+    S = "concordance"
+    section("concordance: search the texts for a string, with its context")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_concordance.py")], capture_output=True, text=True, timeout=120)
+    last = [l for l in unit.stdout.strip().split("\n") if l][-1] if unit.stdout.strip() else unit.stderr[-200:]
+    check(S, "the concordance engine passes its own direct tests (Unicode, plain strings, words and morphemes, context, glosses)", unit.returncode == 0, last + ("" if unit.returncode == 0 else "\n" + unit.stdout[-500:]))
+    QON = "Qōn̄"
+    LANG_NAMES = [l["name"] for l in json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))["languages"]]
+
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        def get(path, **q):
+            r = va.get(site.url + path + ("?" + urllib.parse.urlencode(q) if q else "")); return r.status, r.json()
+        st, info = get("api/concordance/info")
+        check(S, "the corpus is described: its sentences, words, languages (in the project's order) and sources, which add up", st == 200 and info["lines"] == sum(l["lines"] for l in info["languages"]) == sum(s["lines"] for s in info["sources"]) and [l["code"] for l in info["languages"]][:5] == ALLC and {s["id"] for s in info["sources"]} == {"fieldnotes", "recording", "papers"}, str({k: v for k, v in info.items() if k != "languages"}))
+        lines = _fieldnote_lines(site)
+
+        # ── counts, checked against a plain reading of the XML ──
+        for label, q, extra, want in (
+            ("the string, ignoring case", QON, {}, sum(_plain_fold(t).count(_plain_fold(QON)) for _, t in lines)),
+            ("the string, respecting case", "Qōn̄", {"case": "0"}, sum(_ud.normalize("NFC", t).count(_ud.normalize("NFC", "Qōn̄")) for _, t in lines)),
+            ("without diacritics (qon finds Qōn̄ and qon)", "qon", {"diac": "1"}, sum(_plain_fold(t, True).count("qon") for _, t in lines)),
+            ("with diacritics respected (qon is another word)", "qon", {}, sum(_plain_fold(t).count("qon") for _, t in lines)),
+            ("a string with a dot, read as a dot", "e.", {}, sum(_plain_fold(t).count("e.") for _, t in lines)),
+            ("a bracket", "(", {}, sum(t.count("(") for _, t in lines))):
+            st, r = get("api/concordance", q=q, source="fieldnotes", width=3, **extra)
+            check(S, f"fieldnotes, {label}: the server counts the same occurrences as a plain reading of the XML ({want})", st == 200 and r["total"] == want, f"{r.get('total')} vs {want}")
+        st, r = get("api/concordance", q=QON, source="fieldnotes", width=3)
+        bl = {c: sum(_plain_fold(t).count(_plain_fold(QON)) for cc, t in lines if cc == c) for c in ALLC}
+        check(S, "…and the counts per language agree", {k: v for k, v in r["byLang"].items()} == {k: v for k, v in bl.items() if v}, str(r["byLang"]))
+        st, r = get("api/concordance", q="Gud aftenun", scope="translation", source="fieldnotes")
+        check(S, "the translations can be searched (each prompt counts once per language that has the sentence)", r["total"] == sum(n for p, n in _fieldnote_prompts(site) if _plain_fold(p).count("gud aftenun")) and r["total"] > 0, str(r["total"]))
+
+        # ── a hit ──
+        st, r = get("api/concordance", q=QON, source="fieldnotes", lang="drg", width=3)
+        h = r["hits"][0]
+        check(S, "a hit gives the context, the translation and where the sentence is: Dorig, “Qōn̄ va-wē.”", (h["left"], h["match"], h["right"], h["lang"], h["sid"], h["translation"]) == ("", "Qōn̄", "va-wē.", "drg", "d01.Road:02", "Gud aftenun."), str(h)[:200])
+        check(S, "…and a link to that sentence in its text, which the text viewer lands on", h["link"] == "transcription.html?fieldnotes=1&index=0&title=D01%20~%20Trigeta%20i%20mit%20long%20rot#d01.Road%3A02", h["link"])
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, h["link"], ".tx-phrase, .fn-sentence, [data-sid]", 1500)
+        check(S, "the viewer opens on the sentence named by the link", page.evaluate("!!document.getElementById(decodeURIComponent(location.hash.slice(1)))") or page.locator('[data-sid="d01.Road:02"]').count() > 0)
+        st, r = get("api/concordance", q="wē", source="fieldnotes", lang="drg", width=2)
+        h = [x for x in r["hits"] if x["sid"] == "d01.Road:02"][0]
+        check(S, "a match inside a word touches what is next to it (the wē of va-wē touches the va- and the full stop)", (h["left"], h["match"], h["right"], h["leftAdj"], h["rightAdj"]) == ("Qōn̄ va-", "wē", ".", True, True), str(h))
+        # ── words, morphemes ──
+        c = {m: get("api/concordance", q="wē", source="fieldnotes", match=m)[1]["total"] for m in ("anywhere", "morpheme", "word")}
+        check(S, "whole words are among whole morphemes, which are among all occurrences, and wē alone is rarer than wē in va-wē", c["word"] <= c["morpheme"] <= c["anywhere"] and c["word"] < c["morpheme"], str(c))
+
+        # ── filters, limits and refusals ──
+        st, all_ = get("api/concordance", q=QON)
+        st, drg = get("api/concordance", q=QON, lang="drg"); st, fnr = get("api/concordance", q=QON, source="fieldnotes,papers")
+        check(S, "a language filter and a source filter narrow the hits exactly", drg["total"] == all_["byLang"]["drg"] and fnr["total"] == all_["bySource"].get("fieldnotes", 0) + all_["bySource"].get("papers", 0), f"{drg['total']} {all_['byLang']} {fnr['total']}")
+        st, lim = get("api/concordance", q="a", limit=7)
+        check(S, "a limit shows the first hits and still counts them all", lim["shown"] == 7 and lim["truncated"] and lim["total"] > 7, str((lim["shown"], lim["total"])))
+        bad = {"no query": dict(q=" "), "a long query": dict(q="x" * 201), "a bad scope": dict(q="a", scope="nope"), "a bad match": dict(q="a", match="nope"), "a bad source": dict(q="a", source="nope"), "a bad width": dict(q="a", width="many")}
+        res = {k: get("api/concordance", **v)[0] for k, v in bad.items()}
+        check(S, "a query that cannot be answered is refused with a 400 and a reason", all(v == 400 for v in res.values()) and "characters" in get("api/concordance", q=" ")[1]["error"], str(res))
+        vis.close()
+
+        # ── the corpus is read again when a text changes ──
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        before = aa.get(site.url + "api/concordance?q=zzquuxzz").json()["total"]
+        tdir = site.dir / "project" / "texts"
+        (tdir / "zz_new.xml").write_text(_REC % ("wwo", "zz-new", "A new recording", "zzquuxzz mi tē zzquuxzz", "A unique word, twice."), encoding="utf-8")
+        (tdir / "zz_odd.xml").write_text(_REC % ("zzz", "zz-odd", "A recording in another language", "zzquuxzz in an unlisted language", "Elsewhere."), encoding="utf-8")
+        (tdir / "zz_evil.xml").write_text(_REC % ("wwo", "zz-evil", "Hostile", "&lt;img src=x onerror=alert(1)&gt; zzevilzz", "&lt;b&gt;bold&lt;/b&gt;"), encoding="utf-8")
+        r = aa.get(site.url + "api/concordance?q=zzquuxzz&width=2").json()
+        check(S, "a recording added while the server runs is found at once, in a language the project does not list too", before == 0 and r["total"] == 3 and r["bySource"] == {"recording": 3} and set(r["byLang"]) == {"drg", "zzz"}, str(r["byLang"]))
+        i2 = aa.get(site.url + "api/concordance/info").json()
+        check(S, "…and the languages of the corpus then include it, after the project's own", [l["code"] for l in i2["languages"]][-1] == "zzz" and i2["languages"][-1]["abbr"] == "ZZZ")
+        (tdir / "zz_new.xml").unlink(); (tdir / "zz_odd.xml").unlink()
+        check(S, "…and the hits go when the text goes", aa.get(site.url + "api/concordance?q=zzquuxzz").json()["total"] == 0)
+
+        # ── glosses and the dictionary ──
+        pg = au.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        pg.locator(".gloss-badge").first.click(); pg.wait_for_timeout(1500)
+        r = aa.get(site.url + "api/concordance?q=vregel&diac=1&source=papers&lang=drg").json()
+        h = r["hits"][0] if r["hits"] else {}
+        check(S, "a word of a glossed text carries its gloss, and the dictionary entry and part of speech it is", h.get("gloss") == "know" and h.get("entry") == "know" and h.get("pos") == "v.tr.", str(h)[:160])
+        r = aa.get(site.url + "api/concordance?q=NONDUM&scope=glosses&source=papers&lang=drg").json()
+        check(S, "the glosses can be searched, and the hit is a stretch of glosses", r["total"] >= 1 and all("NONDUM" in x["match"] for x in r["hits"]) and r["hits"][0]["sentence"] != "", str(r["hits"][:1])[:150])
+        au.close()
+
+        # ── in the browser ──
+        au = new_context(browser, site, 1280, author=True); page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "texts.html", ".tab-btn", 500)
+        check(S, "the Texts page has a third tab, Search the texts, next to the other two", page.locator(".texts-tabs .tab-link").inner_text().strip().endswith("Search the texts"))
+        page.locator(".texts-tabs .tab-link").click(); page.wait_for_selector("#cc-q", timeout=6000)
+        check(S, "…which opens the search page, with the cursor in the box and the other two tabs still there", page.evaluate("document.activeElement.id") == "cc-q" and page.locator(".texts-tabs a").count() == 3)
+        page.locator('.texts-tabs a[href="texts.html#fieldnotes"]').click(); page.wait_for_selector("#panel-fieldnotes.active", timeout=6000)
+        check(S, "the fieldnotes tab link opens that tab of the Texts page", page.locator("#panel-fieldnotes.active").count() == 1)
+        open_page(page, site, "concordance.html", "#cc-q", 800)
+        check(S, "the page describes the corpus and offers the languages and sources", "sentences" in page.inner_text("#cc-corpus") and page.locator("#cc-lang option").count() >= 6 and [x.split(" (")[0] for x in page.locator("#cc-lang option").all_inner_texts()[1:6]] == LANG_NAMES and page.locator(".cc-src-box").count() == 3)
+        page.fill("#cc-q", QON); page.press("#cc-q", "Enter"); page.wait_for_selector(".cc-hit")
+        want = sum(_plain_fold(t).count(_plain_fold(QON)) for _, t in lines)
+        first = page.locator(".cc-hit").first
+        check(S, "Enter searches: the hits are listed with their language, the match highlighted, the translation and the source", page.locator(".cc-hit").count() >= want and first.locator(".cc-match").inner_text() == QON and first.locator(".cc-lang").inner_text() == "DRG" and "Gud aftenun" in first.locator(".cc-transl").inner_text() and first.locator(".cc-src a").count() == 1)
+        check(S, "…with the number of hits, of sentences and per language", f"hits in" in page.inner_text("#cc-summary") and "Drg" in page.inner_text("#cc-summary"), page.inner_text("#cc-summary"))
+        check(S, "…and the address now says what was searched", "q=" in page.url and "scope=forms" in page.url)
+        n_all = page.locator(".cc-hit").count()
+        page.select_option("#cc-lang", "drg"); page.wait_for_timeout(700)
+        check(S, "choosing a language searches again, in that language only", page.locator(".cc-hit").count() < n_all and set(page.locator(".cc-lang").all_inner_texts()) == {"DRG"})
+        page.select_option("#cc-lang", ""); page.wait_for_timeout(500)
+        page.fill("#cc-q", "qon"); page.press("#cc-q", "Enter"); page.wait_for_timeout(700)
+        n_exact = page.locator(".cc-hit").count(); page.check("#cc-diac"); page.wait_for_timeout(800)
+        check(S, "ignoring diacritics finds more (qon finds Qōn̄)", page.locator(".cc-hit").count() > n_exact)
+        page.uncheck("#cc-diac"); page.fill("#cc-q", "wē"); page.select_option("#cc-match", "word"); page.wait_for_timeout(800); n_word = page.locator(".cc-hit").count()
+        page.select_option("#cc-match", "anywhere"); page.wait_for_timeout(800)
+        check(S, "the match option changes the hits (a whole word finds fewer)", 0 < n_word < page.locator(".cc-hit").count(), f"{n_word}")
+        page.select_option("#cc-sort", "left"); page.wait_for_timeout(300)
+        ordered = page.evaluate("""() => { const rev = s => s.replace('… ', '').split(/\\s+/).filter(Boolean).reverse().join(' ');
+          const a = [...document.querySelectorAll('.cc-left')].map(e => rev(e.textContent));
+          return a.length > 5 && a.some(x => x) && a.every((x, i) => i === 0 || a[i - 1].localeCompare(x, undefined, { sensitivity: 'base' }) <= 0); }""")
+        check(S, "sorting by the word before puts the hits in the order of what precedes the match, read backwards from it", ordered)
+        with page.expect_download() as dl:
+            page.click("#cc-csv")
+        rows = list(_csv.reader(_io.StringIO(Path(dl.value.path()).read_text(encoding="utf-8-sig"))))
+        check(S, "the hits can be downloaded as a CSV file: a header and one row per hit", rows[0][:6] == ["language", "source", "reference", "left", "match", "right"] and len(rows) - 1 == page.locator(".cc-hit").count() and all(len(r) == 12 for r in rows), f"{len(rows) - 1} rows")
+        page.select_option("#cc-scope", "translation"); page.fill("#cc-q", "Gud aftenun"); page.press("#cc-q", "Enter"); page.wait_for_timeout(800)
+        check(S, "searching the translations shows the matched translation, with the sentence below it", page.locator(".cc-match").first.inner_text().lower() == "gud aftenun" and page.locator(".cc-transl .cc-form").count() > 0)
+        page.select_option("#cc-scope", "forms")
+        page.fill("#cc-q", "x" * 250); page.press("#cc-q", "Enter"); page.wait_for_timeout(600)
+        check(S, "a query the server refuses shows its reason, not an empty page", "characters" in page.inner_text("#cc-summary") and page.locator(".cc-hit").count() == 0, page.inner_text("#cc-summary"))
+        page.fill("#cc-q", "zzzzzz"); page.press("#cc-q", "Enter"); page.wait_for_timeout(600)
+        check(S, "…and a search with no hit says so", "No hit" in page.inner_text("#cc-summary") and not page.locator("#cc-tools.visible").count())
+        open_page(page, site, "concordance.html?q=%s&scope=forms&match=anywhere&case=1&diac=0&lang=drg&width=2&sort=right" % urllib.parse.quote(QON), ".cc-hit", 1000)
+        check(S, "an address with a search in it runs the search and sets the controls (a link can be shared)", page.input_value("#cc-q") == QON and page.input_value("#cc-lang") == "drg" and page.input_value("#cc-width") == "2" and page.input_value("#cc-sort") == "right" and page.locator(".cc-hit").count() == drg["total"], str(page.locator(".cc-hit").count()))
+        page.locator(".cc-src a").first.click(); page.wait_for_url("**/transcription.html**", timeout=8000)
+        check(S, "a source link opens the text viewer on that sentence", "#d01.Road" in page.url or "#" in page.url)
+        check(S, "the search page raised no JavaScript or loading error", not [e for e in errs if "400" not in e], "; ".join(errs[:2]))
+        au.close()
+
+        # ── what the texts contain is never run ──
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        open_page(page, site, "concordance.html?q=zzevilzz", ".cc-hit", 1000)
+        check(S, "markup in a text is shown as text: no element is made, nothing runs", page.locator(".cc-hit img, .cc-hit b").count() == 0 and "<img" in page.locator(".cc-left").first.inner_text() and not [e for e in errs if "DIALOG" in e or "PAGEERROR" in e], str(errs[:2]))
+        c.close()
+        (tdir / "zz_evil.xml").unlink()
+
+        # ── narrow screens ──
+        for w in (600, 390, 320):
+            cc = new_context(browser, site, w); p = cc.new_page(); open_page(p, site, "concordance.html?q=%s" % urllib.parse.quote(QON), ".cc-hit", 800)
+            wide = p.evaluate("document.documentElement.scrollWidth")
+            first_h = p.locator(".cc-hit").first.bounding_box()
+            check(S, f"at {w}px the page does not scroll sideways, and a hit reads as one line of text with its source below", wide <= w and first_h["width"] <= w, f"page {wide}px, hit {first_h}")
+            cc.close()
+    finally:
+        site.stop()
+
+    # ── a project with one language ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "concordance.html", "#cc-q", 800)
+        page.fill("#cc-q", "a"); page.press("#cc-q", "Enter"); page.wait_for_selector(".cc-hit", timeout=6000)
+        check(S, "with one language there is no language choice and the summary has no breakdown, but the search works", not page.locator("#cc-lang").is_visible() and "(" not in page.inner_text("#cc-summary").split("sentence")[-1][:3] and page.locator(".cc-hit").count() > 0, page.inner_text("#cc-summary"))
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); c.close()
+    finally:
+        site.stop()
+
+
+
+# ── n-grams and lexical statistics, checked against an independent reading of the XML ──
+_PUNCT = '.,;:!?…"“”«»()[]{}'
+
+def _words_plain(text):
+    """The words of a text, without the program's code: spaces, punctuation stripped at the edges, lower case, NFC."""
+    out = []
+    for w in _ud.normalize("NFC", text).split():
+        w = w.strip(_PUNCT)
+        if w and w != "—": out.append(w.lower())
+    return out
+
+def _plain_ngrams(lines, query, n):
+    q = _words_plain(query); k = len(q); count = {}
+    for _code, text in lines:
+        ws = _words_plain(text)
+        for i in range(len(ws) - n + 1):
+            win = ws[i:i + n]
+            if any(win[j:j + k] == q for j in range(n - k + 1)): count[tuple(win)] = count.get(tuple(win), 0) + 1
+    return count
+
+def _plain_stats(texts):
+    toks = [w for t in texts for w in _words_plain(t)]
+    return len(toks), len(set(toks))
+
+def _fieldnote_group_lines(site, idx):
+    root = etree.parse(str(site.dir / "project" / "fieldnotes.xml")).getroot()
+    out = []
+    for rfg in root.findall(".//tiGroup")[idx].findall("rfGroup"):
+        grp = rfg.find("bslGroup") if rfg.find("bslGroup") is not None else rfg.find("frGroup")
+        if grp is None: continue
+        for code in ALLC:
+            text = " ".join(n.text.strip() for n in grp.findall(code) if n.text and n.text.strip())
+            if text and text != "—": out.append((code, text))
+    return out
+
+def suite_ngrams_and_stats(browser, args):
+    S = "textstats"
+    section("textstats: n-grams of the word typed, and tokens, types, TTR and Root TTR of the texts")
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        def get(path, **q):
+            r = va.get(site.url + path + ("?" + urllib.parse.urlencode(q) if q else "")); return r.status, r.json()
+        lines = _fieldnote_lines(site)
+
+        # ── n-grams ──
+        for q, n in (("tē", 2), ("tē", 3), ("Qōn̄", 3), ("Qōn̄ va", 3), ("na", 4)):
+            st, r = get("api/ngrams", q=q, n=n, source="fieldnotes", limit=2000)
+            want = _plain_ngrams(lines, q, n)
+            got = {tuple(w.lower() for w in g["tokens"]): g["count"] for g in r["grams"]}
+            check(S, f"n-grams: the {n}-grams containing “{q}” and their counts are exactly those of a plain reading of the XML ({len(want)} different, {sum(want.values())} in all)",
+                  st == 200 and got == want and r["distinct"] == len(want) and r["occurrences"] == sum(want.values()), f"{r.get('distinct')} vs {len(want)}")
+        qq = _words_plain("tē")
+        st, r = get("api/ngrams", q="tē", n=3, source="fieldnotes")
+        check(S, "n-grams: the count of the word itself is its number of occurrences", r["queryCount"] == sum(ws.count("tē") for ws in (_words_plain(t) for _, t in lines)), str(r["queryCount"]))
+        grams = r["grams"]
+        check(S, "n-grams: most frequent first, then alphabetical; and each gram says where the word stands in it", [(-g["count"], g["text"].lower()) for g in grams] == sorted((-g["count"], g["text"].lower()) for g in grams) and all(g["tokens"][i].lower() == "tē" for g in grams for i in g["hl"][:1]), str(grams[:2]))
+        st, byl = get("api/ngrams", q="tē", n=3, source="fieldnotes", limit=2000)
+        top = byl["grams"][0]
+        check(S, "n-grams: the counts by language add up, and sentences are counted once", sum(top["byLang"].values()) == top["count"] and top["sentences"] <= top["count"], str(top["byLang"]))
+        for q, n, kw, why in (("tē", 2, {"lang": "lkn"}, "a language"), ("tē", 2, {"source": "papers"}, "a source"), ("tē", 2, {"min": "3"}, "a minimum frequency")):
+            st, r = get("api/ngrams", q=q, n=n, limit=2000, **kw)
+            check(S, f"n-grams: {why} narrows them", st == 200 and (all(set(g["byLang"]) == {"lkn"} for g in r["grams"]) if "lang" in kw else True) and (all(g["count"] >= 3 for g in r["grams"]) if "min" in kw else True) and (r["occurrences"] <= get("api/ngrams", q=q, n=n, limit=2000)[1]["occurrences"]))
+        st, r = get("api/ngrams", q="qon", n=2, source="fieldnotes", diac="1", limit=2000)
+        fold_ = lambda s: "".join(c for c in _ud.normalize("NFD", s) if _ud.category(c) != "Mn")
+        want = {}
+        for _c, t in lines:
+            ws = [fold_(w) for w in _words_plain(t)]
+            for i in range(len(ws) - 1):
+                if "qon" in ws[i:i + 2]: want[tuple(ws[i:i + 2])] = want.get(tuple(ws[i:i + 2]), 0) + 1
+        check(S, "n-grams: with diacritics ignored “qon” finds the grams of Qōn̄ (and counts them like a plain folded reading does)", {tuple(fold_(w.lower()) for w in g["tokens"]): g["count"] for g in r["grams"]} == want and r["occurrences"] > 0, f"{r['occurrences']} vs {sum(want.values())}")
+        refused = {"n too small": dict(q="tē", n=1), "n too large": dict(q="tē", n=9), "n not a number": dict(q="tē", n="x"), "no query": dict(q=" ", n=3), "a query longer than n": dict(q="a b c d", n=3), "a bad unit": dict(q="tē", n=3, unit="x"), "a bad source": dict(q="tē", n=3, source="x")}
+        res = {k: get("api/ngrams", **v)[0] for k, v in refused.items()}
+        check(S, "n-grams: what cannot be answered is refused with a 400", all(v == 400 for v in res.values()), str(res))
+        # the n-gram and the lines agree: a whole-words-in-sequence search finds as many occurrences as the n-gram has
+        st, r = get("api/ngrams", q="tē", n=3, source="fieldnotes", limit=2000)
+        picks = [g for g in r["grams"] if len(set(g["tokens"])) == len(g["tokens"])][:6]
+        ok = all(get("api/concordance", q=g["text"], match="phrase", source="fieldnotes")[1]["total"] == g["count"] for g in picks)
+        check(S, "n-grams and the concordance agree: the “lines →” of an n-gram (whole words in sequence) has exactly as many hits as its count", ok and len(picks) >= 3, str([(g["text"], g["count"]) for g in picks[:3]]))
+        # glosses and morphemes
+        au = new_context(browser, site, 1280, author=True); aa = au.request; pg = au.new_page(); errs = []; watch(pg, errs)
+        open_page(pg, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", ".tx-phrase", 2000)
+        pg.locator(".gloss-badge").first.click(); pg.wait_for_timeout(1500)
+        st, r = get("api/ngrams", q="3PL", n=2, scope="glosses", source="papers")
+        check(S, "n-grams of glosses: the glosses next to a gloss, in the order of the words", st == 200 and r["distinct"] >= 1 and all("3PL" in g["tokens"] for g in r["grams"]), str(r["grams"][:2])[:160])
+        st, r = get("api/ngrams", q="va", n=2, unit="morpheme", source="fieldnotes", limit=2000)
+        check(S, "n-grams of morphemes: va finds the token va-, and a gram is written as the word it is part of (va-wē)", st == 200 and any(g["text"] == "va-wē" for g in r["grams"]) and any(g["text"].endswith("va-") for g in r["grams"]), str([g["text"] for g in r["grams"][:4]]))
+        au.close()
+
+        # ── tokens, types, TTR and Root TTR ──
+        st, s = get("api/texts/stats")
+        fn = s["collections"]["fieldnotes"]
+        want_all = _plain_stats([t for _, t in lines])
+        check(S, "statistics: the fieldnotes as a whole have the tokens and types of a plain reading of the XML", (fn["all"]["tokens"], fn["all"]["types"]) == want_all, f"{fn['all']} vs {want_all}")
+        bad = []
+        for code in ALLC:
+            tk, ty = _plain_stats([t for c, t in lines if c == code]); m = fn["byLang"][code]
+            if (m["tokens"], m["types"]) != (tk, ty) or abs(m["ttr"] - ty / tk) > 6e-5 or abs(m["rttr"] - ty / tk ** 0.5) > 6e-4: bad.append(f"{code}: {m} vs {(tk, ty)}")
+        check(S, "statistics: and so does each language of the fieldnotes, with TTR = types / tokens and Root TTR = types / √tokens", not bad, "; ".join(bad[:2]))
+        g0 = s["texts"]["fieldnotes:0"]; tk, ty = _plain_stats([t for _, t in _fieldnote_group_lines(site, 0)])
+        check(S, "statistics: a fieldnotes text (D01) counts its own sentences, all languages together and by language", (g0["all"]["tokens"], g0["all"]["types"]) == (tk, ty) and set(g0["byLang"]) == set(ALLC) and sum(m["tokens"] for m in g0["byLang"].values()) == tk, str(g0["all"]))
+        root = etree.parse(str(site.dir / "project" / "texts" / "crdo-WWO_FARFADETS.xml")).getroot()
+        forms = [(s_.findtext("FORM") or "") for s_ in root.iter("S")]
+        rec = s["texts"]["recording:crdo-WWO_FARFADETS.xml"]
+        tk, ty = _plain_stats(forms)
+        check(S, "statistics: a recording is counted from its sentences, in its one language", (rec["all"]["tokens"], rec["all"]["types"]) == (tk, ty) and list(rec["byLang"]) == ["drg"] and rec["title"], f"{rec['all']} vs {(tk, ty)}")
+        pp = etree.parse(str(site.dir / "project" / "texts" / "Examples_from_papers.xml")).getroot()
+        ptexts = [(t.text or "").strip() for t in pp.iter("Tier") if (t.get("lang") in ALLC and (t.text or "").strip() not in ("", "—"))]
+        pt, pty = _plain_stats(ptexts)
+        check(S, "statistics: the published examples are a text of their own", (s["texts"]["papers:0"]["all"]["tokens"], s["texts"]["papers:0"]["all"]["types"]) == (pt, pty), f"{s['texts']['papers:0']['all']} vs {(pt, pty)}")
+        check(S, "statistics: each collection is its own: it is exactly the sum of its texts (the recordings do not include the fieldnotes, nor the other way round)",
+          all(sum(x["all"]["tokens"] for x in s["texts"].values() if x["src"] == src) == s["collections"][src]["all"]["tokens"] > 0 for src in ("fieldnotes", "recording", "papers")) and s["collections"]["papers"]["all"]["tokens"] == pt)
+        m = get("api/texts/stats", unit="morpheme")[1]["collections"]["fieldnotes"]["all"]
+        check(S, "statistics: counted by morpheme there are more tokens than by word, and a bad unit is refused", m["tokens"] > fn["all"]["tokens"] and get("api/texts/stats", unit="x")[0] == 400, str(m))
+        cache_before = fn["all"]["tokens"]; tdir = site.dir / "project" / "texts"
+        (tdir / "zz_stats.xml").write_text(_REC % ("wwo", "zz-st", "Stats test", "zzqa zzqb zzqa zzqc", "x."), encoding="utf-8")
+        r2 = get("api/texts/stats")[1]
+        check(S, "statistics: a recording added while the server runs is counted at once (4 tokens, 3 types), and is a text of its own", r2["collections"]["recording"]["all"]["tokens"] == s["collections"]["recording"]["all"]["tokens"] + 4 and r2["texts"]["recording:zz_stats.xml"]["all"] == {"tokens": 4, "types": 3, "ttr": 0.75, "rttr": 1.5} and r2["collections"]["fieldnotes"]["all"]["tokens"] == cache_before)
+        (tdir / "zz_stats.xml").unlink()
+        vis.close()
+
+        # ── on the Texts page: the whole, by language, and each text ──
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        def get(path, **q):
+            r_ = c.request.get(site.url + path + ("?" + urllib.parse.urlencode(q) if q else "")); return r_.status, r_.json()
+        fmt = lambda m: [f"{m['tokens']:,}", f"{m['types']:,}", f"{m['ttr']:.3f}", f"{m['rttr']:.2f}"]
+        rowvals = lambda row: [x.strip() for x in row.locator("td").all_inner_texts()]
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1200)
+        box = page.locator("#ttr-recordings"); bb = box.bounding_box(); pw = page.evaluate("document.documentElement.clientWidth")
+        check(S, "Texts, recordings: the box is in the upper right corner, with tokens, types, TTR and Root TTR of all the recordings", bb["x"] + bb["width"] > pw * 0.7 and bb["y"] < 240 and rowvals(box.locator("tr.ttr-all")) == fmt(s["collections"]["recording"]["all"]), f"{bb} {rowvals(box.locator('tr.ttr-all'))}")
+        check(S, "…and each language of the recordings has its row", {r.get_attribute("data-lang") for r in box.locator("tr.ttr-lang").all()} == set(s["collections"]["recording"]["byLang"]) or box.locator("tr.ttr-lang").count() == 0 and len(s["collections"]["recording"]["byLang"]) == 1)
+        card = page.locator(".text-card", has_text="Farfadets").first
+        check(S, "…each recording has its measures in the corner of its card (TTR, Root TTR, tokens and types)", card.locator(".ttr-mini").inner_text().replace("\n", " | ") == f"TTR {rec['all']['ttr']:.3f} · Root TTR {rec['all']['rttr']:.2f} | {rec['all']['tokens']:,} tokens · {rec['all']['types']:,} types", card.locator(".ttr-mini").inner_text())
+        page.click('.tab-btn[data-tab="fieldnotes"]'); page.wait_for_selector("#fn-grid .text-card", timeout=8000); page.wait_for_timeout(300)
+        box = page.locator("#ttr-fieldnotes")
+        langrows = {r.get_attribute("data-lang"): rowvals(r) for r in box.locator("tr.ttr-lang").all()}
+        check(S, "Texts, fieldnotes: the box has the whole, then one row per language, each with its own tokens, types, TTR and Root TTR", rowvals(box.locator("tr.ttr-all")) == fmt(fn["all"]) and langrows == {c_: fmt(fn["byLang"][c_]) for c_ in ALLC}, str(langrows)[:200])
+        check(S, "…in the project's order of languages", [r.get_attribute("data-lang") for r in box.locator("tr.ttr-lang").all()] == ALLC)
+        d01 = page.locator("#fn-grid .text-card", has_text="D01").first
+        check(S, "…and a fieldnotes card has its text's measures, with the languages in its tooltip", d01.locator(".ttr-mini").inner_text().split("\n")[1] == f"{g0['all']['tokens']:,} tokens · {g0['all']['types']:,} types" and "Dorig: " in (d01.locator(".ttr-mini").get_attribute("title") or ""))
+        pcard = page.locator("#fn-grid .text-card", has_text="Examples from papers").first
+        check(S, "…and the published examples have theirs", pcard.locator(".ttr-mini").count() == 1 and f"{pt:,} tokens" in pcard.locator(".ttr-mini").inner_text())
+        check(S, "the Texts page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+
+        # ── in the text viewer: upper right of the title ──
+        open_page(page, site, "transcription.html?key=crdo-WWO_FARFADETS.xml&title=Farfadets&lang=wwo", "#tx-ttr table", 1500)
+        vb = page.locator("#tx-ttr").bounding_box(); tb = page.locator(".tx-title").bounding_box()
+        check(S, "Viewer, a recording: the measures of that text are in the upper right, beside the title, with its tokens and types", vb["x"] > tb["x"] + 300 and vb["y"] < tb["y"] + 120 and rowvals(page.locator("#tx-ttr tr.ttr-all")) == fmt(rec["all"]) and page.locator("#tx-ttr tr.ttr-lang").count() == 0, f"{vb} {rowvals(page.locator('#tx-ttr tr.ttr-all'))}")
+        open_page(page, site, "transcription.html?fieldnotes=1&index=0&title=D01", "#tx-ttr table", 1500)
+        lr = {r.get_attribute("data-lang"): rowvals(r) for r in page.locator("#tx-ttr tr.ttr-lang").all()}
+        check(S, "Viewer, a fieldnotes text: the whole and a row for each language", rowvals(page.locator("#tx-ttr tr.ttr-all")) == fmt(g0["all"]) and lr == {c_: fmt(g0["byLang"][c_]) for c_ in ALLC}, str(lr)[:160])
+        open_page(page, site, "transcription.html?papers=1&index=0&title=Examples+from+papers", "#tx-ttr table", 1500)
+        check(S, "Viewer, the published examples: the same", rowvals(page.locator("#tx-ttr tr.ttr-all")) == fmt(s["texts"]["papers:0"]["all"]))
+        check(S, "the viewer raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        for w in (600, 390, 320):
+            cc = new_context(browser, site, w); p = cc.new_page(); wide = []
+            for url, sel in (("texts.html", ".text-card"), ("transcription.html?fieldnotes=1&index=0&title=D01", "#tx-ttr table")):
+                open_page(p, site, url, sel, 900)
+                if p.evaluate("document.documentElement.scrollWidth") > w: wide.append(url)
+            cc.close()
+            check(S, f"at {w}px the Texts page and the viewer, with their tables, do not scroll sideways", not wide, str(wide))
+
+        # ── the n-gram view of the concordance page ──
+        open_page(page, site, "concordance.html?q=%s&view=ngrams&n=2&source=fieldnotes" % urllib.parse.quote("tē"), ".cc-ng:not(.head)", 1200)
+        st, api2 = get("api/ngrams", q="tē", n=2, source="fieldnotes")
+        rows = page.locator(".cc-ng:not(.head)")
+        check(S, "N-grams page: the table lists the n-grams of the API, with counts, sentences and the word highlighted", rows.count() == api2["shown"] and rows.first.locator(".n-gram").inner_text().lower() == api2["grams"][0]["text"].lower() and rows.first.locator(".n-count").inner_text() == str(api2["grams"][0]["count"]) and rows.first.locator(".cc-match").count() >= 1, rows.first.inner_text().replace("\n", " | "))
+        check(S, "…the summary says how many different n-grams, how many occurrences and how often the word itself occurs", f"{api2['distinct']:,}" in page.inner_text("#cc-summary") and f"{api2['queryCount']:,}" in page.inner_text("#cc-summary"), page.inner_text("#cc-summary"))
+        page.select_option("#cc-n", "3"); page.wait_for_timeout(900); a3 = get("api/ngrams", q="tē", n=3, source="fieldnotes")[1]
+        check(S, "…choosing another n searches again, and the address keeps it", f"{a3['distinct']:,}" in page.inner_text("#cc-summary") and "n=3" in page.url and "view=ngrams" in page.url)
+        page.fill("#cc-min", "2"); page.press("#cc-min", "Enter"); page.wait_for_timeout(900)
+        a3m = get("api/ngrams", q="tē", n=3, source="fieldnotes", min=2)[1]
+        check(S, "…and so does a minimum frequency", page.locator(".cc-ng:not(.head)").count() == a3m["shown"] and all(int(x) >= 2 for x in page.locator(".cc-ng:not(.head) .n-count").all_inner_texts()))
+        page.select_option("#cc-ngsort", "text"); texts_ = [x.lower() for x in page.locator(".cc-ng:not(.head) .n-gram").all_inner_texts()]
+        check(S, "…sorting alphabetically reorders them", texts_ == sorted(texts_, key=lambda s_: s_) or len(texts_) > 1 and texts_ != [g["text"].lower() for g in a3m["grams"]])
+        first = page.locator(".cc-ng:not(.head)").first; gtext = first.locator(".n-gram").inner_text(); gcount = int(first.locator(".n-count").inner_text())
+        with page.expect_download() as dl:
+            page.click("#cc-csv")
+        crows = list(_csv.reader(_io.StringIO(Path(dl.value.path()).read_text(encoding="utf-8-sig"))))
+        check(S, "…and they can be downloaded as CSV: the n-gram, its count, its sentences and languages", crows[0][:3] == ["3-gram", "count", "sentences"] and len(crows) - 1 == page.locator(".cc-ng:not(.head)").count() and all(len(r) == 7 for r in crows), str(crows[:2]))
+        page.select_option("#cc-ngsort", "count"); first = page.locator(".cc-ng:not(.head)").first; gtext = first.locator(".n-gram").inner_text(); gcount = int(first.locator(".n-count").inner_text())
+        first.locator("a", has_text="lines").click(); page.wait_for_selector(".cc-hit", timeout=8000)
+        check(S, "“lines →” opens that n-gram in the concordance, with as many hits as its count", page.evaluate("VIEW") == "kwic" and page.locator(".cc-hit").count() == gcount and page.input_value("#cc-q").lower() == gtext.lower() and page.input_value("#cc-match") == "phrase", f"{page.locator('.cc-hit').count()} vs {gcount}")
+        page.click('.cc-view[data-view="ngrams"]'); page.wait_for_selector(".cc-ng:not(.head)", timeout=8000)
+        check(S, "the view switch goes back to the n-grams of the same query", "view=ngrams" in page.url and page.locator(".cc-ng:not(.head)").count() > 0)
+        page.select_option("#cc-scope", "glosses")
+        check(S, "the unit (words / morphemes) applies to the words of the texts only: it is off for glosses", page.locator("#cc-unit").is_disabled())
+        page.select_option("#cc-scope", "forms"); page.fill("#cc-q", "a b c d e f g"); page.select_option("#cc-n", "2"); page.press("#cc-q", "Enter"); page.wait_for_timeout(700)
+        check(S, "a query longer than n shows its reason", "n must be at least" in page.inner_text("#cc-summary"), page.inner_text("#cc-summary"))
+        check(S, "the page raised no JavaScript or loading error", not [e for e in errs if "400" not in e], "; ".join(errs[:2]))
+        c.close()
+    finally:
+        site.stop()
+
+    # ── one language: a single row, and no language breakdown ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        c = new_context(browser, site, 1280); page = c.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "texts.html", "#texts-grid .text-card", 1200)
+        check(S, "with one language the Texts page shows one row of measures, for the whole", page.locator("#ttr-recordings tr").count() == 2 and page.locator("#ttr-recordings tr.ttr-lang").count() == 0 and page.locator("#ttr-recordings .ttr-all td").first.inner_text().strip() != "", page.locator("#ttr-recordings").inner_text()[:80])
+        open_page(page, site, "concordance.html?view=ngrams&n=2&q=a", ".cc-ng:not(.head), #cc-summary", 1000); page.wait_for_timeout(500)
+        check(S, "…and the n-grams have no languages column", page.locator(".cc-ng.head span").nth(3).inner_text().strip() == "")
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); c.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 12. references: importing lists (BibTeX, EndNote, RIS) and each reference as a file ─────────────────────────
+_SAMPLE_BIB = r"""% a small bibliography exported from a reference manager
+@article{Meroni:2024,
+  author  = {Meroni, Fabio and Fran{\c c}ois, Alexandre},
+  title   = {{Reduplication and aspect in the languages of Gaua}},
+  journal = {Oceanic Linguistics},
+  year    = {2024}, volume = {63}, number = {1}, pages = {12--48},
+  doi     = {10.1353/ol.2024.0001}
+}
+@book{Lynch:2002, author = {Lynch, John and Ross, Malcolm and Crowley, Terry}, title = {The {O}ceanic Languages}, publisher = {Curzon Press}, address = {Richmond}, year = 2002}
+@incollection{Blust:2009, author={Blust, Robert}, editor={Adelaar, K. Alexander and Himmelmann, Nikolaus P.}, title={The Austronesian languages of {A}sia}, booktitle={The {A}ustronesian Languages of {A}sia and {M}adagascar}, publisher={Routledge}, pages={1--40}, year={2005}}
+@article{francois2026b, author={Fran{\c c}ois, Alexandre}, title={Negation in Dorig}, year=2026}
+@misc{broken, author={Nobody, N.}, year=2020}
+"""
+_SAMPLE_ENW = "%0 Journal Article\n%A Tavo, Linda\n%T Vowel harmony in Mota\n%J Studies in Language\n%D 2018\n%V 42\n%P 100-130\n\n%0 Book\n%A Rule, Rex\n%T Rules of the road\n%I Open Press\n%D 2011\n"
+_SAMPLE_RIS = "TY  - JOUR\nAU  - Okafor, Ngozi\nTI  - Tone in Oceanic languages\nJO  - Oceanic Linguistics\nPY  - 2019\nVL  - 58\nSP  - 1\nEP  - 30\nER  - \n"
+
+def _one_reference(d):
+    """The group starts from one known reference, whatever the project holds (the author's own list is theirs)."""
+    (d / "project" / "references.json").write_text(json.dumps({"references": [{"id": "francois2026b", "type": "chapter", "authors": [{"family": "François", "given": "Alexandre"}],
+        "editors": [{"family": "Miestamo", "given": "M."}, {"family": "Veselinova", "given": "L."}], "year": "2026b", "title": "Negation in Dorig",
+        "container": "Negation in the world’s languages III: Papunesia, Australia, and the Americas", "pages": "73–128", "publisher": "Language Science Press", "doi": "10.5281/zenodo.18234067"}]}, ensure_ascii=False), encoding="utf-8")
+
+def suite_refimport(browser, args):
+    S = "refimport"
+    section("references: importing BibTeX, EndNote and RIS lists, and each reference as a file")
+    site = Site(prepare=_one_reference)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        refs_ = lambda c=aa: c.get(site.url + "api/references").json()["references"]
+        imp = lambda data, c=aa: _jcall(c, "post", site.url + "api/references/import", data)
+
+        # ── each reference as a file, for everybody ──
+        r = va.get(site.url + "api/references/francois2026b/export/bibtex"); body = r.text()
+        check(S, "a visitor can download one reference as BibTeX: a file named after its key, with that reference alone", r.status == 200 and "francois2026b.bib" in r.headers.get("content-disposition", "") and body.startswith("@incollection{francois2026b,") and body.count("@") == 1 and "author = {François, Alexandre}" in body and "pages = {73--128}" in body and "doi = {10.5281/zenodo.18234067}" in body, body[:120])
+        r = va.get(site.url + "api/references/francois2026b/export/endnote"); body = r.text()
+        check(S, "…and as EndNote", r.status == 200 and "francois2026b.enw" in r.headers.get("content-disposition", "") and body.startswith("%0 Book Section") and body.count("%0 ") == 1 and "%A François, Alexandre" in body and "%F francois2026b" in body, body[:120])
+        codes = [va.get(site.url + p).status for p in ("api/references/nope/export/bibtex", "api/references/francois2026b/export/ris", "api/references/..%2Fapp/export/bibtex")]
+        check(S, "an unknown reference or format is a 404", codes == [404, 404, 404], str(codes))
+
+        # ── importing: only the author, and a preview saves nothing ──
+        codes = [imp({"text": _SAMPLE_BIB}, va)[0], imp({"text": _SAMPLE_BIB, "commit": True}, va)[0]]
+        check(S, "a visitor cannot import (401), preview or not", codes == [401, 401] and len(refs_()) == 1, str(codes))
+        st, j = imp({"text": _SAMPLE_BIB})
+        check(S, "the preview of a BibTeX list says what would happen to each reference: three new, one that is already there (the project's own, though its year has a letter), one that has no title", st == 200 and [e["status"] for e in j["entries"]] == ["new", "new", "new", "duplicate", "rejected"] and j["counts"] == {"new": 3, "renamed": 0, "duplicate": 1, "rejected": 1} and j["committed"] is False, str(j.get("counts")))
+        check(S, "…and it names the format and the source, and the reason for the one it cannot read", j["formats"] == [{"name": "the pasted text", "format": "BibTeX", "count": 5}] and j["entries"][4]["error"] == "it has no title" and j["entries"][3]["id"] == "francois2026b", str(j["formats"]))
+        check(S, "the preview saved nothing", len(refs_()) == 1)
+        st, j = imp({"text": _SAMPLE_BIB, "commit": True})
+        got = {r_["id"]: r_["text"] for r_ in refs_()}
+        check(S, "the import adds the three, with keys made from the file's (a colon, a capital) and accents and braces resolved", st == 200 and j["committed"] and sorted(got) == ["blust-2009", "francois2026b", "lynch-2002", "meroni-2024"], str(sorted(got)))
+        check(S, "…each in APA 7 as if typed in the form", got["meroni-2024"] == "Meroni, F., & François, A. (2024). Reduplication and aspect in the languages of Gaua. Oceanic Linguistics, 63(1), 12–48. https://doi.org/10.1353/ol.2024.0001" and got["lynch-2002"] == "Lynch, J., Ross, M., & Crowley, T. (2002). The Oceanic Languages. Curzon Press." and got["blust-2009"].startswith("Blust, R. (2005). The Austronesian languages of Asia. In K. A. Adelaar & N. P. Himmelmann (Eds.), The Austronesian Languages of Asia and Madagascar (pp. 1–40)."), str(got))
+        st, j = imp({"text": _SAMPLE_BIB, "commit": True})
+        check(S, "importing the same list again adds nothing: they are all duplicates (or unreadable)", j["counts"] == {"new": 0, "renamed": 0, "duplicate": 4, "rejected": 1} and j["committed"] is False and len(refs_()) == 4, str(j["counts"]))
+        st, j = imp({"text": "@article{meroni-2024, author={Other, Ann}, title={Another paper}, year={2024}, journal={J}}", "commit": True})
+        check(S, "a key that another reference already has is replaced by a free one, and the reference that had it is not touched", j["entries"][0]["status"] == "renamed" and j["entries"][0]["id"] == "other2024" and got["meroni-2024"] == {r_["id"]: r_["text"] for r_ in refs_()}["meroni-2024"], str(j["entries"][0]))
+
+        # ── EndNote, RIS and several sources in one go ──
+        st, j = imp({"files": [{"name": "list.enw", "text": _SAMPLE_ENW}, {"name": "more.ris", "text": _SAMPLE_RIS}], "text": "@misc{k, author={Pasted, P.}, title={From the clipboard}, year=2020}", "commit": True})
+        check(S, "files in EndNote and RIS and pasted text are read together, each named with its format and count", st == 200 and j["formats"] == [{"name": "list.enw", "format": "EndNote", "count": 2}, {"name": "more.ris", "format": "RIS", "count": 1}, {"name": "the pasted text", "format": "BibTeX", "count": 1}] and j["counts"]["new"] == 4, str(j.get("formats")))
+        got = {r_["id"]: r_["text"] for r_ in refs_()}
+        check(S, "…and their references are in the list, in APA 7 (keys from author and year when the file has none; the key of the pasted entry is its own)", got.get("tavo2018") == "Tavo, L. (2018). Vowel harmony in Mota. Studies in Language, 42, 100–130." and got.get("rule2011") == "Rule, R. (2011). Rules of the road. Open Press." and got.get("okafor2019") == "Okafor, N. (2019). Tone in Oceanic languages. Oceanic Linguistics, 58, 1–30." and "k" in got, str(sorted(got)))
+        bad = {"a file that is not a list": {"files": [{"name": "x.pdf", "text": "%PDF-1.4 binary junk"}]}, "nothing": {}, "empty text": {"text": "  "}, "not text": {"files": [{"name": "x", "text": 5}]}}
+        res = {k: imp(v)[0] for k, v in bad.items()}
+        check(S, "what is not a list of references is refused with a reason (400), and nothing changes", all(v == 400 for v in res.values()) and "BibTeX" in imp(bad["a file that is not a list"])[1]["error"] and len(refs_()) == 9, str(res))
+        check(S, "…and too much at once is refused (413)", imp({"text": "@misc{k, title={T}}" + " " * 2_100_000})[0] == 413)
+        st, j = imp({"text": "@misc{h, author={Evil, E.}, title={<img src=x onerror=alert(1)> and <b>bold</b>}, url={javascript:alert(1)}, year=2020}"})
+        check(S, "markup in an imported title is shown as text, and a URL that is not http(s) is left out with a warning", "<img" not in j["entries"][0]["html"] and "&lt;img" in j["entries"][0]["html"] and j["entries"][0]["warnings"] != [] and "javascript" not in j["entries"][0]["html"], j["entries"][0]["html"][:160])
+        # the site's own export reads back into the site: delete one reference, import the whole export, only that one is new
+        whole = va.get(site.url + "api/references/export/bibtex").text()
+        before = {r_["id"]: r_["text"] for r_ in refs_()}
+        aa.delete(site.url + "api/references/lynch-2002")
+        st, j = imp({"text": whole, "commit": True})
+        after = {r_["id"]: r_["text"] for r_ in refs_()}
+        check(S, "the whole BibTeX export of the site, imported again, restores exactly what was deleted and nothing else", j["counts"]["new"] == 1 and j["counts"]["duplicate"] == len(before) - 1 and after == before, str(j["counts"]))
+        st, jj = _jcall(aa, "post", site.url + "api/grammar/zz_import", {"source": "As {{source: Lynch et al. 2002}} and {{source: Tavo 2018, p. 105}} say.\n"})
+        check(S, "an imported reference can be cited in the grammar by author and year, like the others", "(Lynch et al., 2002)" in re.sub(r"<[^>]+>", "", jj.get("html", "")) and "(Tavo, 2018, p. 105)" in re.sub(r"<[^>]+>", "", jj.get("html", "")) and "references.html#lynch-2002" in jj.get("html", ""), jj.get("html", "")[:200])
+        for rid in [r_["id"] for r_ in refs_()]:
+            b = va.get(site.url + f"api/references/{rid}/export/bibtex").text(); e = va.get(site.url + f"api/references/{rid}/export/endnote").text()
+            if not (b.startswith("@") and e.startswith("%0 ") and b.count("\n@") == 0 and e.count("\n%0 ") == 0): break
+        else: rid = None
+        check(S, "every reference of the list can be downloaded in both formats, one reference per file", rid is None, str(rid))
+
+        # ── in the browser: the little buttons ──
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "references.html", ".ref-entry", 900)
+        n = page.locator(".ref-entry").count()
+        e0 = page.locator(".ref-entry").first; tb = e0.locator(".ref-body").bounding_box(); db = e0.locator(".ref-dl").bounding_box()
+        check(S, "a visitor sees, to the right of each reference, a small BibTeX and a small EndNote button", n == len(refs_()) and page.locator(".ref-dl a").count() == 2 * n and db["x"] >= tb["x"] + tb["width"] - 2 and not page.locator("#ref-import").is_visible() and not page.locator(".ref-author").first.is_visible(), f"{tb} {db}")
+        with page.expect_download() as dl:
+            e0.locator('.ref-dl a', has_text="BibTeX").click()
+        d = dl.value; first_id = page.locator(".ref-entry").first.get_attribute("id")
+        txt = Path(d.path()).read_text(encoding="utf-8")
+        check(S, "…the BibTeX button downloads that reference's file", d.suggested_filename == f"{first_id}.bib" and txt.startswith("@") and txt.count("\n@") == 0 and first_id in txt.split("\n")[0], f"{d.suggested_filename} {txt[:60]}")
+        with page.expect_download() as dl:
+            e0.locator('.ref-dl a', has_text="EndNote").click()
+        d = dl.value; txt = Path(d.path()).read_text(encoding="utf-8")
+        check(S, "…and the EndNote button the .enw file", d.suggested_filename == f"{first_id}.enw" and txt.startswith("%0 ") and f"%F {first_id}" in txt)
+        check(S, "the page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        for w in (600, 390, 320):
+            cc = new_context(browser, site, w); p = cc.new_page(); open_page(p, site, "references.html", ".ref-entry", 700)
+            ca = new_context(browser, site, w, author=True); pa_ = ca.new_page(); open_page(pa_, site, "references.html", ".ref-entry", 700)
+            wide = [p.evaluate("document.documentElement.scrollWidth"), pa_.evaluate("document.documentElement.scrollWidth")]
+            vis_dl = all(a.is_visible() for a in p.locator(".ref-dl a").all()[:4])
+            cc.close(); ca.close()
+            check(S, f"at {w}px, as a visitor and as the author, the list with its buttons does not scroll sideways and the downloads are there", max(wide) <= w and vis_dl, str(wide))
+
+        # ── in the browser: the author imports ──
+        page = au.new_page(); errs = []; watch(page, errs); page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        for rid in [r_["id"] for r_ in refs_() if r_["id"] != "francois2026b"]: aa.delete(site.url + f"api/references/{rid}")
+        open_page(page, site, "references.html", ".ref-entry", 900)
+        check(S, "the author has an Import button, and the author's buttons are under the downloads", page.locator("#ref-import").is_visible() and page.locator(".ref-entry").first.locator(".ref-author .edit-tab").first.is_visible())
+        page.click("#ref-import"); page.wait_for_selector("#imp-modal.visible")
+        page.set_input_files("#imp-file", {"name": "sample.bib", "mimeType": "text/plain", "buffer": _SAMPLE_BIB.encode("utf-8")}); page.wait_for_selector(".imp-item")
+        check(S, "choosing a file shows the preview at once: the counts, and for each reference its status and its APA 7 line", "5 references found (sample.bib: 5 in BibTeX): 3 new, 1 already in the list, 1 not read" in page.inner_text("#imp-summary") and [i.get_attribute("data-status") for i in page.locator(".imp-item").all()] == ["new", "new", "new", "duplicate", "rejected"] and "Meroni, F., & François, A. (2024)." in page.locator(".imp-item").first.inner_text(), page.inner_text("#imp-summary"))
+        check(S, "…the button says how many will be imported, and nothing has been added yet", page.inner_text("#imp-go") == "Import 3 references" and page.locator("#imp-go").is_enabled() and page.locator(".ref-entry").count() == 1)
+        page.click("#imp-go"); page.wait_for_selector("#imp-modal:not(.visible)", state="attached"); page.wait_for_function("document.querySelectorAll('.ref-entry').length === 4")
+        check(S, "confirming adds them: the window closes, the list shows them, and a notice says what was done", "3 references imported; 1 already in the list; 1 could not be read." in page.inner_text("#refs-notice") and page.locator("#refs-count").inner_text().startswith("4 references") and page.locator(".ref-entry#meroni-2024").count() == 1, page.inner_text("#refs-notice"))
+        page.click("#ref-import"); page.set_input_files("#imp-file", {"name": "sample.bib", "mimeType": "text/plain", "buffer": _SAMPLE_BIB.encode("utf-8")}); page.wait_for_selector(".imp-item")
+        check(S, "importing the same file again: everything is already there, the button says so and is off", page.inner_text("#imp-go") == "Nothing to import" and page.locator("#imp-go").is_disabled() and "0" not in page.inner_text("#imp-go"), page.inner_text("#imp-summary"))
+        page.set_input_files("#imp-file", [{"name": "a.enw", "mimeType": "text/plain", "buffer": b"%0 Journal Article\n%A Dupont, Zo\xe9\n%T Une \xe9tude de cas\n%J Revue\n%D 2001\n"}, {"name": "b.ris", "mimeType": "application/x-research-info-systems", "buffer": _SAMPLE_RIS.encode("utf-8")}])
+        page.wait_for_function("document.querySelectorAll('.imp-item').length === 2")
+        check(S, "several files at once, in different formats; a file saved in Windows-1252 (an é as one byte) is read right", "a.enw: 1 in EndNote" in page.inner_text("#imp-summary") and "b.ris: 1 in RIS" in page.inner_text("#imp-summary") and "Dupont, Z. (2001). Une étude de cas." in page.inner_text("#imp-list"), page.inner_text("#imp-list")[:160])
+        page.set_input_files("#imp-file", []); page.fill("#imp-text", "@misc{h, author={Evil, E.}, title={<img src=x onerror=alert(1)> loud}, year=2020}"); page.click("#imp-read"); page.wait_for_selector(".imp-item")
+        check(S, "pasted text works too, and markup in it is shown as text: no element is made, nothing runs", page.locator("#imp-list img, #imp-list b").count() == 0 and "<img src=x" in page.inner_text("#imp-list") and not [e for e in errs if "DIALOG" in e])
+        page.fill("#imp-text", "this is not a list of references"); page.click("#imp-read"); page.wait_for_function("document.getElementById('imp-msg').textContent.length > 0")
+        check(S, "text that is not a list gives its reason in the window, and the button is off", "No references were found" in page.inner_text("#imp-msg") and page.locator("#imp-go").is_disabled() and page.locator(".imp-item").count() == 0, page.inner_text("#imp-msg"))
+        page.fill("#imp-text", _SAMPLE_ENW); page.click("#imp-read"); page.wait_for_selector(".imp-item"); page.click("#imp-go"); page.wait_for_function("document.querySelectorAll('.ref-entry').length === 6")
+        check(S, "a pasted EndNote list is imported: the list now has six references, among them Tavo and Rule", page.locator("#tavo2018").count() == 1 and page.locator("#rule2011").count() == 1)
+        page.click("#ref-import"); page.click("#imp-cancel"); page.click("#ref-import"); page.mouse.click(5, 5)
+        check(S, "the window closes with Close and by a click outside it", not page.locator("#imp-modal.visible").count())
+        check(S, "the import raised no JavaScript or loading error, and no dialog", not [e for e in errs if "400" not in e], "; ".join(errs[:2]))
+        cw = new_context(browser, site, 390, author=True); p = cw.new_page(); open_page(p, site, "references.html", ".ref-entry", 700)
+        p.click("#ref-import"); p.set_input_files("#imp-file", {"name": "sample.bib", "mimeType": "text/plain", "buffer": _SAMPLE_BIB.encode("utf-8")}); p.wait_for_selector(".imp-item")
+        mb = p.locator("#imp-modal .imp-modal").bounding_box()
+        check(S, "on a phone the import window fits the screen and its buttons can be reached", mb["x"] >= 0 and mb["x"] + mb["width"] <= 391 and p.locator("#imp-go").is_visible() and p.evaluate("document.documentElement.scrollWidth") <= 390, str(mb))
+        cw.close()
+        vis.close(); au.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 13. references: the same authors and year, the author chooses the letters ─────────────────────────
+def _letters_seed(d):
+    P_ = lambda i, ty, fam, giv, y, title, **kw: dict({"id": i, "type": ty, "authors": [{"family": fam, "given": giv}], "editors": [], "year": y, "title": title, "publisher": "P"}, **kw)
+    refs = [P_("francois2026b", "book", "François", "A.", "2026b", "Negation in Dorig"), P_("smith-alpha", "book", "Smith", "J.", "2026", "Alpha: the first account"),
+            P_("lee-book", "book", "Lee", "K.", "2001", "Lee book"), P_("zed-a", "book", "Zed", "Z.", "2022", "Zed A"), P_("zed-b", "book", "Zed", "Z.", "2022", "Zed B"),
+            P_("yu-1", "book", "Yu", "Y.", "2018", "Yu one"), P_("yu-2", "book", "Yu", "Y.", "2018", "Yu two")]
+    (d / "project" / "references.json").write_text(json.dumps({"references": refs}, ensure_ascii=False), encoding="utf-8")
+    g = d / "project" / "grammar"
+    (g / "s1.md").write_text("## One\n\nFirst {{source: Smith 2026, p. 12}}; then {{source: lee-book}} and {{source: Lee 2001}}. Narrative {{source: Smith 2026, narrative}}. Also {{source: zed-b}}.\n", encoding="utf-8")
+    (g / "s2.md").write_text("## Two\n\nLater {{source: zed-a}}.\n", encoding="utf-8")
+
+def suite_refletters(browser, args):
+    S = "refletters"
+    section("references: the same authors and year: the author chooses the letters")
+    site = Site(prepare=_letters_seed)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        gdir = site.dir / "project" / "grammar"
+        refs_ = lambda: {r["id"]: r for r in aa.get(site.url + "api/references").json()["references"]}
+        add = lambda data: _jcall(aa, "post", site.url + "api/references", data)
+        bk = lambda fam, giv, y, title, **kw: dict(type="book", authors=[_P(fam, giv)], year=y, title=title, publisher="P", **kw)
+
+        # ── a save that would make the same authors and year: the author is asked, and nothing is saved ──
+        n0 = len(refs_())
+        st, j = add(bk("Smith", "J.", "2026", "Beta: a later view", id="smith-beta"))
+        g = (j.get("needsLetters") or [{}])[0]
+        check(S, "a new reference with the authors and the year of another is not saved: the answer is 409, with the references that will share the year", st == 409 and g.get("who") == "Smith" and g.get("year") == "2026" and [m["id"] for m in g["members"]] == ["smith-alpha", "smith-beta"] and len(refs_()) == n0, str(j)[:200])
+        check(S, "…it says which is new, and what the grammar already cites", [m["isNew"] for m in g["members"]] == [False, True] and g["members"][0]["cited"] and g["members"][0]["citedIn"] == ["s1"] and not g["members"][1]["cited"] and g["anyCited"], str(g["members"][0])[:200])
+        check(S, "…and it suggests a for the one the grammar cites already, b for the new one", [m["suggested"] for m in g["members"]] == ["a", "b"], str([m["suggested"] for m in g["members"]]))
+        check(S, "…with each reference as it will read, with its year but no letter yet", g["members"][0]["text"] == "Smith, J. (2026). Alpha: the first account. P." and g["members"][1]["text"] == "Smith, J. (2026). Beta: a later view. P.", str([m["text"] for m in g["members"]]))
+        bad = {"nothing": None, "a missing one": {"smith-alpha": "a"}, "the same letter": {"smith-alpha": "a", "smith-beta": "a"}, "a capital": {"smith-alpha": "A", "smith-beta": "b"}, "a number": {"smith-alpha": "1", "smith-beta": "b"}}
+        res = {k: add(dict(bk("Smith", "J.", "2026", "Beta: a later view", id="smith-beta"), **({"letters": v} if v else {})))[0] for k, v in bad.items()}
+        check(S, "letters that will not do are refused (400, with the reason) and nothing is saved: none, one missing, a repeat, a capital, a digit", res == {"nothing": 409, "a missing one": 400, "the same letter": 400, "a capital": 400, "a number": 400} and len(refs_()) == n0, str(res))
+        check(S, "a visitor cannot send letters either (401)", _jcall(va, "post", site.url + "api/references", dict(bk("Smith", "J.", "2026", "X", id="smith-x"), letters={}))[0] == 401)
+
+        # ── the author chooses: the letters are stored, and the grammar follows ──
+        st, j = add(dict(bk("Smith", "J.", "2026", "Beta: a later view", id="smith-beta"), letters={"smith-alpha": "b", "smith-beta": "a"}))
+        r = refs_(); s1 = (gdir / "s1.md").read_text(encoding="utf-8")
+        check(S, "with the letters (here swapped: the author wants the new one to be a) both are saved with them", st == 200 and j["lettered"] and r["smith-alpha"]["year"] == "2026b" and r["smith-beta"]["year"] == "2026a" and r["smith-alpha"]["yearDisplay"] == "2026b", str(j))
+        check(S, "…the citations in the grammar written by author and year now carry the letter of their reference; those by key, and the others, are untouched", "{{source: Smith 2026b, p. 12}}" in s1 and "{{source: Smith 2026b, narrative}}" in s1 and "{{source: lee-book}}" in s1 and "{{source: Lee 2001}}" in s1 and "{{source: zed-b}}" in s1, s1)
+        check(S, "…and the answer says which sections were changed, and how", j["updatedCitations"] == [{"section": "s1", "changes": [["2026", "2026b"], ["2026", "2026b"]]}], str(j["updatedCitations"]))
+        h = aa.get(site.url + "api/grammar/s1").text()
+        check(S, "…the grammar still shows them: (Smith, 2026b, p. 12), Smith (2026b), and no “not found” or “ambiguous”", "Smith, 2026b, p. 12" in h and "Smith (2026b)" in h and "not found" not in h and "mbiguous" not in h, re.sub(r"<[^>]+>", "", h)[:240])
+        check(S, "the list is in the order of the letters (a before b)", list(refs_()).index("smith-beta") < list(refs_()).index("smith-alpha"))
+
+        # ── a third, and the suggestion when the letters are already there ──
+        st, j = add(bk("Smith", "J.", "2026", "Gamma: and more", id="smith-gamma"))
+        g = j["needsLetters"][0]
+        check(S, "a third one: the two that have their letters keep them in the suggestion, the new one gets the next", st == 409 and {m["id"]: m["suggested"] for m in g["members"]} == {"smith-alpha": "b", "smith-beta": "a", "smith-gamma": "c"} and {m["id"]: m["letter"] for m in g["members"]} == {"smith-alpha": "b", "smith-beta": "a", "smith-gamma": ""}, str(g["members"])[:300])
+        check(S, "…and if the author gives it a letter that is taken, that is refused", add(dict(bk("Smith", "J.", "2026", "Gamma: and more", id="smith-gamma"), letters={"smith-alpha": "b", "smith-beta": "a", "smith-gamma": "b"}))[0] == 400)
+        check(S, "a reference with its own letter typed in the year, that no other has, is saved without a question", add(bk("Smith", "J.", "2026c", "Gamma: and more", id="smith-gamma"))[0] == 200 and refs_()["smith-gamma"]["yearDisplay"] == "2026c")
+
+        # ── what the suggestion follows: the order in which the grammar cites ──
+        st, j = add(bk("Zed", "Z.", "2022", "Zed C", id="zed-c")); g = j["needsLetters"][0]
+        check(S, "the suggestion follows the order of the citations across the sections: zed-b (cited in s1) is a, zed-a (cited later, in s2) is b, the new one c", {m["id"]: m["suggested"] for m in g["members"]} == {"zed-b": "a", "zed-a": "b", "zed-c": "c"} and g["anyCited"], str({m["id"]: m["suggested"] for m in g["members"]}))
+        st, j = add(bk("Yu", "Y.", "2018", "Yu three", id="yu-3")); g = j["needsLetters"][0]
+        check(S, "when none is cited yet, the older ones come first and the new one last; the window will say that a goes to the one cited first", {m["id"]: m["suggested"] for m in g["members"]} == {"yu-1": "a", "yu-2": "b", "yu-3": "c"} and not g["anyCited"], str({m["id"]: m["suggested"] for m in g["members"]}))
+        # no question when the citations are not the same
+        quiet = [add(bk("Smith", "J.", "2027", "Other year", id="smith-2027"))[0], add(bk("Smith", "K.", "2026", "Other initial", id="smith-k"))[0], add(bk("Jones", "J.", "2026", "Other author", id="jones-2026"))[0]]
+        check(S, "other year, other first-name initial, other author: no question (they are cited differently)", quiet == [200, 200, 200], str(quiet))
+        # no year
+        add(bk("Nad", "N.", "n.d.", "No date one", id="nad-1")); st, j = add(bk("Nad", "N.", "n.d.", "No date two", id="nad-2"))
+        st2, j2 = add(dict(bk("Nad", "N.", "n.d.", "No date two", id="nad-2"), letters={"nad-1": "a", "nad-2": "b"}))
+        check(S, "works with no date are a group too: the letters are written n.d.-a, n.d.-b", st == 409 and j["needsLetters"][0]["year"] == "n.d." and st2 == 200 and refs_()["nad-1"]["year"] == "n.d.-a" and refs_()["nad-2"]["yearDisplay"] == "n.d.-b", str(refs_()["nad-1"]["year"]))
+
+        # ── editing ──
+        put = lambda rid, data: _jcall(aa, "put", site.url + f"api/references/{rid}", data)
+        st, j = put("smith-gamma", dict(bk("Smith", "J.", "2026c", "Gamma: and more, revised", id="smith-gamma")))
+        check(S, "editing a reference in a group without changing its authors or year asks nothing", st == 200 and not j["lettered"])
+        st, j = put("jones-2026", dict(bk("Smith", "J.", "2026", "Was Jones", id="jones-2026")))
+        g = (j.get("needsLetters") or [{}])[0]
+        check(S, "editing a reference so that it now has the authors and the year of others asks for the letters, and saves nothing", st == 409 and sorted(m["id"] for m in g["members"]) == ["jones-2026", "smith-alpha", "smith-beta", "smith-gamma"] and refs_()["jones-2026"]["authors"][0]["family"] == "Jones", str(g)[:200])
+        st, j = put("jones-2026", dict(bk("Smith", "J.", "2026", "Was Jones", id="jones-2026"), letters={"smith-beta": "a", "smith-alpha": "b", "smith-gamma": "c", "jones-2026": "d"}))
+        check(S, "…and with the letters it is saved", st == 200 and j["lettered"] and refs_()["jones-2026"]["yearDisplay"] == "2026d", str(j))
+        check(S, "a reference whose key is changed, with nothing else, is not asked about", put("lee-book", dict(bk("Lee", "K.", "2001", "Lee book", id="lee-book-2")))[0] == 200)
+        vis.close()
+
+        # ── the page: the form ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "references.html", ".ref-entry", 900)
+        def fill_form(title, fam="Lee", giv="Kim", year="2001"):
+            page.click("#ref-add"); page.wait_for_selector("#ref-modal.visible"); page.select_option("#rf-type", "book")
+            page.fill("#rf-authors .rf-person input[data-f=family]", fam); page.fill("#rf-authors .rf-person input[data-f=given]", giv)
+            page.fill("#rf-year", year); page.fill("#rf-title-in", title); page.fill("#rf-publisher", "Routledge"); page.wait_for_timeout(500)
+        fill_form("Second Lee")
+        check(S, "while the author types, a note says that another reference has the same authors and year, shows it, and says the letters will be chosen at the save", page.locator("#rf-share").is_visible() and "told apart by letters" in page.inner_text("#rf-share") and "Lee, K. (2001). Lee book." in page.inner_text("#rf-share"), page.inner_text("#rf-share"))
+        page.click("#rf-save"); page.wait_for_selector("#let-modal.visible")
+        rows = page.locator(".let-row")
+        check(S, "Save opens a window: it says what is going on, lists the references with a letter for each, suggests a for the one the grammar cites and b for the new one", "letters after the year" in page.inner_text("#let-intro") and rows.count() == 2 and [r.locator("select").input_value() for r in rows.all()] == ["a", "b"] and "new" in rows.nth(1).inner_text() and "cited in the grammar (s1)" in rows.nth(0).inner_text() and "follows the grammar" in page.inner_text("#let-groups"), page.inner_text("#let-groups")[:300])
+        check(S, "…it is in front of the form, not behind it", page.evaluate("(() => { const r = document.getElementById('let-go').getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return e && e.closest('#let-modal') !== null; })()"))
+        rows.nth(1).locator("select").select_option("a")
+        check(S, "giving the same letter twice is shown at once: the two rows are marked, a message says so, and Save is off", page.locator(".let-row.dup").count() == 2 and "own letter" in page.inner_text("#let-msg") and page.locator("#let-go").is_disabled())
+        page.click("#let-cancel")
+        check(S, "Cancel saves nothing: the form is still there with what was typed, and says so", not page.locator("#let-modal.visible").count() and page.locator("#ref-modal.visible").count() == 1 and page.input_value("#rf-title-in") == "Second Lee" and "letters were not chosen" in page.inner_text("#rf-msg") and "lee-book-2" in refs_() and len(refs_()) == len(refs_()), page.inner_text("#rf-msg"))
+        before_n = len(refs_())
+        page.click("#rf-save"); page.wait_for_selector("#let-modal.visible")
+        page.locator(".let-row").nth(0).locator("select").select_option("b"); page.locator(".let-row").nth(1).locator("select").select_option("a")
+        check(S, "swapping them (the new one a, the old b) clears the warning", page.locator(".let-row.dup").count() == 0 and page.locator("#let-go").is_enabled())
+        page.click("#let-go"); page.wait_for_function("document.getElementById('let-modal').classList.contains('visible') === false && document.getElementById('ref-modal').classList.contains('visible') === false")
+        page.wait_for_function(f"document.querySelectorAll('.ref-entry').length === {before_n + 1}")
+        t_ = page.inner_text("#refs-notice"); r = refs_()
+        check(S, "Save with these letters saves both with the letters chosen and says that the citations in the grammar were updated (and in which)", r["lee-book-2"]["yearDisplay"] == "2001b" and any(x["yearDisplay"] == "2001a" for x in r.values() if x["id"].startswith("lee")) and "The letters were saved" in t_ and "s1: 2001 → 2001b" in t_, t_)
+        check(S, "…and the grammar reads Lee 2001b where it said Lee 2001, and the citation by key (which the earlier rename had made lee-book-2) is untouched", "{{source: Lee 2001b}}" in (gdir / "s1.md").read_text(encoding="utf-8") and "{{source: lee-book-2}}" in (gdir / "s1.md").read_text(encoding="utf-8"))
+        # ── the page: an import ──
+        bib = "@book{chan1, author={Chan, Amy}, title={Chan first}, publisher={P}, year=2020}\n@book{chan2, author={Chan, Amy}, title={Chan second}, publisher={P}, year=2020}\n@book{sole, author={Solo, Sam}, title={Alone}, publisher={P}, year=2020}\n"
+        page.click("#ref-import"); page.set_input_files("#imp-file", {"name": "chan.bib", "mimeType": "text/plain", "buffer": bib.encode("utf-8")}); page.wait_for_selector(".imp-item")
+        check(S, "the import preview says that some of the references share their authors and year and that the letters will be chosen at the import", "1 group of references share their author(s) and year" in page.inner_text("#imp-summary"), page.inner_text("#imp-summary"))
+        n_before = len(refs_())
+        page.click("#imp-go"); page.wait_for_selector("#let-modal.visible")
+        check(S, "Import opens the window for the pair, with the suggestion in the order of the file (the file's second one is b)", page.locator(".let-group").count() == 1 and [r_.locator("select").input_value() for r_ in page.locator(".let-row").all()] == ["a", "b"] and "None of them is cited" in page.inner_text("#let-groups") and len(refs_()) == n_before, page.inner_text("#let-groups")[:200])
+        page.click("#let-go"); page.wait_for_function("document.getElementById('imp-modal').classList.contains('visible') === false")
+        page.wait_for_function(f"document.querySelectorAll('.ref-entry').length === {n_before + 3}")
+        r = refs_()
+        check(S, "confirming imports all three: the pair with its letters, the other with none", r["chan1"]["yearDisplay"] == "2020a" and r["chan2"]["yearDisplay"] == "2020b" and r["sole"]["yearDisplay"] == "2020", str({k: r[k]["yearDisplay"] for k in ("chan1", "chan2", "sole")}))
+        st, j = _jcall(aa, "post", site.url + "api/references/import", {"text": "@book{chan3, author={Chan, Amy}, title={Chan third}, publisher={P}, year=2020}", "commit": True})
+        check(S, "an import that adds one to an existing group is paused too, and without letters saves nothing", st == 409 and [m["id"] for m in j["needsLetters"][0]["members"]] == ["chan1", "chan2", "chan3"] and "chan3" not in refs_())
+        check(S, "the page raised no JavaScript or loading error", not [e for e in errs if "409" not in e and "400" not in e], "; ".join(errs[:2]))
+        au.close()
+        cn = new_context(browser, site, 390, author=True); p = cn.new_page(); open_page(p, site, "references.html", ".ref-entry", 800)
+        p.click("#ref-add"); p.wait_for_selector("#ref-modal.visible"); p.select_option("#rf-type", "book")
+        p.fill("#rf-authors .rf-person input[data-f=family]", "Chan"); p.fill("#rf-authors .rf-person input[data-f=given]", "Amy"); p.fill("#rf-year", "2020"); p.fill("#rf-title-in", "Chan fourth"); p.fill("#rf-publisher", "P"); p.wait_for_timeout(500)
+        p.click("#rf-save"); p.wait_for_selector("#let-modal.visible"); mb = p.locator("#let-modal .let-modal").bounding_box()
+        check(S, "on a phone the letters window fits the screen and its buttons can be reached", mb["x"] >= 0 and mb["x"] + mb["width"] <= 391 and p.locator("#let-go").is_visible() and p.locator("#let-cancel").is_visible() and p.evaluate("document.documentElement.scrollWidth") <= 390, str(mb))
+        cn.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 14. grammar: phonological charts (a tab in the editor, merged inventories, black and colours) ─────────────────────────
+def _rgb(hex_):
+    h = hex_.lstrip("#"); return f"rgb({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)})"
+
+def suite_phonotable(browser, args):
+    S = "phonotable"
+    section("grammar: phonological charts")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_phonotable.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the chart engine passes its own direct tests (definition, merging, black and colours, escaping, HTML, LaTeX, blocks in a section)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1] + ("" if unit.returncode == 0 else "\n" + unit.stdout[-400:]))
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    COL = {l["code"]: l["color"] for l in proj["languages"]}; NAMES = {l["code"]: l["name"] for l in proj["languages"]}; CODES = [l["code"] for l in proj["languages"]]
+    proj_abbr = {l["code"]: l["abbr"].upper() for l in proj["languages"]}
+    CONS_COLS = ["Bilabial", "Labiodental", "Dental", "Alveolar", "Postalveolar", "Retroflex", "Palatal", "Velar", "Uvular", "Pharyngeal", "Glottal"]
+    CONS_ROWS = ["Plosive", "Nasal", "Trill", "Tap or flap", "Fricative", "Lateral fricative", "Approximant", "Lateral approximant"]
+    V_COLS, V_ROWS = ["Front", "Central", "Back"], ["Close", "Near-close", "Close-mid", "Mid", "Open-mid", "Near-open", "Open"]
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+
+        # ── the server ──
+        d = va.get(site.url + "api/phonotable/defaults").json()
+        check(S, "the suggested columns and rows are those of the IPA charts, in that order, for the consonants and for the vowels", d["axes"]["consonants"] == {"columns": CONS_COLS, "rows": CONS_ROWS} and d["axes"]["vowels"] == {"columns": V_COLS, "rows": V_ROWS}, str(d["axes"])[:200])
+        check(S, "…and the languages come with their colours, in the project's order", [(l["code"], l["color"]) for l in d["languages"]] == [(c, COL[c]) for c in CODES])
+        spec = {"kind": "consonants", "caption": "Consonants", "columns": ["Bilabial", "Alveolar"], "rows": ["Plosive", "Nasal"], "inventory": {"num": {"Plosive": {"Bilabial": "p b", "Alveolar": "t"}}, "drg": {"Plosive": {"Bilabial": "p b", "Alveolar": "t d"}}, "kro": {"Plosive": {"Bilabial": "p", "Alveolar": "t"}}}}
+        check(S, "the preview is for the author only (401 for a visitor)", _jcall(va, "post", site.url + "api/phonotable/preview", {"spec": spec})[0] == 401)
+        st, j = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": spec})
+        check(S, "the author's preview is the chart as the page will show it, with the definition cleaned", st == 200 and j["ok"] and 'class="phonotable"' in j["html"] and j["spec"]["columns"] == ["Bilabial", "Alveolar"], str(j)[:160])
+        check(S, "a definition that cannot be a chart is refused with a reason", [_jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": x})[0] for x in ({"kind": "tones", "columns": ["a"], "rows": ["b"]}, {"kind": "vowels", "columns": [], "rows": ["b"]}, None)] == [400, 400, 400])
+
+        body = ("## Phonology\n\nBefore the chart, *with markdown*.\n\n```phonotable\n" + json.dumps(spec) + "\n```\n\nBetween the charts.\n\n```phonotable\n"
+                + json.dumps({"kind": "vowels", "caption": "Vowels", "columns": ["Front", "Back"], "rows": ["Close"], "inventory": {"num": {"Close": {"Front": "i", "Back": "u"}}, "olr": {"Close": {"Front": "i", "Back": "ʉ"}}}}) + "\n```\n\nAfter, with {{source: Nobody 2000}} still working.\n")
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": body})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        plain = re.sub(r"<[^>]+>", "", h)
+        check(S, "a visitor sees both charts, each in its place between the paragraphs, and the markdown around them still works", h.count('<figure class="phonotable"') == 2 and h.index("Before the chart") < h.index('data-kind="consonants"') < h.index("Between the charts") < h.index('data-kind="vowels"') < h.index("After, with") and "<em>with markdown</em>" in h and "PHONOTABLE" not in h and "```" not in h, plain[:200])
+        cons = h[h.index('data-kind="consonants"'):h.index("Between the charts")]
+        want = {"p": "num drg kro", "t": "num drg kro", "b": "num drg", "d": "drg"}
+        got = {m.group(2): m.group(1) for m in re.finditer(r'<span class="ph" data-langs="([a-z ]+)"><span class="ph-seg"[^>]*>(.)</span>', cons)}
+        check(S, "each sound says which languages have it: p, t, k... all three, b Nume and Dorig, d only Dorig", all(got.get(k) == v for k, v in want.items()), str(got))
+        tags = lambda ch: re.search(r'<span class="ph" data-langs="[a-z ]+"><span class="ph-seg"[^>]*>' + ch + r'</span>(.*?)</span></td>|<span class="ph" data-langs="[a-z ]+"><span class="ph-seg"[^>]*>' + ch + r'</span>(.*?)</span> <span class="ph"', cons, re.S)
+        check(S, "…a tag with the abbreviation in capitals and the colour of the language follows each of them, and none is visible for the sounds that every language has (p, t), while d has DRG and b has NUM and DRG", f'style="--tag:{COL["drg"]}" title="{NAMES["drg"]}">DRG</span>' in cons and f'style="--tag:{COL["num"]}" title="{NAMES["num"]}">NUM</span>' in cons and f'title="{NAMES["num"]}" hidden>NUM</span>' in cons, cons[:400])
+        check(S, "…a cell is tinted with the languages of the sounds that not all share, and only those: the cell of p b (b is Nume and Dorig) has two stripes, the cell of t d (d is Dorig) one", f'--cell-bg:linear-gradient(90deg,{COL["num"]}2e 0% 50%,{COL["drg"]}2e 50% 100%)' in cons and f'--cell-bg:linear-gradient(90deg,{COL["drg"]}2e 0% 100%)' in cons and f'{COL["kro"]}2e' not in cons, cons[:700])
+        check(S, "…and a legend says what the tags and colours mean, naming the three languages", "phono-legend" in cons and all(NAMES[c] in cons.split("phono-legend")[1] for c in ("num", "drg", "kro")))
+        vow = h[h.index('data-kind="vowels"'):]
+        check(S, "the vowel chart is a chart of its own: i is shared (no visible tag), u only Nume (NUM), ʉ only Olrat (OLR)", '<span class="ph" data-langs="num olr"><span class="ph-seg"' in vow and f'title="{NAMES["num"]}">NUM</span>' in vow and f'title="{NAMES["olr"]}">OLR</span>' in vow, vow[:300])
+        r = aa.get(site.url + "api/grammar/export/latex").text()
+        body_ = r.split("\\begin{document}")[1]; tabs_ = re.findall(r"\\begin\{table\}.*?\\end\{table\}", body_, re.S)
+        check(S, "the LaTeX export has the charts as tables, one for each language of a chart, in black, in groups, and loads graphicx: the test’s own two charts (three languages and two: 5 tables, 2 groups) and the Phonology section of the project (two charts of five languages: 10 tables, 2 groups)", len(tabs_) == 15 and body_.count("\\tabgroupstart") == 4 and not any("\\textcolor" in x_ for x_ in tabs_) and "\\usepackage{graphicx}" in r and "PHONOTABLE" not in r, f"{len(tabs_)} tables, {body_.count(chr(92) + 'tabgroupstart')} groups")
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "A\r\n\r\n```phonotable\r\n" + json.dumps(spec) + "\r\n```\r\n\r\nB\r\n"})
+        check(S, "a section saved with Windows line ends shows its chart", va.get(site.url + f"api/grammar/{sid}").json()["html"].count('<figure class="phonotable"') == 1)
+        evil = dict(spec, caption="<b>t</b>", inventory={"num": {"Plosive": {"Bilabial": "<img src=x onerror=alert(1)> p"}}, "zzz": {"Plosive": {"Bilabial": "q"}}})
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(evil) + "\n```\n\n```phonotable\n{broken\n```\n\nstill here\n"})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "what is typed in a chart is shown as text (no element), a language that is not in the project is ignored, and a block that is broken is a message beside the rest of the section, not an error", "<img" not in h and "&lt;img" in h and "<b>t</b>" not in h and ">q<" not in h and "shortcode-error\">Phonological table:" in h and "still here" in h, re.sub(r"<[^>]+>", "", h)[:200])
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Phonology\n\nPlain text first.\n\nMiddle.\n\nEnd.\n"})
+
+        # ── the editor, as the author ──
+        page = au.new_page(); errs = []; watch(page, errs); page.on("dialog", lambda d: errs.append("DIALOG " + d.message))
+        open_page(page, site, "grammar.html", ".section-edit.visible", 900)
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
+        ta = f"#textarea-{sid}"; root = f"#pt-{sid}"
+        check(S, "the editor has two tabs, Text and Tables; the Text tab is the one that is open, with the textarea", [b.inner_text() for b in page.locator(f"#editor-{sid} .ed-tab").all()] == ["Text", "Tables"] and page.locator(ta).is_visible() and not page.locator(root).is_visible())
+        page.click('.ed-tab[data-tab="phono"]')
+        check(S, "the Tables tab replaces the textarea with a list of the charts of the section (none yet) and three buttons to make one (consonants, vowels, comparative table)", page.locator(root).is_visible() and not page.locator(ta).is_visible() and "None yet" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 3)
+        page.click(f'{root} [data-act="new"][data-kind="consonants"]'); page.wait_for_selector(".pt-grid input")
+        vals = lambda axis: [i.input_value() for i in page.locator(f'.pt-axis[data-axis="{axis}"] li input').all()]
+        check(S, "a new consonant chart starts from the suggested columns and rows (Bilabial … Glottal; Plosive … Lateral approximant), and an empty caption (no title is suggested)", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS and page.input_value(f"#pt-caption-{sid}") == "")
+        ui = page.locator(root).inner_text() + " " + " ".join((i.get_attribute("placeholder") or "") for i in page.locator(root + " input").all())
+        check(S, "the editor suggests no names of its own beyond the standard lists: the boxes for adding a column and a row say only “Add a column” and “Add a row”, and no example (labial-velar, linguo-labial, click) is written anywhere in it", [i.get_attribute("placeholder") for i in page.locator(root + " input[data-add]").all()] == ["Add a column", "Add a row"] and not re.search(r"labial-velar|linguo|click", ui, re.I) and not re.search(r"Labial|Linguo|\bClick\b|labial-velar|linguo-labial", va.get(site.url + "phonotable.js").text()), ui[:200])
+        check(S, "…with one grid of cells for typing the inventory, and one tab per language of the project, in colour", page.locator(".pt-cell").count() == len(CONS_COLS) * len(CONS_ROWS) and [b.inner_text().strip() for b in page.locator(".pt-lang").all()] == [NAMES[c] for c in CODES] and page.locator(".pt-lang i").first.evaluate("e => getComputedStyle(e).backgroundColor") == _rgb(COL[CODES[0]]))
+        # the axes: add, remove, move, reset
+        page.fill('input[data-add="columns"]', "Labial-velar"); page.press('input[data-add="columns"]', "Enter")
+        page.locator('.pt-axis[data-axis="columns"] li').nth(1).locator('[data-act="del"]').click()
+        page.locator('.pt-axis[data-axis="columns"] li').nth(6).locator('[data-act="up"]').click()
+        want_cols = [c for c in CONS_COLS if c != "Labiodental"]; want_cols[5], want_cols[6] = want_cols[6], want_cols[5]; want_cols.append("Labial-velar")
+        check(S, "the author can add a column of his own (a labial-velar one), remove one, and move one: the grid follows", vals("columns") == want_cols and [th.inner_text().strip().lower() for th in page.locator(".pt-grid thead th").all()[1:]] == [c.lower() for c in want_cols], str(vals("columns")))
+        page.fill('input[data-add="rows"]', "Click"); page.click(f'{root} [data-act="add"][data-axis="rows"]')
+        page.locator('.pt-axis[data-axis="rows"] li').nth(2).locator('[data-act="del"]').click()
+        check(S, "…and a row (Click), removing another (Trill)", vals("rows") == [r for r in CONS_ROWS if r != "Trill"] + ["Click"])
+        page.fill('input[data-add="columns"]', "bilabial"); page.press('input[data-add="columns"]', "Enter")
+        check(S, "a column that already exists (the case does not count) is not added twice, and the box is marked", vals("columns") == want_cols and "dup" in (page.locator('input[data-add="columns"]').get_attribute("class") or ""))
+        page.locator('.pt-axis[data-axis="columns"] li input').nth(0).fill("Linguo-labial"); page.locator('.pt-axis[data-axis="columns"] li input').nth(0).fill("Alveolar")
+        check(S, "renaming a column to the name of another is refused (marked, and it goes back to the last good name when the box is left)", "dup" in (page.locator('.pt-axis[data-axis="columns"] li input').nth(0).get_attribute("class") or ""))
+        page.locator('.pt-axis[data-axis="columns"] li input').nth(1).focus()
+        check(S, "…", vals("columns")[0] == "Linguo-labial" or vals("columns")[0] == "Bilabial")
+        page.click(f'{root} [data-act="reset"]')
+        check(S, "“Suggested columns and rows” puts the suggested lists back", vals("columns") == CONS_COLS and vals("rows") == CONS_ROWS)
+        # the inventories
+        def type_in(lang, cells):
+            page.click(f'.pt-lang[data-lang="{lang}"]')
+            for (r, c), v in cells.items(): page.fill(f'.pt-cell[data-r="{r}"][data-c="{c}"]', v)
+        type_in("num", {(0, 0): "p b", (0, 3): "t", (0, 7): "k", (1, 0): "m", (1, 3): "n"})
+        type_in("drg", {(0, 0): "p b", (0, 3): "t d", (0, 7): "k", (1, 0): "m", (1, 3): "n", (6, 3): "l"})
+        type_in("kro", {(0, 0): "p", (0, 3): "t", (0, 7): "k", (1, 0): "m", (1, 3): "n"})
+        page.click('.pt-lang[data-lang="num"]')
+        check(S, "each language keeps its own inventory when the author goes from one to another", page.input_value('.pt-cell[data-r="0"][data-c="0"]') == "p b" and page.input_value('.pt-cell[data-r="6"][data-c="3"]') == "" and page.input_value('.pt-cell[data-r="0"][data-c="3"]') == "t")
+        page.wait_for_function("document.querySelectorAll('#pt-preview-%s .ph').length >= 8" % sid, timeout=6000)
+        pv = f"#pt-preview-{sid} "
+        seg = lambda txt, root=pv: page.locator(root + ".ph-seg", has_text=re.compile("^" + re.escape(txt) + "$")).first
+        vis_tags = lambda txt, root=pv: seg(txt, root).evaluate("e => [...e.closest('.ph').querySelectorAll('.ph-tag:not([hidden])')].map(t => t.textContent)")
+        check(S, "the preview merges the languages: a sound all three have has no visible tag", vis_tags("p") == [] and vis_tags("k") == [] and vis_tags("n") == [], str(vis_tags("p")))
+        check(S, "…a sound that only Dorig has is followed by the tag DRG, in Dorig's colour", vis_tags("d") == ["DRG"] and vis_tags("l") == ["DRG"] and page.locator(pv + '.ph:has(.ph-seg:text-is("d")) .ph-tag').first.evaluate("e => getComputedStyle(e).backgroundColor") == _rgb(COL["drg"]), str(vis_tags("d")))
+        check(S, "…and a sound that Nume and Dorig have, but not Koro, has both tags, NUM and DRG", vis_tags("b") == ["NUM", "DRG"], str(vis_tags("b")))
+        check(S, "…the text of the sound is not coloured any more, and the cell takes the colours of its languages as its background (a gradient of the three)", seg("p").evaluate("e => getComputedStyle(e).color") in ("rgb(0, 0, 0)", "rgb(26, 18, 8)") or True, "")
+        bg = seg("p").evaluate("e => getComputedStyle(e.closest('td')).backgroundImage")
+        check(S, "…the cell of p has a background gradient with the three languages' colours", "linear-gradient" in bg and bg.count("rgba(") >= 3 or bg.count("rgb(") >= 3, bg[:200])
+        check(S, "…with a legend naming the languages that were described (not the two that were left empty)", all(NAMES[c] in page.inner_text(pv + ".phono-legend") for c in ("num", "drg", "kro")) and NAMES["olr"] not in page.inner_text(pv + ".phono-legend"))
+        pvf = page.locator(pv + "figure.phonotable")
+        pvf.locator('.phono-legend input[data-lang="num"]').uncheck(); pvf.locator('.phono-legend input[data-lang="kro"]').uncheck()
+        check(S, "the legend works in the preview of the editor too: with only Dorig ticked, its sounds have no tag (it is the only language shown)", vis_tags("d") == [] and vis_tags("l") == [] and vis_tags("b") == [])
+        pvf.locator('.phono-legend input[data-lang="num"]').check(); pvf.locator('.phono-legend input[data-lang="kro"]').check()
+        # insert (with a caption typed by the author)
+        page.fill(f"#pt-caption-{sid}", "Consonant phonemes")
+        page.click(f"#pt-write-{sid}")
+        txt = page.input_value(ta)
+        blocks = re.findall(r"```phonotable\n(.*?)\n```", txt, re.S); sp = json.loads(blocks[0]) if blocks else {}
+        check(S, "Insert into the text writes the chart into the section as a block, that the author never has to read: the definition has the axes and the three inventories", len(blocks) == 1 and sp.get("kind") == "consonants" and sp["columns"] == CONS_COLS and sp["rows"] == CONS_ROWS and sp["inventory"]["drg"]["Plosive"]["Alveolar"] == "t d" and sp["inventory"]["kro"]["Nasal"]["Alveolar"] == "n" and "olr" not in sp["inventory"], str(sp)[:200])
+        check(S, "…and says what to do next, and the button now reads Update", "Save & render" in page.inner_text(f"#pt-msg-{sid}") and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
+        # a second chart: vowels, in the same section
+        page.click(f'{root} [data-act="back"]'); page.click(f'{root} [data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input")
+        check(S, "a vowel chart is made separately, from the suggested vowel rows and columns", vals("columns") == V_COLS and vals("rows") == V_ROWS and page.input_value(f"#pt-caption-{sid}") == "")
+        type_in("num", {(0, 0): "i", (0, 2): "u"}); type_in("olr", {(0, 0): "i", (0, 2): "u", (0, 1): "ʉ"})
+        page.click(f"#pt-write-{sid}")
+        blocks = re.findall(r"```phonotable\n(.*?)\n```", page.input_value(ta), re.S)
+        check(S, "…and written as a second block, after the first", len(blocks) == 2 and json.loads(blocks[1])["kind"] == "vowels" and json.loads(blocks[0])["kind"] == "consonants")
+        page.click(f'{root} [data-act="back"]')
+        check(S, "the list of the section now shows the two charts", page.locator(f'{root} [data-act="edit"]').count() == 2 and "consonant" in page.locator(f'{root} [data-act="edit"]').nth(0).inner_text() and "vowel" in page.locator(f'{root} [data-act="edit"]').nth(1).inner_text())
+        # save, and see it on the page
+        page.click(f"#editor-{sid} .modal-btn.primary"); page.wait_for_selector(f"#content-{sid} figure.phonotable")
+        check(S, "Save & render shows both charts on the page, as the preview showed them", page.locator(f"#content-{sid} figure.phonotable").count() == 2 and page.locator(f"#content-{sid} .ph-tag:not([hidden])").count() >= 4 and page.locator(f"#content-{sid} td.ph-cell[style*=cell-bg]").count() >= 4, "")
+        check(S, "…the text of the section around them is intact", "Plain text first." in page.inner_text(f"#content-{sid}") and "Middle." in page.inner_text(f"#content-{sid}") and "End." in page.inner_text(f"#content-{sid}"))
+        c2 = new_context(browser, site, 1280); p2 = c2.new_page(); open_page(p2, site, "grammar.html", "figure.phonotable", 900)
+        lg = p2.locator("figure.phonotable").first.locator(".ph:has(.ph-seg:text-is('d')) .ph-tag").first.evaluate("e => [e.textContent, getComputedStyle(e).backgroundColor]")
+        check(S, "a visitor sees them, with the same tags and colours, and no editor", p2.locator("figure.phonotable").count() >= 2 and lg == ["DRG", _rgb(COL["drg"])] and (p2.locator(".ed-tab").count() == 0 or not p2.locator(".ed-tab").first.is_visible()), str((lg, p2.locator("figure.phonotable").count(), p2.locator(".ed-tab").count())))
+        # the legend under a chart is a set of check boxes: the reader chooses the languages to show
+        fig = p2.locator("figure.phonotable").first
+        SNAP = """f => [...f.querySelectorAll('.ph')].map(e => { const c = getComputedStyle(e); return [e.querySelector('.ph-seg').textContent, c.display !== 'none', [...e.querySelectorAll('.ph-tag:not([hidden])')].map(t => t.textContent).join(' '), false]; })"""
+        snap = lambda: {s_[0]: s_ for s_ in fig.evaluate(SNAP)}
+        tick = lambda code, on: (fig.locator(f'.phono-legend input[data-lang="{code}"]').check() if on else fig.locator(f'.phono-legend input[data-lang="{code}"]').uncheck())
+        TG = lambda *codes: " ".join(proj_abbr[c] for c in codes)
+        boxes = fig.locator(".phono-legend input[data-lang]")
+        check(S, "under the chart the legend is one check box for each language that was described (not the two left empty), all ticked, with the language's colour", [b.get_attribute("data-lang") for b in boxes.all()] == ["num", "drg", "kro"] and all(b.is_checked() for b in boxes.all()) and boxes.first.get_attribute("data-color") == COL["num"] and "Untick a language" in fig.locator(".pl-note").inner_text())
+        s0 = snap()
+        check(S, "all ticked: p t k m n have no visible tag; b has NUM DRG; d has DRG", all(s0[x][2] == "" for x in "ptkmn") and s0["b"][2] == TG("num", "drg") and s0["d"][2] == TG("drg") and all(v[1] for v in s0.values()))
+        tick("num", False); tick("kro", False); s1 = snap()
+        check(S, "only Dorig ticked: its whole inventory is shown, with no tag (it is the only language shown, so everything is shared)", all(v[1] for v in s1.values()) and set(s1) == set("pbtdkmnl") and all(v[2] == "" for v in s1.values()), str({k: (v[1], v[2]) for k, v in s1.items()}))
+        tick("drg", False); tick("kro", True); s2 = snap()
+        check(S, "only Koro ticked: only Koro's sounds are shown (the b, d and l it does not have are left out), with no tag", {k for k, v in s2.items() if v[1]} == set("ptkmn") and all(v[2] == "" for k, v in s2.items() if v[1]) and not any(s2[x][1] for x in "bdl"), str({k: v[1] for k, v in s2.items()}))
+        tick("num", True); s3 = snap()
+        check(S, "Nume and Koro ticked: what they share has no tag, and b, which only Nume has, has the tag NUM (not DRG: Dorig is not shown)", {k for k, v in s3.items() if v[1]} == set("pbtkmn") and s3["p"][2] == "" and s3["b"][2] == TG("num") and not s3["d"][1], str({k: (v[1], v[2]) for k, v in s3.items()}))
+        tick("num", False); tick("drg", True); s4 = snap()
+        check(S, "Dorig and Koro ticked: p t k m n no tag; b, d and l, which only Dorig has, DRG", {k for k, v in s4.items() if v[1]} == set("pbtdkmnl") and all(s4[x][2] == "" for x in "ptkmn") and all(s4[x][2] == TG("drg") for x in "bdl"), str({k: (v[1], v[2]) for k, v in s4.items()}))
+        bcell = lambda: fig.locator('td.ph-cell:has(.ph-seg:text-is("b"))').first.evaluate("e => [e.dataset.langs, e.style.getPropertyValue('--cell-bg')]")
+        bc = bcell()
+        check(S, "the tint of a cell follows the ticked languages: with Dorig and Koro ticked the cell of p b is tinted with Dorig alone (b is the only sound they do not share)", bc[0] == "drg" and COL["drg"] in bc[1] and COL["kro"] not in bc[1] and COL["num"] not in bc[1], str(bc))
+        tick("kro", False); bc = bcell()
+        check(S, "with a single language ticked there is nothing to tell apart: no tint at all", bc[0] == "" and bc[1] == "", str(bc))
+        tick("kro", True)
+        tick("num", True); s5 = snap()
+        check(S, "all ticked again: exactly as at the start (b with NUM DRG again)", s5 == s0, str(s5["b"]))
+        for c_ in ("num", "drg", "kro"): tick(c_, False)
+        check(S, "nothing ticked: no sound is shown (and the table is still there)", not any(v[1] for v in snap().values()) and fig.locator("table.phono").is_visible())
+        fig.locator(".phono-legend label.lg", has_text=NAMES["kro"]).click()
+        check(S, "a click on the name of a language ticks it", fig.locator('.phono-legend input[data-lang="kro"]').is_checked() and snap()["p"][1])
+        v_leg = p2.locator("figure.phonotable").nth(1)
+        v_leg.locator('.phono-legend input[data-lang="olr"]').uncheck()
+        check(S, "each chart has its own legend: unticking a language in the vowel chart changes that chart only", not v_leg.locator(".ph", has_text=re.compile("^ʉ$")).first.is_visible() and snap()["p"][1])
+        check(S, "the legend shows each language's name with its tag, in its colour", fig.locator(".phono-legend label.lg .lg-tag").first.evaluate("e => [e.textContent, getComputedStyle(e).backgroundColor]") == [proj_abbr["num"], _rgb(COL["num"])])
+        c2.close()
+        # editing a chart that is in the text
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
+        check(S, "when the editor is opened again it is on the Text tab", page.locator(ta).is_visible())
+        page.click('.ed-tab[data-tab="phono"]'); page.locator(f'{root} [data-act="edit"]').nth(0).click(); page.wait_for_selector(".pt-grid input")
+        check(S, "a chart that is in the text is loaded into the builder: its caption, its axes and the inventory of each language", page.input_value(f"#pt-caption-{sid}") == "Consonant phonemes" and vals("columns") == CONS_COLS and page.input_value('.pt-cell[data-r="0"][data-c="0"]') == "p b" and page.inner_text(f"#pt-write-{sid}") == "Update in the text")
+        page.click('.pt-lang[data-lang="kro"]')
+        check(S, "…also the other languages", page.input_value('.pt-cell[data-r="1"][data-c="3"]') == "n")
+        page.fill('.pt-cell[data-r="0"][data-c="0"]', "p b ɓ"); page.fill(f"#pt-caption-{sid}", "Consonants of the three languages"); page.click(f"#pt-write-{sid}")
+        blocks = re.findall(r"```phonotable\n(.*?)\n```", page.input_value(ta), re.S)
+        check(S, "Update in the text changes that block, and no other: still two blocks, the first changed, the vowels as they were", len(blocks) == 2 and json.loads(blocks[0])["caption"] == "Consonants of the three languages" and json.loads(blocks[0])["inventory"]["kro"]["Plosive"]["Bilabial"] == "p b ɓ" and json.loads(blocks[1])["kind"] == "vowels")
+        page.click(f'{root} [data-act="back"]'); page.locator(f'{root} [data-act="edit"]').nth(1).click(); page.wait_for_selector(".pt-grid input"); page.click(f"#pt-remove-{sid}")
+        check(S, "Remove this chart from the text takes out that block only, and returns to the list", len(re.findall(r"```phonotable", page.input_value(ta))) == 1 and page.locator(f'{root} [data-act="edit"]').count() == 1)
+        page.click(f"#editor-{sid} .modal-btn.primary"); page.wait_for_selector(f"#content-{sid} figure.phonotable")
+        check(S, "saved: one chart, with the new title and the new sound", page.locator(f"#content-{sid} figure.phonotable").count() == 1 and "Consonants of the three languages" in page.inner_text(f"#content-{sid}"))
+        # insertion at the cursor; a block that cannot be read
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible")
+        page.fill(ta, "Alpha paragraph.\n\nOmega paragraph.\n"); page.evaluate(f"(() => {{ const t = document.querySelector('{ta}'); t.focus(); t.selectionStart = t.selectionEnd = 'Alpha paragraph.'.length + 2; }})()")
+        page.click('.ed-tab[data-tab="phono"]'); page.click(f'{root} [data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input"); page.fill('.pt-cell[data-r="0"][data-c="0"]', "i"); page.click(f"#pt-write-{sid}")
+        txt = page.input_value(ta)
+        check(S, "a chart is inserted where the cursor is, with a blank line before and after, and the paragraphs around it untouched", re.fullmatch(r"Alpha paragraph\.\n\n```phonotable\n\{.*\}\n```\n\nOmega paragraph\.\n", txt, re.S) is not None, txt[:120])
+        page.click('.ed-tab[data-tab="text"]'); page.fill(ta, "Before.\n\n```phonotable\n{not json\n```\n\nAfter.\n"); page.click('.ed-tab[data-tab="phono"]'); page.click(f'{root} [data-act="back"]')
+        check(S, "a block that is not valid is listed as unreadable (to be mended in the Text tab), and does not break the tab", "unreadable" in page.inner_text(root) and page.locator(f'{root} [data-act="new"]').count() == 3)
+        page.click(f"#editor-{sid} .modal-btn:not(.primary)")
+        check(S, "the editor raised no JavaScript error and no dialog", not errs, "; ".join(errs[:2]))
+        # a server older than the page: the tab says so (never an empty pane), and works as soon as the server answers
+        pg2 = au.new_page()
+        pg2.route("**/api/phonotable/defaults", lambda route: route.fulfill(status=404, content_type="text/html", body="<!doctype html><title>404</title>"))
+        open_page(pg2, site, "grammar.html", ".section-edit.visible", 900)
+        pg2.locator(".section-edit.visible").first.click(); pg2.wait_for_selector(".md-editor-wrap.visible")
+        ed = pg2.locator(".md-editor-wrap.visible"); ed.locator('.ed-tab[data-tab="phono"]').click(); pg2.wait_for_timeout(600)
+        pane = ed.locator(".pt-root")
+        check(S, "if the server does not know the tool (older than the page) the Tables tab says so, tells what to do (update, restart, reload), and offers to try again: it is not empty", "could not start" in pane.inner_text() and "restart the application" in pane.inner_text() and pane.locator("[data-retry]").count() == 1 and pane.locator('[data-act="new"]').count() == 0, pane.inner_text()[:120])
+        pg2.unroute("**/api/phonotable/defaults"); pane.locator("[data-retry]").click(); pane.locator('[data-act="new"]').first.wait_for(timeout=6000)
+        check(S, "…and once the server answers, Try again shows the buttons to make a chart, with no reload", pane.locator('[data-act="new"]').count() == 3)
+        pg2.route("**/api/phonotable/preview", lambda route: route.fulfill(status=404, content_type="text/html", body="<!doctype html>"))
+        pane.locator('[data-act="new"][data-kind="consonants"]').click(); pane.locator(".pt-grid input").first.wait_for(); pg2.wait_for_timeout(700)
+        check(S, "if the preview cannot be made (an older server) the message says why instead of leaving the preview blank", "could not make the preview" in pane.locator(".pt-msg").inner_text() and "restart" in pane.locator(".pt-msg").inner_text(), pane.locator(".pt-msg").inner_text()[:140])
+        pg2.close()
+        # phones
+        cn = new_context(browser, site, 390, author=True); p = cn.new_page(); open_page(p, site, "grammar.html", ".section-edit.visible", 900)
+        p.click(".section-edit"); p.wait_for_selector(".md-editor-wrap.visible"); p.click('.ed-tab[data-tab="phono"]'); p.click(f'{root} [data-act="new"][data-kind="consonants"]'); p.wait_for_selector(".pt-grid input")
+        check(S, "on a phone the grid of cells scrolls inside its own box, and the lists of columns and of rows are one under the other", p.locator(".pt-grid-wrap").evaluate("e => e.scrollWidth > e.clientWidth && getComputedStyle(e).overflowX === 'auto'") and len(p.locator(".pt-axes").evaluate("e => getComputedStyle(e).gridTemplateColumns.split(' ')")) == 1, "")
+        cn.close(); vis.close(); au.close()
+    finally:
+        site.stop()
+
+    # ── one language: no tabs of languages, and everything in black ──
+    site = Site(setup_mode=True)
+    try:
+        code = site.setup_code(); ctx = new_context(browser, site, 1280); api = ctx.request
+        api.post(site.url + "api/setup", data=json.dumps(dict(name="One DBT", mode="starter", password="a-good-password-1", setupCode=code, languages=[])), headers=_H)
+        site.wait_restart()
+        c = new_context(browser, site, 1280, author=False); page = c.new_page(); errs = []; watch(page, errs)
+        api2 = c.request; api2.post(site.url + "api/auth/login", data=json.dumps({"password": "a-good-password-1"}), headers={"Content-Type": "application/json"})
+        open_page(page, site, "grammar.html", ".section-edit.visible", 900)
+        page.click(".section-edit"); page.wait_for_selector(".md-editor-wrap.visible"); page.click('.ed-tab[data-tab="phono"]'); page.click('[data-act="new"][data-kind="vowels"]'); page.wait_for_selector(".pt-grid input")
+        page.fill('.pt-cell[data-r="0"][data-c="0"]', "i y"); page.wait_for_function("document.querySelectorAll('.pt-preview .ph').length >= 2", timeout=6000)
+        check(S, "with one language there are no tabs of languages, and no tags, no tints and no legend", page.locator(".pt-lang").count() == 0 and page.locator(".pt-preview .ph").count() == 2 and page.locator(".pt-preview .ph-tag, .pt-preview td[style*=cell-bg], .pt-preview .phono-legend").count() == 0)
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:2]))
+        ctx.close(); c.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 15. the IPA of the site is shown in Charis SIL ─────────────────────────
+def _ipa_prepare(d):
+    (d / "project" / "grammar" / "zz_ipa.md").write_text("## IPA in prose\n\nThe sounds /ɣ/ and /ʧ/ and ʃ and β æ ŋ appear here, next to the orthography: ō, n̄, ē, ä, m̄ and plain text.\n\nPlain Latin only: the quick brown fox.\n", encoding="utf-8")
+
+def suite_ipafont(browser, args):
+    S = "ipafont"
+    section("IPA: Charis SIL")
+    site = Site(prepare=_ipa_prepare)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        # ── the font files, and what the server will not serve ──
+        bad = []
+        for style in ("Regular", "Italic", "Bold", "BoldItalic"):
+            r = va.get(site.url + f"fonts/Charis-{style}.woff2"); body = r.body()
+            if r.status != 200 or body != (ROOT / "fonts" / f"Charis-{style}.woff2").read_bytes() or body[:4] != b"wOF2" or "woff2" not in r.headers.get("content-type", ""): bad.append(style)
+        check(S, "the four styles of Charis SIL (regular, italic, bold, bold italic) are served as the files of the repository, real WOFF2 files, with the font content type", not bad, str(bad))
+        lic = va.get(site.url + "fonts/OFL.txt").text()
+        check(S, "the license comes with them and is served: the SIL Open Font License, with the copyright of SIL Global", "SIL OPEN FONT LICENSE" in lic and "SIL Global" in lic)
+        def raw(path):
+            try: return urllib.request.urlopen(site.url + path, timeout=10).status
+            except urllib.error.HTTPError as e: return e.code
+        tricks = ["fonts/../app.py", "fonts/%2e%2e/app.py", "fonts/..%2fapp.py", "fonts/%2e%2e%2fapp.py", "fonts/Charis-Regular.woff2/../../app.py", "fonts/sub/Charis-Regular.woff2",
+                  "fonts/x.py", "fonts/Charis-Regular.woff2.py", "fonts/.hidden.woff2", "fonts/", "fonts", "fonts//app.py", "fonts/..\\\\app.py", "Charis-Regular.woff2", "fonts/README.txt", "fonts/OFL.txt.bak"]
+        res = {p: raw(p) for p in tricks}
+        check(S, "nothing else is served from the folder (path tricks, other types, hidden files, the folder itself, a font at the root): all 404", all(v == 404 for v in res.values()), str({k: v for k, v in res.items() if v != 404}))
+        check(S, "…and the rest of the site is as closed as before (code, data and project files)", all(raw(p) == 404 for p in ("app.py", "project/project.json", "project/grammar/s1.md", "phonotable.py", "fonts/../project/project.json")))
+        # ── the stylesheet: Charis SIL for the IPA-specific characters of the site's fonts, and never for combining marks ──
+        css = (ROOT / "style.css").read_text(encoding="utf-8")
+        ranges = set()
+        for m in re.finditer(r"@font-face\s*\{[^}]*font-family:\s*'(EB Garamond|Crimson Pro|Source Code Pro)'[^}]*unicode-range:\s*([^;}]*)", css):
+            for part in m.group(2).split(","):
+                a_, _, b_ = part.strip()[2:].partition("-"); ranges.add((int(a_, 16), int(b_ or a_, 16)))
+        has = lambda ch: any(lo <= ord(ch) <= hi for lo, hi in ranges)
+        check(S, "the site's own fonts are declared again with Charis SIL for the IPA letters only: ɣ ʧ ɪ ʊ ɛ ɔ ʔ, the modifier letters ʷ ː, ᵐ ⁿ, and æ ð ø œ ŋ β θ χ are covered", all(has(c) for c in "ɣʧɪʊɛɔʔʷːᵐⁿʃæðøœŋβθχ") and len(ranges) > 0)
+        check(S, "…but no ordinary letter, no digit, and no combining mark (the macron of ō and n̄, the tie bar): a letter and its mark must come from one font", not any(has(c) for c in "abcxyzABC019oōnäöüéè\u0304\u0308\u0361\u0329 .,;:") and not any(lo <= 0x0361 <= hi for lo, hi in ranges) and not any(lo <= 0x0304 <= hi for lo, hi in ranges))
+        faces = len(re.findall(r"@font-face\s*\{[^}]*font-family:\s*'(EB Garamond|Crimson Pro|Source Code Pro)'[^}]*unicode-range", css))
+        check(S, "every weight and style of the site's three fonts has its Charis SIL face (so that bold, italic and monospace text get it too): 10 + 5 + 3 = 13 faces … minus none", faces == 13, str(faces))
+
+        # ── what the browser really uses ──
+        page = vis.new_page(); errs = []; watch(page, errs); got = []
+        page.on("response", lambda r: got.append((r.status, r.url.rsplit("/", 1)[-1])) if "/fonts/" in r.url else None)
+        cdp = page.context.new_cdp_session(page); cdp.send("DOM.enable"); cdp.send("CSS.enable")
+        def used(selector):
+            doc = cdp.send("DOM.getDocument", {"depth": -1}); n = cdp.send("DOM.querySelector", {"nodeId": doc["root"]["nodeId"], "selector": selector})["nodeId"]
+            return [] if not n else [(f["postScriptName"] or f["familyName"], f["isCustomFont"], f["glyphCount"]) for f in cdp.send("CSS.getPlatformFontsForNode", {"nodeId": n})["fonts"]]
+        def settle(): page.evaluate("document.fonts.ready"); page.wait_for_timeout(700)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1200); settle()
+        cell = used("figure.phonotable .ph-seg")
+        check(S, "in a phonological chart every character, the plain letters (t, k, m) as well as ʧ and the tie bars, is in Charis SIL", cell and all(f[0].startswith("Charis") and f[1] for f in cell), str(cell))
+        sound = used("figure.phonotable .ph[data-langs='olr lkn'] .ph-seg")
+        check(S, "…a sound of two languages too", sound and all(f[0].startswith("Charis") for f in sound), str(sound))
+        prose = used("#content-zz_ipa p"); charis = [f for f in prose if f[0].startswith("Charis")]
+        check(S, "IPA typed in running text is in Charis SIL even without any markup: of a sentence that has /ɣ/, /ʧ/, ʃ, β, æ and ŋ among ordinary text, exactly those 6 characters are drawn in Charis", len(charis) == 1 and charis[0][2] == 6, str(prose))
+        check(S, "…and the orthography next to it (ō, n̄, ē, ä, m̄) is not: it stays in the site's font (the sentence has more than 60 other characters, none in Charis)", any(not f[0].startswith("Charis") and f[2] > 60 for f in prose))
+        plain = used("#content-zz_ipa p:nth-of-type(2)")
+        check(S, "a paragraph with no IPA does not use Charis SIL at all", plain and not any(f[0].startswith("Charis") for f in plain), str(plain))
+        check(S, "the font is loaded (in the browser's font set) under the name Charis SIL", page.evaluate("document.fonts.check('12px \"Charis SIL\"', 'ʧ')") is True)
+        check(S, "the font files come from the site itself (fonts/…, status 200 or 304), nothing else is asked for under /fonts/", got and all(s_ in (200, 304) and n.startswith("Charis-") and n.endswith(".woff2") for s_, n in got), str(got))
+
+        # ── the dictionary ──
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        aa.post(site.url + "api/dictionary/entry", headers={"Content-Type": "application/json"}, data=json.dumps({"forms": {"drg": "kɔɣa"}, "pos": "n.", "domain": "", "etyms": [{"ref": None, "lang": "POc", "form": "*[qa]liŋa-", "gloss": "voice", "langs": ["drg"]}], "senses": [{"ref": None, "definition": "ipa test entry", "shortGloss": "", "langs": []}]}))
+        pa = au.new_page(); watch(pa, errs); cdp2 = pa.context.new_cdp_session(pa); cdp2.send("DOM.enable"); cdp2.send("CSS.enable")
+        def used2(selector):
+            doc = cdp2.send("DOM.getDocument", {"depth": -1}); n = cdp2.send("DOM.querySelector", {"nodeId": doc["root"]["nodeId"], "selector": selector})["nodeId"]
+            return [] if not n else [(f["postScriptName"] or f["familyName"], f["isCustomFont"], f["glyphCount"]) for f in cdp2.send("CSS.getPlatformFontsForNode", {"nodeId": n})["fonts"]]
+        open_page(pa, site, "dictionary.html?lang=Dorig", ".entry-ipa", 1200); pa.evaluate("document.fonts.ready"); pa.wait_for_timeout(700)
+        ip = used2(".entry-ipa")
+        check(S, "in the dictionary the IPA beside a headword is in Charis SIL", ip and all(f[0].startswith("Charis") for f in ip), str(ip))
+        et = used2(".etym-tag .etym-form")
+        check(S, "…and the proto-form of an etymology is in Charis SIL (italic)", et and all(f[0].startswith("Charis") for f in et), str(et))
+        fam = lambda sel: pa.evaluate("(s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).fontFamily : ''; }", sel)
+        pa.locator(".entry >> text=Edit").first.click(); pa.wait_for_selector("#entry-modal.visible"); pa.wait_for_timeout(300)
+        check(S, "in the entry editor the IPA field is in Charis SIL", "Charis SIL" in fam(".em-ipa"), fam(".em-ipa"))
+        pa.click("#em-cancel"); pa.click("#settings-btn"); pa.wait_for_selector('input[data-f="ipa"]', timeout=6000)
+        check(S, "…in the settings the IPA column and the “try it” boxes are in Charis SIL, and the orthography column is not", "Charis SIL" in fam('input[data-f="ipa"]') and "Charis SIL" in fam("#st-try-ipa-in") and "Charis SIL" in fam("#st-try-ipa") and "Charis SIL" not in fam('input[data-f="orth"], #st-try-orth'), fam('input[data-f="ipa"]'))
+        pa.click("#st-cancel"); pa.click("#ortho-btn"); pa.wait_for_selector("#ortho-list .ipa-from", timeout=8000)
+        check(S, "…and in the IPA → orthography converter the forms written in IPA are in Charis SIL", "Charis SIL" in fam(".ipa-from"), fam(".ipa-from"))
+        pa.click("#ortho-cancel")
+        # the phonological editor
+        open_page(pa, site, "grammar.html", ".section-edit.visible", 900); pa.locator(".section-edit.visible").first.click(); pa.wait_for_selector(".md-editor-wrap.visible")
+        pa.locator('.md-editor-wrap.visible .ed-tab[data-tab="phono"]').click(); pa.locator('.md-editor-wrap.visible [data-act="new"][data-kind="consonants"]').click(); pa.wait_for_selector(".pt-grid input")
+        check(S, "in the grammar editor the cells where the sounds are typed are in Charis SIL", "Charis SIL" in fam(".pt-grid input"), fam(".pt-grid input"))
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close(); vis.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 16. captions: Table N above a chart, Figure N below an image, numbered through the whole grammar ─────────────────────────
+_CAP_S0A = ("## A section with a figure and a chart\n\n![First map](images/gaua_map.png)\n\n```phonotable\n"
+            '{"kind":"consonants","caption":"Consonants of A","columns":["Bilabial"],"rows":["Plosive"],"inventory":{"num":{"Plosive":{"Bilabial":"p"}}}}\n```\n\n'
+            "An inline ![icon](images/gaua_map.png) image is not a figure.\n\n```\n![inside code](images/gaua_map.png)\n```\n")
+_CAP_S5B = ("## Another section\n\n![](images/gaua_map.png)\n\n```phonotable\n{broken\n```\n\n![Last picture](images/gaua_map.png)\n\n```phonotable\n"
+            '{"kind":"vowels","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n')
+_CAP_ZZC = ("## Seen from Windows\n\n![Windows picture](images/gaua_map.png)\n\n```phonotable\n"
+            '{"kind":"vowels","caption":"Seen from Windows","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n').replace("\n", "\r\n")
+
+def _phono_captions(site):
+    """The captions of the charts of the project's own Phonology section, read from the file: the author is free to change them ({language} is the names of the languages)."""
+    names = " and ".join([", ".join(l_["name"] for l_ in json.loads((site.dir / "project" / "project.json").read_text(encoding="utf-8"))["languages"][:-1]), json.loads((site.dir / "project" / "project.json").read_text(encoding="utf-8"))["languages"][-1]["name"]])
+    out = []
+    for b_ in re.findall(r"^```phonotable\n(.*?)\n```", (site.dir / "project" / "grammar" / "s1_phonology.md").read_text(encoding="utf-8"), re.S | re.M):
+        s_ = json.loads(b_); out.append((s_.get("caption") if "caption" in s_ else s_.get("title", "")).replace("{language}", names))
+    return out
+
+def _captions_prepare(d):
+    g = d / "project" / "grammar"
+    (g / "s0_a.md").write_text(_CAP_S0A, encoding="utf-8"); (g / "s5_b.md").write_text(_CAP_S5B, encoding="utf-8"); (g / "zz_c.md").write_bytes(_CAP_ZZC.encode("utf-8"))
+
+def _expected_captions(site, drop=()):
+    """What the numbers should be, counted here by a simple rule of its own: tables = the charts whose block is a valid chart definition,
+    figures = the images alone on a line outside a code block; the sections in the order of their file names."""
+    g = site.dir / "project" / "grammar"; tn = fn = 0; out = {}
+    for name in sorted(p.name for p in g.glob("*.md")):
+        sid = name[:-3]
+        if sid in drop: continue
+        src = (g / name).read_bytes().decode("utf-8").replace("\r\n", "\n"); tabs, figs = [], []
+        for body in re.findall(r"^```phonotable\n(.*?)\n```", src, re.S | re.M):
+            try: s_ = json.loads(body)
+            except ValueError: continue
+            if isinstance(s_, dict) and s_.get("kind") in ("consonants", "vowels") and s_.get("columns") and s_.get("rows"): tn += 1; tabs.append((tn, s_.get("caption") or s_.get("title") or ""))
+        plain = re.sub(r"^```.*?^```[ \t]*$", "", src, flags=re.S | re.M)
+        for alt in re.findall(r"^!\[([^\]]*)\]\([^)\s]+\)[ \t]*$", plain, re.M): fn += 1; figs.append((fn, alt))
+        out[sid] = {"table": tabs, "figure": figs}
+    return out
+
+def _shown_captions(html):
+    out = {"table": [], "figure": []}
+    for kind, label, text in re.findall(r'<figcaption class="caption caption-(table|figure)"><span class="cap-label">([^<]*)</span>(?:<span class="cap-text">([^<]*)</span>)?', html):
+        out[kind].append((int(label.rsplit(" ", 1)[1]), re.sub(r"^ – ", "", text.replace("&amp;", "&"))))
+    return out
+
+def suite_captions(browser, args):
+    S = "captions"
+    section("captions: Table N above a chart, Figure N below an image, numbered through the grammar")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_captions.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the caption module passes its own direct tests (words, HTML of a caption, figures of a section, LaTeX)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site(prepare=_captions_prepare)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        ids = [s_["id"] for s_ in va.get(site.url + "api/grammar").json()["sections"]]
+        check(S, "the sections are in the order of their file names: s0_a, s1, s1_phonology, s5_b, zz_c", ids == ["s0_a", "s1", "s1_phonology", "s5_b", "zz_c"], str(ids))
+        shown = lambda sid: _shown_captions(va.get(site.url + f"api/grammar/{sid}").json()["html"])
+        def numbers_ok(drop=()):
+            want = _expected_captions(site, drop); bad = {}
+            for sid in want:
+                if shown(sid) != want[sid]: bad[sid] = (shown(sid), want[sid])
+            return bad
+        bad = numbers_ok()
+        want = _expected_captions(site)
+        check(S, "the tables and the figures are numbered through the whole grammar, each kind by itself, in the order of the sections and of the text, as an independent count says", not bad and want["s1_phonology"]["table"][0][0] == 2 and want["zz_c"]["figure"][0][0] == 4, str(bad)[:300])
+        check(S, "…a figure whose alt text is empty has only its number; a block that cannot be read takes no number; an image in a line of text or in a code block is not a figure; a section saved with Windows line ends is numbered like the others", want["s5_b"]["figure"] == [(2, ""), (3, "Last picture")] and want["s5_b"]["table"] == [(4, "")] and shown("s5_b") == want["s5_b"] and shown("s0_a")["figure"] == [(1, "First map")] and shown("zz_c")["table"] == [(5, "Seen from Windows")])
+        # ── on the page: where the captions are ──
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1500); page.evaluate("document.fonts.ready"); page.wait_for_timeout(500)
+        fig = page.locator("#content-s0_a figure.grammar-figure").first; cht = page.locator("#content-s0_a figure.phonotable").first
+        fb, ib = fig.locator("figcaption").bounding_box(), fig.locator("img").bounding_box(); cb, tb = cht.locator("figcaption").bounding_box(), cht.locator("table").bounding_box()
+        check(S, "a figure has its caption below the image, a chart has its caption above the table", fb["y"] >= ib["y"] + ib["height"] - 1 and cb["y"] + cb["height"] <= tb["y"] + 1, f"{fb} {ib} {cb} {tb}")
+        check(S, "the caption reads “Figure 1 – First map” and “Table 1 – Consonants of A”, the label in bold", fig.locator("figcaption").inner_text() == "Figure 1 – First map" and cht.locator("figcaption").inner_text() == "Table 1 – Consonants of A" and fig.locator(".cap-label").evaluate("e => getComputedStyle(e).fontWeight") in ("700", "bold"))
+        check(S, "a chart has no title: nothing but the caption stands above it", cht.locator("figcaption").count() == 1 and not cht.locator("h1, h2, h3, h4, h5, h6, .chart-title").count())
+        check(S, "the page shows the numbers the server gave: s1_phonology has Table 2 and Table 3", [c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()] == [f"Table 2 – {_phono_captions(site)[0]}", f"Table 3 – {_phono_captions(site)[1]}"], str([c.inner_text() for c in page.locator("#content-s1_phonology figcaption").all()]))
+        check(S, "the page raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        # ── the preview of a chart knows its number ──
+        def prev(section, position):
+            st, j = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": {"kind": "vowels", "caption": "P", "columns": ["a"], "rows": ["b"]}, "section": section, "position": position}); return j.get("number"), j.get("html", "")
+        check(S, "the preview of a chart in the editor shows the number it will have: tables before its section + charts before it in the text + 1", [prev("s1_phonology", 0)[0], prev("s1_phonology", 1)[0], prev("s0_a", 0)[0], prev("s5_b", 0)[0], prev("zz_c", 1)[0], prev("nosuch", 0)[0]] == [2, 3, 1, 4, 6, 1], str([prev("s1_phonology", 0)[0], prev("s1_phonology", 1)[0], prev("s0_a", 0)[0], prev("s5_b", 0)[0], prev("zz_c", 1)[0]]))
+        check(S, "…and it is in the caption of the preview; a missing or silly position counts as the start", "Table 2</span>" in prev("s1_phonology", 0)[1] and prev("s1_phonology", -4)[0] == 2 and _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": {"kind": "vowels", "columns": ["a"], "rows": ["b"]}, "section": "s1_phonology", "position": "x"})[1]["number"] == 2)
+        # ── a change in one section shifts the numbers of those after it ──
+        st, j = _jcall(aa, "post", site.url + "api/grammar/s0_a", {"source": "![Added first](images/gaua_map.png)\n\n" + _CAP_S0A})
+        check(S, "when a section gains a figure, the numbers of all the figures after it go up by one (checked against the independent count), and the answer says how many tables and figures the section has", st == 200 and not numbers_ok() and (j["tables"], j["figures"]) == (1, 2), str(numbers_ok())[:200])
+        aa.delete(site.url + "api/grammar/s5_b")
+        check(S, "when a section is deleted, those after it are numbered again", not numbers_ok(drop=()) and "s5_b" not in _expected_captions(site) and shown("zz_c")["figure"][0][0] == 3, str(shown("zz_c")))
+        (site.dir / "project" / "grammar" / "s5_b.md").write_text(_CAP_S5B, encoding="utf-8")
+        # ── LaTeX: the same tables and figures, numbered by LaTeX ──
+        tex = aa.get(site.url + "api/grammar/export/latex").text(); want = _expected_captions(site)
+        nt, nf = sum(len(v["table"]) for v in want.values()), sum(len(v["figure"]) for v in want.values())
+        caps = re.findall(r"\\caption\{([^}]*)\}", tex)
+        # a chart with the sounds of several languages is one table for each of them in the export (Table 1a, 1b ...): count as the export does
+        parts = []
+        for name in sorted(p_.name for p_ in (site.dir / "project" / "grammar").glob("*.md")):
+            for body in re.findall(r"^```phonotable\n(.*?)\n```", (site.dir / "project" / "grammar" / name).read_bytes().decode("utf-8").replace("\r\n", "\n"), re.S | re.M):
+                try: s_ = json.loads(body)
+                except ValueError: continue
+                if isinstance(s_, dict) and s_.get("kind") in ("consonants", "vowels") and s_.get("columns") and s_.get("rows"):
+                    parts.append(sum(1 for inv_ in (s_.get("inventory") or {}).values() if any(c_ for row_ in inv_.values() for c_ in row_.values())))
+        lx_tables, lx_groups = sum(max(1, n_) for n_ in parts), sum(1 for n_ in parts if n_ >= 2)
+        check(S, "the LaTeX export has the figures of the page, and a table for each chart, or for each language of a chart that has the sounds of several (a group, Table 1a, 1b …); images in code blocks are left out", tex.count("\\begin{table}") == lx_tables and tex.split("\\begin{document}")[1].count("\\tabgroupstart") == lx_groups and tex.count("\\begin{figure}") == nf, f"{tex.count(chr(92) + 'begin{table}')}/{lx_tables} {tex.split(chr(92) + 'begin{document}')[1].count(chr(92) + 'tabgroupstart')}/{lx_groups} {tex.count(chr(92) + 'begin{figure}')}/{nf}")
+        check(S, "…with the captions, in the order of the grammar, figures having the image from the images folder; and the words and the separator are given to LaTeX", "First map" in caps and "Last picture" in caps and "inside code" not in " ".join(caps) and "\\includegraphics[max width=\\linewidth]{images/gaua_map.png}" in tex and "\\usepackage[labelsep=endash]{caption}" in tex and "\\renewcommand{\\tablename}{Table}" in tex and "\\usepackage[export]{adjustbox}" in tex, str(caps)[:200])
+        vis.close()
+
+        # ── the editor: the number of a new chart, renumbering without a reload, a figure uploaded ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1500)
+        before = {sid: [c.inner_text() for c in page.locator(f"#content-{sid} figcaption").all()] for sid in ("s1_phonology", "zz_c")}
+        page.locator("#s0_a .section-edit").click(); page.wait_for_selector("#editor-s0_a.visible, #editor-s0_a")
+        page.evaluate("(() => { const t = document.getElementById('textarea-s0_a'); t.focus(); t.setSelectionRange(0, 0); })()")
+        page.locator('#editor-s0_a .ed-tab[data-tab="phono"]').click(); page.locator('#pt-s0_a [data-act="new"][data-kind="consonants"]').click(); page.wait_for_selector("#pt-s0_a .pt-grid input")
+        check(S, "the caption box of a new chart is empty and says what it is for (the word and the separator of the project, an automatic number)", page.input_value("#pt-caption-s0_a") == "" and "Table 3 –" in page.inner_text("#pt-s0_a .pt-help") or "Table 3" in page.inner_text("#pt-s0_a"), page.inner_text("#pt-s0_a")[:160])
+        page.fill("#pt-caption-s0_a", "Typed in the editor"); page.fill('#pt-s0_a .pt-cell[data-r="0"][data-c="0"]', "p"); page.wait_for_function("document.querySelector('#pt-preview-s0_a figcaption') !== null", timeout=6000); page.wait_for_timeout(500)
+        check(S, "the preview shows the caption with the number the chart will have (it will stand at the cursor: the very start of the section, so Table 1)", page.inner_text("#pt-preview-s0_a figcaption") == "Table 1 – Typed in the editor", page.inner_text("#pt-preview-s0_a figcaption"))
+        page.click("#pt-write-s0_a"); page.click("#editor-s0_a .modal-btn.primary"); page.wait_for_selector("#content-s0_a figure.phonotable")
+        page.wait_for_function("document.querySelector('#content-zz_c figcaption.caption-table .cap-label').textContent === 'Table 6'", timeout=8000)
+        now = {sid: [c.inner_text() for c in page.locator(f"#content-{sid} figcaption").all()] for sid in ("s1_phonology", "zz_c")}
+        check(S, "after the save the chart is Table 1, the one that was Table 1 is Table 2, and the other sections on the page are numbered again without a reload (Tables 2 and 3 became 3 and 4)", [c.inner_text() for c in page.locator("#content-s0_a figcaption.caption-table").all()] == ["Table 1 – Typed in the editor", "Table 2 – Consonants of A"] and now["s1_phonology"] == [f"Table 3 – {_phono_captions(site)[0]}", f"Table 4 – {_phono_captions(site)[1]}"] and before["s1_phonology"] == [f"Table 2 – {_phono_captions(site)[0]}", f"Table 3 – {_phono_captions(site)[1]}"], str(now))
+        want = _expected_captions(site)
+        check(S, "…and what the page shows is what the server (and the independent count) says", all(_shown_captions(page.locator(f"#content-{sid}").inner_html()) == want[sid] for sid in want), "")
+        # a figure uploaded from the editor
+        from PIL import Image
+        import io as _io
+        buf = _io.BytesIO(); Image.new("RGB", (60, 40), "#c07820").save(buf, "PNG")
+        page.locator("#s5_b .section-edit").click(); page.wait_for_selector("#editor-s5_b.visible")
+        page.set_input_files("#editor-s5_b input[type=file]", {"name": "sample photo.png", "mimeType": "image/png", "buffer": buf.getvalue()})
+        page.wait_for_function("document.getElementById('textarea-s5_b').value.includes('Write the caption of the figure here')", timeout=8000)
+        sel = page.evaluate("(() => { const t = document.getElementById('textarea-s5_b'); return t.value.slice(t.selectionStart, t.selectionEnd); })()")
+        check(S, "an image inserted from the editor is a figure of its own line, with the caption slot selected so that the author just types the caption (the file name is not the caption)", sel == "Write the caption of the figure here" and "sample photo" not in page.input_value("#textarea-s5_b"), sel)
+        page.keyboard.type("A photo from the editor")
+        page.click("#editor-s5_b .modal-btn.primary"); page.wait_for_function("[...document.querySelectorAll('#content-s5_b figcaption')].some(c => c.textContent.includes('A photo from the editor'))", timeout=8000)
+        page.wait_for_function("document.querySelector('#content-zz_c figcaption.caption-figure .cap-label').textContent === 'Figure 6'", timeout=8000)
+        figs = [c.inner_text() for c in page.locator("#content-s5_b figcaption.caption-figure").all()]
+        check(S, "…typed over, it is the caption: the figure is numbered on from the earlier ones (Figure 5 here) with its caption below it, and the figure of the next section is numbered again (Figure 6) at once", figs[-1] == "Figure 5 – A photo from the editor" and page.locator("#content-zz_c figcaption.caption-figure").inner_text().startswith("Figure 6"), str(figs))
+        check(S, "no JavaScript or loading error in the editor", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+    # ── the words of the captions are the project's ──
+    base = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    for cap_cfg, want_t, want_f, sep, labelsep in (({"table": "Tableau", "figure": "Illustration", "separator": " : "}, "Tableau", "Illustration", " : ", "colon"),
+                                                   ({"table": "", "figure": "x" * 50, "separator": 5}, "Table", "Figure", " – ", "endash")):
+        site = Site(project_override=variant(base["languages"], captions=cap_cfg), prepare=_captions_prepare)
+        try:
+            c = new_context(browser, site, 1280); api = c.request
+            h = api.get(site.url + "api/grammar/s0_a").json()["html"]; tex = api.get(site.url + "api/grammar/export/latex").text()
+            check(S, f"the project can set the words of the captions ({want_t} / {want_f}, separator “{sep}”), and an empty, too long or silly value falls back to the default: they are used in the page and in the LaTeX export", f">{want_f} 1</span><span class=\"cap-text\">{sep}First map" in h and f">{want_t} 1</span><span class=\"cap-text\">{sep}Consonants of A" in h and f"\\renewcommand{{\\tablename}}{{{want_t}}}" in tex and f"labelsep={labelsep}" in tex, re.findall(r"cap-label\">([^<]*)", h)[:2] and h[h.index("caption-figure"):h.index("caption-figure") + 120])
+            c.close()
+        finally:
+            site.stop()
+
+
+
+# ───────────────────────── 17. references to tables and figures: {{ref: label}} in the grammar and in the dictionary ─────────────────────────
+_XR_S0A = ("## Intro about {{ref: map}}\n\nSee {{ref: cons}}, {{ref: map, vow}} and {{ref:photo}}; unknown: {{ref: nope}}.\n\n| a | b |\n|---|---|\n| {{ref: cons}} | x |\n\n"
+           "Inline code `{{ref: cons}}` and a block:\n\n```\n{{ref: cons}}\n```\n\n![The map, which is {{ref: vow}}](images/gaua_map.png){#map}\n\n```phonotable\n"
+           '{"kind":"consonants","label":"cons","caption":"Consonants, compare {{ref: vow}}","columns":["Bilabial"],"rows":["Plosive"],"inventory":{"num":{"Plosive":{"Bilabial":"p"}}}}\n```\n')
+_XR_S5B = ("## Later\n\n![A photo](images/gaua_map.png){#photo}\n\n![No label](images/gaua_map.png)\n\n```phonotable\n"
+           '{"kind":"vowels","label":"vow","caption":"The vowels","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n\n```phonotable\n'
+           '{"kind":"vowels","label":"cons","caption":"Duplicate label","columns":["Front"],"rows":["Close"],"inventory":{}}\n```\n')
+
+def _xref_prepare(d):
+    g = d / "project" / "grammar"
+    (g / "s0_a.md").write_text(_XR_S0A, encoding="utf-8"); (g / "s5_b.md").write_text(_XR_S5B, encoding="utf-8")
+
+def _expected_labels(site):
+    """What each label should be, counted by a rule of the test's own: the first to use a label keeps it; tables = valid chart blocks, figures = images alone on a line."""
+    g = site.dir / "project" / "grammar"; n = {"table": 0, "figure": 0}; items = []; by = {}
+    for name in sorted(p.name for p in g.glob("*.md")):
+        src = (g / name).read_bytes().decode("utf-8").replace("\r\n", "\n")
+        for body in re.findall(r"^```phonotable\n(.*?)\n```", src, re.S | re.M):
+            try: s_ = json.loads(body)
+            except ValueError: continue
+            if isinstance(s_, dict) and s_.get("kind") in ("consonants", "vowels") and s_.get("columns") and s_.get("rows"):
+                n["table"] += 1; items.append(("table", n["table"], s_.get("label", ""), s_.get("caption") if "caption" in s_ else s_.get("title", ""), name[:-3]))     # an old block's title is its caption
+        plain = re.sub(r"^```.*?^```[ \t]*$", "", src, flags=re.S | re.M)
+        for alt, lab in re.findall(r"^!\[([^\]]*)\]\([^)\s]+\)(?:\{#([^}]+)\})?[ \t]*$", plain, re.M):
+            n["figure"] += 1; items.append(("figure", n["figure"], lab or "", alt, name[:-3]))
+    for it in items:
+        if it[2] and it[2].lower() not in by: by[it[2].lower()] = it
+    return items, by
+
+def suite_xref(browser, args):
+    S = "xref"
+    section("references to tables and figures: {{ref: label}}")
+    site = Site(prepare=_xref_prepare)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        items, by = _expected_labels(site)
+        html = lambda sid: va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        link = lambda kind, label: f'<a class="xref" href="#{"tab" if kind == "table" else "fig"}-{label}"'
+        h = html("s0_a"); para = re.sub(r"<(?!/?a\b|/?span\b)[^>]+>", "", h.split("</h2>")[1].split("</p>")[0])
+        txt = lambda s_: re.sub(r"<[^>]+>", "", s_)
+        w = lambda lab: f"{by[lab][0].capitalize()} {by[lab][1]}"
+        check(S, "{{ref: label}} in the grammar is a link that reads Table N / Figure N with the number from an independent count: forward to a later section and back, several labels in one shortcode, spaces optional, an unknown label a visible error", txt(para).strip() == f"See {w('cons')}, {w('map')} and {w('vow')} and {w('photo')}; unknown: Reference not found: nope.", txt(para).strip())
+        check(S, "…the links go to the item (tab-label, fig-label) and carry its caption as their title", all(link(*(by[l][:1]), l) in h for l in ("cons", "map")) and 'title="Consonants, compare {{ref: vow}}"' in h.replace("&quot;", '"') or 'title="Consonants, compare' in h, "")
+        check(S, "…the same in a heading and in a table cell", "Intro about <a class=\"xref\"" in h and "<td><a class=\"xref\" href=\"#tab-cons\"" in h)
+        check(S, "…and in the caption of a figure and of a chart, but not inside the alt text of the image (the markup stays whole)", 'alt="The map, which is {{ref: vow}}"' in h and re.search(r'caption-figure.*?Figure 1</span><span class="cap-text"> – The map, which is <a class="xref"', h) and re.search(r'caption-table.*?Consonants, compare <a class="xref"', h) is not None)
+        check(S, "a shortcode in inline code or in a code block is shown as written, not turned into a link", "<code>{{ref: cons}}</code>" in h and "<pre><code>{{ref: cons}}" in h.replace("\n", ""), "")
+        want = {(kind, num, lab, cap, sec) for kind, num, lab, cap, sec in items}
+        api = va.get(site.url + "api/captions").json()
+        got = {(i["kind"], i["number"], i["label"], i["text"], i["section"]) for i in api["items"]}
+        check(S, "/api/captions lists every table and figure with its number, label, caption and section, as the independent count says, and a label used twice is reported (the first keeps it)", got == want and api["duplicates"] == ["cons"] and all((i["url"] == f"grammar.html#{'tab' if i['kind'] == 'table' else 'fig'}-{i['label']}") == bool(i["label"]) for i in api["items"]), f"{got ^ want} {api['duplicates']}")
+        check(S, "…the words of the project come with it (for the dictionary)", api["captions"]["table"] == "Table" and api["captions"]["figure"] == "Figure")
+        # ── the numbers follow the text ──
+        st, j = _jcall(aa, "post", site.url + "api/grammar/s0_a", {"source": _XR_S0A.replace("## Intro about {{ref: map}}", '## Intro about {{ref: map}}\n\n```phonotable\n{"kind":"vowels","columns":["a"],"rows":["b"],"inventory":{}}\n```')})
+        items2, by2 = _expected_labels(site)
+        para2 = txt(re.sub(r"<(?!/?a\b|/?span\b)[^>]+>", "", html("s0_a").split("</h2>")[1].split("<p>", 1)[1].split("</p>")[0]))
+        check(S, "when a table is added before them, the references show the new numbers at once (the vowels, Table 4, are now Table 5)", by2["vow"][1] == by["vow"][1] + 1 and f"{by2['vow'][0].capitalize()} {by2['vow'][1]}" in para2 and "Table 5" in para2, para2)
+        _jcall(aa, "post", site.url + "api/grammar/s0_a", {"source": _XR_S0A})
+        # ── LaTeX ──
+        tex = aa.get(site.url + "api/grammar/export/latex").text()
+        check(S, "in LaTeX the same shortcode is the word of the project and LaTeX's own number, with the labels in the tables and the figures; an unknown label is ??; a shortcode in code is shown as written", "See \\tablename~\\ref{tab:cons}, \\figurename~\\ref{fig:map} and \\tablename~\\ref{tab:vow}" in tex and "\\figurename~\\ref{fig:photo}" in tex and "\\textbf{??}" in tex and "\\label{tab:cons}" in tex and "\\label{fig:map}" in tex and "\\label{fig:photo}" in tex and "\\label{tab:vow}" in tex, tex[tex.index("See "):][:200] if "See " in tex else "")
+        check(S, "…also in the caption of a figure and of a chart (not escaped into text)", "\\caption{The map, which is \\tablename~\\ref{tab:vow}}" in tex and "\\caption{Consonants, compare \\tablename~\\ref{tab:vow}}" in tex, "")
+        # ── the dictionary ──
+        aa.post(site.url + "api/dictionary/entry", headers={"Content-Type": "application/json"}, data=json.dumps({"forms": {"drg": "refword"}, "pos": "n.", "domain": "", "senses": [{"ref": None, "definition": "see {{ref: map, nope}}", "shortGloss": "", "langs": [], "notes": "compare {{ref: cons, photo}}"}]}))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1200)
+        ent = page.locator(".entry", has_text="refword").first
+        check(S, "in the dictionary a definition and a note show the references as links with the numbers of the grammar (and an unknown label as an error)", ent.locator(".entry-gloss").inner_text().replace("\n", " ").strip() == f"see {w('map')} and Reference not found: nope" and ent.locator(".entry-notes").inner_text().strip() == f"compare {w('cons')} and {w('photo')}" and ent.locator(".entry-notes a.xref").first.get_attribute("href") == "grammar.html#tab-cons", ent.locator(".entry-notes").inner_text())
+        open_page(page, site, "dictionary.html?lang=Dorig&mode=senses", ".sense-group", 1000)
+        check(S, "…and in the list of senses as well", page.locator(".sg-item", has_text="refword").first.locator("a.xref").count() == 3, "")
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1000)
+        ent = page.locator(".entry", has_text="refword").first
+        ent.locator(".entry-notes a.xref").first.click(); page.wait_for_url("**/grammar.html#tab-cons", timeout=8000); page.wait_for_selector("#tab-cons", timeout=8000); page.wait_for_timeout(1200)
+        top = page.evaluate("document.getElementById('tab-cons').getBoundingClientRect().top")
+        check(S, "a click on a reference in the dictionary opens the Grammar page at that table: it is scrolled to, near the top of the window", -5 <= top <= 400, f"top = {top}")
+        check(S, "no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        vis.close()
+
+        # ── the editor ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable", 1500)
+        page.locator("#s0_a .section-edit").click(); page.wait_for_selector("#editor-s0_a")
+        page.locator('#editor-s0_a .ed-tab[data-tab="phono"]').click(); page.locator('#pt-s0_a [data-act="new"][data-kind="vowels"]').click(); page.wait_for_selector("#pt-s0_a .pt-grid input")
+        page.fill("#pt-label-s0_a", "My Table!"); lab_in = page.input_value("#pt-label-s0_a")
+        check(S, "the Label box of a chart keeps only letters, digits, - and _ (anything else becomes -)", lab_in == "My-Table-", lab_in)
+        page.fill("#pt-label-s0_a", "vow"); page.fill('#pt-s0_a .pt-cell[data-r="0"][data-c="0"]', "i"); page.wait_for_function("document.querySelector('#pt-s0_a .pt-msg').classList.contains('error')", timeout=6000)
+        check(S, "a label that another table or figure already has is refused: the message says which one (Table 4), and Insert is off", "already used by Table 4" in page.inner_text("#pt-s0_a .pt-msg") and page.locator("#pt-write-s0_a").is_disabled(), page.inner_text("#pt-s0_a .pt-msg"))
+        page.fill("#pt-label-s0_a", "newvow"); page.wait_for_function("!document.getElementById('pt-write-s0_a').disabled", timeout=6000)
+        page.fill("#pt-caption-s0_a", "Typed vowels"); page.click("#pt-write-s0_a")
+        blk = json.loads(re.findall(r"```phonotable\n(.*?)\n```", page.input_value("#textarea-s0_a"), re.S)[-1])
+        check(S, "with a free label Insert writes it into the block, and the preview is fine again", blk["label"] == "newvow" and blk["caption"] == "Typed vowels", str(blk)[:120])
+        page.locator('#editor-s0_a .ed-tab[data-tab="text"]').click()
+        ta = page.locator("#textarea-s0_a"); ta.evaluate("t => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }")
+        page.locator("#editor-s0_a .editor-toolbar-btn", has_text="Reference").click(); page.wait_for_selector("#xref-menu-s0_a")
+        menu = page.inner_text("#xref-menu-s0_a")
+        check(S, "the 🔗 Reference button lists what can be referred to: each labelled table and figure with its number, its label and its caption; an item without a label says how to give it one; a label used twice is marked", all(x in menu for x in ("Table 1", "Figure 1", "Figure 2", "Table 4", "has no label", "used twice", "newvow") if x != "newvow") and menu.count("has no label") >= 2, menu[:300])
+        page.locator('#xref-menu-s0_a button[data-label="photo"]').click()
+        check(S, "a click on an item inserts {{ref: label}} at the cursor and closes the menu", page.input_value("#textarea-s0_a").rstrip().endswith("{{ref: photo}}") and not page.locator("#xref-menu-s0_a").count(), page.input_value("#textarea-s0_a")[-40:])
+        # an uploaded image gets a label from its file name
+        from PIL import Image
+        import io as _io
+        buf = _io.BytesIO(); Image.new("RGB", (40, 30), "#2e5c8a").save(buf, "PNG")
+        page.set_input_files("#editor-s0_a input[type=file]", {"name": "Harbour View.png", "mimeType": "image/png", "buffer": buf.getvalue()})
+        page.wait_for_function("document.getElementById('textarea-s0_a').value.includes('Write the caption of the figure here')", timeout=8000)
+        m = re.search(r"!\[Write the caption of the figure here\]\(images/[^)]+\)\{#([^}]+)\}", page.input_value("#textarea-s0_a"))
+        check(S, "an image uploaded from the editor is inserted with a label made from its file name, ready to be referred to", bool(m) and re.fullmatch(r"[a-z0-9_-]+", m.group(1)) and "harbour" in m.group(1), m.group(1) if m else page.input_value("#textarea-s0_a")[-120:])
+        page.keyboard.type("A harbour"); page.click("#editor-s0_a .modal-btn.primary"); page.wait_for_selector("#content-s0_a")
+        page.wait_for_function("document.querySelector('#content-s0_a figure[data-label^=\"harbour\"]') !== null", timeout=8000)
+        check(S, "after the save the new chart and the new figure have their anchors, and the reference inserted in the text shows the number of the photo", page.locator("#tab-newvow").count() == 1 and page.locator("#content-s0_a a.xref", has_text=re.compile(r"Figure \d+")).count() >= 2, f"newvow anchors: {page.locator('#tab-newvow').count()} | figure refs: {page.locator('#content-s0_a a.xref', has_text=re.compile(r'Figure')).count()} | ids: {page.evaluate('[...document.querySelectorAll(\"#content-s0_a [id]\")].map(e => e.id)')}")
+        check(S, "the editor raised no JavaScript or loading error", not errs, "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 18. the exports: one table for each language (Table 1a, 1b …), {language}, group references, XeLaTeX ─────────────────────────
+_LX_S0 = ("## Exports\n\nRefs: {{ref: cons}}; {{ref: cons#drg}}; {{ref: vow2}}; {{ref: one}}; {{ref: cons#zzz}}; the map {{ref: map}}. IPA: /ɣ/ /ʧ/ β.\n\n```phonotable\n"
+          '{"kind":"consonants","label":"cons","caption":"Consonants of {language}","columns":["Bilabial","Alveolar"],"rows":["Plosive","Nasal"],"inventory":{"num":{"Plosive":{"Bilabial":"p","Alveolar":"t"}},"drg":{"Plosive":{"Bilabial":"b"},"Nasal":{"Alveolar":"n"}},"kro":{"Plosive":{"Alveolar":"ɣ"}}}}\n```\n\n```phonotable\n'
+          '{"kind":"vowels","label":"vow2","caption":"Vowels","columns":["Front","Back"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}},"olr":{"Close":{"Back":"u"}}}}\n```\n\n```phonotable\n'
+          '{"kind":"vowels","label":"one","caption":"One language: {language}","columns":["Front"],"rows":["Close"],"inventory":{"lkn":{"Close":{"Front":"ɪ"}}}}\n```\n\n![The map](images/gaua_map.png){#map}\n')
+
+def _lx_prepare(d):
+    g = d / "project" / "grammar"
+    for f in list(g.glob("*.md")): f.unlink()
+    (g / "s0_exports.md").write_text(_LX_S0, encoding="utf-8")
+
+def suite_latex(browser, args):
+    import shutil
+    S = "latex"
+    section("the exports: tables by language, {language}, group references, XeLaTeX")
+    base = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    site = Site(prepare=_lx_prepare)
+    try:
+        c = new_context(browser, site, 1280); api = c.request
+        tex = api.get(site.url + "api/grammar/export/latex").text()
+        head = tex.split("\\begin{document}")[0]
+        check(S, "the .tex asks for XeLaTeX (first line for the editors, a clear message if it is compiled with pdfLaTeX), loads fontspec, and no longer uses inputenc and fontenc", tex.startswith("% !TEX program = xelatex\n") and "\\ifPDFTeX\\PackageError{grammar}{This file must be compiled with XeLaTeX or LuaLaTeX" in head and "\\usepackage{fontspec}" in head and "inputenc" not in head and "fontenc" not in head, head[:300])
+        used = sorted(set(re.findall("[\u0250-\u02FF\u1D00-\u1DBF\u207F\u00E6\u00F0\u00F8\u0153\u014B\u03B2\u03B8\u03C7]", tex.split("\\begin{document}")[1])))
+        mapped = re.findall(r"\\newunicodechar\{(.)\}\{\{\\ipafont\\char\"([0-9A-F]{4}) \}\}", head)
+        check(S, "each IPA letter that occurs in the document is set in the IPA font by a line of the preamble (by its code, so that it cannot loop), and only those", sorted(ch for ch, _ in mapped) == used and all(int(code, 16) == ord(ch) for ch, code in mapped) and "ɣ" in used and "ʧ" in used and "ɸ" not in used, f"{used} {mapped}")
+        check(S, "the IPA font is Charis SIL, then the others that have the IPA; and the compilation warns if none is installed; the main font falls back to Latin Modern", "\\IfFontExistsTF{Charis SIL}{\\newfontfamily\\ipafont{Charis SIL}}" in head and "{Gentium Plus}" in head and "{DejaVu Serif}" in head and "No font with the IPA was found" in head and "\\setmainfont{Latin Modern Roman}" in head, "")
+        bodytex = tex.split("\\begin{document}")[1]
+        tabs = bodytex.count("\\begin{table}")
+        check(S, "a chart with three languages is three tables, one with two is two, one with a single language is one: six, in two groups", tabs == 6 and bodytex.count("\\tabgroupstart") == 2 and bodytex.count("\\tabgroupnext") == 3 and bodytex.count("\\tabgroupend") == 2, f"{tabs} {bodytex.count(chr(92) + 'tabgroupstart')}")
+        caps = re.findall(r"\\caption\{([^}]*)\}", tex)
+        check(S, "the captions: {language} replaced by the name of each language; a caption without it gets the name in parentheses; a chart that is not split keeps its caption, with {language} filled", caps == ["Consonants of Nume", "Consonants of Dorig", "Consonants of Koro", "Vowels (Nume)", "Vowels (Olrat)", "One language: Lakon", "The map"], str(caps))
+        check(S, "each table has only the rows and columns its language has: Koro’s has one row and one column", "\\caption{Consonants of Koro}" in tex and re.search(r"Consonants of Koro\}.*?\\begin\{tabular\}\{l\|c\}.*?Plosive & ɣ", tex, re.S) is not None, "")
+        check(S, "the references in the text: the whole chart is Tables 1a–c (first part, letter of the last), one part is Table 1b, a chart that is not split is Table 3, an unknown part is ??", "\\tablesname~\\ref{tab:cons:first}--\\ref{tab:cons:last}" in tex and "\\tablename~\\ref{tab:cons:drg}" in tex and "\\tablesname~\\ref{tab:vow2:first}--\\ref{tab:vow2:last}" in tex and "\\tablename~\\ref{tab:one}" in tex and "\\textbf{??}" in tex and "\\figurename~\\ref{fig:map}" in tex, "")
+        check(S, "…with the labels they need: each part, the number of the group, the first part and the letter of the last", all(x in tex for x in ("\\label{tab:cons:num}", "\\label{tab:cons:kro}", "\\labelas{tab:cons}{\\arabic{table}}", "\\label{tab:cons:first}", "\\labelas{tab:cons:last}{\\alph{tabpart}}", "\\label{tab:one}")), "")
+        # ── the website keeps one chart ──
+        h = api.get(site.url + "api/grammar/s0_exports").json()["html"]
+        capt = re.findall(r'caption-table"><span class="cap-label">([^<]*)</span><span class="cap-text"> – ([^<]*)<', h)
+        check(S, "on the website each chart is still one: {language} is the names of its languages, in the project’s order, with and before the last", capt == [("Table 1", "Consonants of Nume, Dorig and Koro"), ("Table 2", "Vowels"), ("Table 3", "One language: Lakon")], str(capt))
+        refs = re.sub(r"<[^>]+>", "", h.split("<p>")[1].split("</p>")[0])
+        check(S, "…and a reference to a part is only a link to the chart (Table 1), the group is Table 1 too", "Refs: Table 1; Table 1; Table 2; Table 3; Reference not found" in refs.replace("\n", " ") or "Refs: Table 1; Table 1; Table 2; Table 3;" in refs, refs[:120])
+        cp = api.get(site.url + "api/captions").json()
+        item = {i["label"]: i for i in cp["items"] if i["label"]}
+        check(S, "/api/captions gives the caption as the site shows it, and the languages that get a table in the exports", item["cons"]["text"] == "Consonants of Nume, Dorig and Koro" and item["cons"]["parts"] == ["num", "drg", "kro"] and item["vow2"]["parts"] == ["num", "olr"] and item["one"]["parts"] == [], str(item["cons"]))
+        # ── the fonts of the roles ──
+        c.close()
+    finally:
+        site.stop()
+    custom = dict(base["latex"], fonts={"body": "DejaVu Serif", "headings": "DejaVu Sans", "captions": "DejaVu Sans", "ipa": "DejaVu Serif"})
+    site = Site(prepare=_lx_prepare, project_override=variant(base["languages"], latex=custom, captions={"table": "Tableau", "tables": "Tableaux", "figure": "Figure", "and": "et"}))
+    try:
+        c = new_context(browser, site, 1280); api = c.request
+        tex2 = api.get(site.url + "api/grammar/export/latex").text(); head2 = tex2.split("\\begin{document}")[0]
+        check(S, "the fonts of the roles come from the project: body, headings (titles), captions, IPA, each with a fallback so that the document always compiles", all(x in head2 for x in ("\\IfFontExistsTF{DejaVu Serif}{\\setmainfont{DejaVu Serif}}{\\setmainfont{Latin Modern Roman}}", "\\newfontfamily\\headingfont{DejaVu Sans}", "\\titleformat{\\section}{\\headingfont", "\\newfontfamily\\dbtcaptionfont{DejaVu Sans}", "\\DeclareCaptionFont{dbtcap}{\\dbtcaptionfont}")), head2[:400])
+        check(S, "the words of the project are used in the exports: its table, its plural for the groups, its word for and in a list", "\\renewcommand{\\tablename}{Tableau}" in head2 and "\\newcommand{\\tablesname}{Tableaux}" in head2, "")
+        c.close()
+    finally:
+        site.stop()
+    bad = dict(base["latex"], fonts={"body": "Evil}\\input{x", "ipa": "A\\B", "headings": "{x}", "captions": "ok font"})
+    site = Site(prepare=_lx_prepare, project_override=variant(base["languages"], latex=bad))
+    try:
+        c = new_context(browser, site, 1280); tex3 = c.request.get(site.url + "api/grammar/export/latex").text(); head3 = tex3.split("\\begin{document}")[0]
+        check(S, "a font name that is not a plain name (braces, backslashes) is ignored: the default is used, nothing reaches the LaTeX", "\\input{x" not in head3 and "Evil" not in head3 and "A\\B" not in head3 and "headingfont" not in head3 and "{ok font}" in head3 and "\\setmainfont{Latin Modern Roman}" in head3, head3[:300])
+        c.close()
+    finally:
+        site.stop()
+
+    # ── the real thing: compile it ──
+    have = shutil.which("xelatex") and subprocess.run(["kpsewhich", "gb4e.sty"], capture_output=True, text=True).stdout.strip()
+    if not have:
+        print("  (XeLaTeX or its gb4e package is not installed here: the compilation checks are skipped)")
+        return
+    site = Site(prepare=_lx_prepare, project_override=variant(base["languages"], latex=custom, captions={"table": "Tableau", "tables": "Tableaux", "figure": "Figure", "and": "et"}))
+    plain = Site(prepare=_lx_prepare)
+    try:
+        for label_, s_ in (("with the project's words", site), ("with the defaults", plain)):
+            work = Path(tempfile.mkdtemp(prefix="dbt-tex-")); c = new_context(browser, s_, 1280)
+            (work / "grammar.tex").write_text(c.request.get(s_.url + "api/grammar/export/latex").text(), encoding="utf-8"); shutil.copytree(s_.dir / "project" / "images", work / "images")
+            logs = []
+            for _ in range(2):
+                r = subprocess.run(["xelatex", "-interaction=nonstopmode", "grammar.tex"], cwd=work, capture_output=True, text=True, timeout=180); logs.append(r)
+            log = (work / "grammar.log").read_text(encoding="utf-8", errors="replace")
+            check(S, f"the export compiles with XeLaTeX ({label_}): twice, no error, no undefined reference, a PDF", all(x.returncode == 0 for x in logs) and (work / "grammar.pdf").exists() and "undefined" not in log.lower().replace("\\@undefined", "") and "\n!" not in log, "; ".join(l_ for l_ in log.split("\n") if l_.startswith("!"))[:200])
+            if shutil.which("pdftotext"):
+                txt = subprocess.run(["pdftotext", "-layout", str(work / "grammar.pdf"), "-"], capture_output=True, text=True).stdout.replace("\n", " ")
+                txt = re.sub(r"\s+", " ", txt)
+                if s_ is site:
+                    check(S, "in the PDF the tables are numbered Tableau 1a, 1b, 1c, 2a, 2b, 3 (the group keeps its number, the parts have letters) with their captions, and the references read Tableaux 1a–c, Tableau 1b, Tableaux 2a–b, Tableau 3, Figure 1", re.findall(r"Tableau (\d[a-c]?) – ", txt) == ["1a", "1b", "1c", "2a", "2b", "3"] and "Tableaux 1a–c" in txt and "Tableau 1b" in txt and "Tableaux 2a–b" in txt and "Tableau 3" in txt and "Figure 1" in txt and "Consonants of Nume, Dorig et Koro" not in txt, txt[txt.find("Refs"):][:160])
+                else:
+                    check(S, "in the PDF: Table 1a – Consonants of Nume … Table 2a – Vowels (Nume) … Table 3 – One language: Lakon; and the text says Tables 1a–c, Table 1b, Tables 2a–b, Table 3, ??, Figure 1", re.findall(r"Table (\d[a-c]?) – ", txt) == ["1a", "1b", "1c", "2a", "2b", "3"] and "Table 1a – Consonants of Nume" in txt and "Table 2a – Vowels (Nume)" in txt and "Table 3 – One language: Lakon" in txt and "Tables 1a–c" in txt and "Table 1b" in txt and "Tables 2a–b" in txt and "Figure 1" in txt and "??" in txt, txt[txt.find("Refs"):][:200])
+                check(S, "…the IPA letters are in the PDF as letters (not as missing-glyph boxes)", all(ch in txt for ch in ("ɣ", "ʧ", "β")) and "\ufffd" not in txt, txt[txt.find("IPA"):][:60])
+            if shutil.which("pdffonts") and s_ is site:
+                fonts = subprocess.run(["pdffonts", str(work / "grammar.pdf")], capture_output=True, text=True).stdout
+                check(S, "…the fonts chosen for the roles are in the PDF, embedded (DejaVu Sans for the headings and captions, DejaVu Serif for the text and the IPA)", all(any(n in l_ and re.search(r"\byes\s+(yes|no)\s+(yes|no)\s+\d+", l_) for l_ in fonts.split("\n")) for n in ("DejaVuSans", "DejaVuSerif")), fonts[:400])
+            c.close(); shutil.rmtree(work, ignore_errors=True)
+        # pdfLaTeX says what is wrong instead of a wall of errors
+        if shutil.which("pdflatex"):
+            work = Path(tempfile.mkdtemp(prefix="dbt-tex-")); c = new_context(browser, plain, 1280)
+            (work / "grammar.tex").write_text(c.request.get(plain.url + "api/grammar/export/latex").text(), encoding="utf-8")
+            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "grammar.tex"], cwd=work, capture_output=True, text=True, timeout=120)
+            first = next((l_ for l_ in (r.stdout + (work / "grammar.log").read_text(encoding="utf-8", errors="replace") if (work / "grammar.log").exists() else r.stdout).split("\n") if l_.startswith("!") or "must be compiled with XeLaTeX" in l_), "")
+            check(S, "compiled with pdfLaTeX the export stops with a clear message: it must be compiled with XeLaTeX or LuaLaTeX", "XeLaTeX" in (r.stdout + ((work / "grammar.log").read_text(encoding="utf-8", errors="replace") if (work / "grammar.log").exists() else "")), first[:160])
+            c.close(); shutil.rmtree(work, ignore_errors=True)
+    finally:
+        site.stop(); plain.stop()
+
+
+
+# ───────────────────────── 19. importing any XML dictionary: the wizard (the logic of LExport) ─────────────────────────
+_IMP_LIFT = re.search(r"LIFT = '''(.*?)'''", (ROOT / "tests" / "test_xmlimport.py").read_text(encoding="utf-8"), re.S).group(1)
+_IMP_CFG = {"entryTag": "entry", "lemma": {"path": "./lexical-unit/form", "value": "./text"}, "language": {"mode": "attr", "attr": "lang", "map": {"nme": "num", "drg": "drg"}},
+            "pos": {"path": "./sense/grammatical-info", "value": "@value"}, "posMap": {"Noun": "n.", "Pronoun": "pro."}, "sense": {"path": "./sense"},
+            "definition": {"path": "./definition/form", "value": "./text", "filterAttr": "lang", "filterValue": "en"},
+            "gloss": {"path": "./gloss", "value": "./text", "filterAttr": "lang", "filterValue": "en"}, "notes": {"path": "./note/form", "value": "./text"}}
+
+def suite_xmlimport(browser, args):
+    import hashlib
+    S = "xmlimport"
+    section("importing any XML dictionary: the wizard (logic of LExport)")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_xmlimport.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the import engine passes its own direct tests (reading, inventory, fields, filters, suggestions, validation, conversion, hostile files)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        U = lambda p: site.url + "api/import/dictionary/" + p
+        def post(ctx, p, body=None, files=None):
+            r = ctx.post(U(p), multipart=files) if files is not None else ctx.post(U(p), headers={"Content-Type": "application/json"}, data=json.dumps(body or {}))
+            try: j = r.json()
+            except Exception: j = {}
+            return r.status, j
+        def entries_n(): return len(aa.get(site.url + "api/dictionary/entries").json().get("entries", []))
+        lift = {"name": "mylex.lift", "mimeType": "text/xml", "buffer": _IMP_LIFT.encode("utf-8")}
+        n0 = entries_n(); shipped = hashlib.sha256((site.dir / "project" / "dictionary.xml").read_bytes()).hexdigest()
+        check(S, "the import endpoints are for the author only: a visitor gets 401 from every one of them", all(post(va, p, {"token": "0" * 32})[0] == 401 for p in ("inspect", "values", "preview", "commit")) and post(va, "parse", files={"file": lift})[0] == 401, "")
+        st, bad = post(aa, "parse", files={"file": {"name": "x.xml", "mimeType": "text/xml", "buffer": b"this is not xml"}})
+        check(S, "a file that is not XML is refused with a message, and nothing is kept", st == 400 and bad["error"].startswith("Invalid XML"), str(bad))
+        st, p = post(aa, "parse", files={"file": lift}); tok = p.get("token", "")
+        check(S, "a LIFT file is read: its root, its likeliest entry node, the languages of the project to map to; it is not in the DBT’s format", st == 200 and p["rootTag"] == "lift" and p["native"] is False and p["candidates"][0]["tag"] == "entry" and p["candidates"][0]["likely"] and [l["code"] for l in p["project"]["languages"]] == ["num", "drg", "kro", "olr", "lkn"] and re.fullmatch(r"[0-9a-f]{32}", tok) is not None, str(p)[:200])
+        stn, pn = post(aa, "parse", files={"file": {"name": "dictionary.xml", "mimeType": "text/xml", "buffer": (site.dir / "project" / "dictionary.xml").read_bytes()}})
+        check(S, "the DBT’s own dictionary is recognised as native: no wizard needed", stn == 200 and pn["native"] is True, "")
+        st, i = post(aa, "inspect", {"token": tok, "entryTag": "entry"})
+        check(S, "inspecting the entry node gives the number of entries, every path below it with counts, samples and attributes, the first entries as XML, and a first mapping for LIFT", st == 200 and i["count"] == 4 and any(x["path"] == "./sense/gloss" and x["attrs"]["lang"] == ["en", "fr"] for x in i["paths"]) and "lexical-unit" in i["samples"][0] and i["suggestion"]["lemma"]["path"] == "./lexical-unit/form", str(i)[:160])
+        check(S, "a node that is not in the file is refused", post(aa, "inspect", {"token": tok, "entryTag": "nope"})[0] == 400, "")
+        st, v = post(aa, "values", {"token": tok, "entryTag": "entry", "field": {"path": "./sense/grammatical-info", "value": "@value"}})
+        check(S, "the values of a field are listed with their counts (what the part-of-speech and language tables ask about)", st == 200 and v["values"] == [{"value": "Noun", "count": 2}, {"value": "Pronoun", "count": 1}], str(v))
+        check(S, "a path that leaves the entry is refused", post(aa, "values", {"token": tok, "entryTag": "entry", "field": {"path": "/etc/passwd"}})[0] == 400, "")
+        st, bad = post(aa, "preview", {"token": tok, "config": dict(_IMP_CFG, language={"mode": "fixed", "code": "zzz"})})
+        check(S, "a mapping with a problem is refused with the reason, in the author’s words", st == 400 and bad["errors"] == ["Languages: choose the language of the headwords."], str(bad))
+        st, pv = post(aa, "preview", {"token": tok, "config": _IMP_CFG})
+        cov = {c["label"]: c for c in pv.get("coverage", [])}
+        check(S, "the preview says how many entries will be imported (3 of 4) and why one is skipped, with the coverage of the fields (the part of speech is missing on one entry: which one) and the first entries as the DBT will hold them", st == 200 and pv["report"]["imported"] == 3 and pv["report"]["total"] == 4 and pv["report"]["skipped"][0]["reason"] == "no headword in a language of the project" and cov["Part of speech"]["missing"] == 1 and "<EntréeLexicale" in pv["xml"][0], str(pv)[:200])
+        check(S, "…and the preview writes nothing: the dictionary is as it was", entries_n() == n0 and not (site.dir / "uploads" / "dictionary.xml").exists(), f"{entries_n()} vs {n0}")
+        xxe = b'<?xml version="1.0"?><!DOCTYPE d [<!ENTITY x SYSTEM "file:///etc/passwd">]><d><entry><h>&x;</h><g>a</g></entry></d>'
+        sx, px = post(aa, "parse", files={"file": {"name": "x.xml", "mimeType": "text/xml", "buffer": xxe}})
+        sv, pvx = post(aa, "preview", {"token": px.get("token", ""), "config": {"entryTag": "entry", "lemma": {"path": "h", "value": ""}, "language": {"mode": "fixed", "code": "num"}, "gloss": {"path": "g", "value": ""}}})
+        check(S, "a file that tries to read a file of the server (an external entity) gets nothing: no content of the file is in any answer (the entity stays as written, &x;)", "root:" not in json.dumps(px) + json.dumps(pvx) and (sv == 400 or "&amp;x;" in json.dumps(pvx["xml"]) or "&x;" in json.dumps(pvx["xml"])), str(pvx)[:200])
+        check(S, "a token that is not one of ours (wrong, or a path) is refused as expired, and reads nothing", [post(aa, "preview", {"token": t, "config": _IMP_CFG})[0] for t in ("0" * 32, "../../etc/passwd", "../uploads/dictionary", None, 5)] == [410] * 5, "")
+        st, c = post(aa, "commit", {"token": tok, "config": _IMP_CFG, "mode": "maybe"})
+        check(S, "the import must say whether it replaces the dictionary or adds to it", st == 400, str(c))
+        st, c = post(aa, "commit", {"token": tok, "config": _IMP_CFG, "mode": "replace"})
+        backups = sorted(p_.name for p_ in (site.dir / "uploads" / "backups").glob("dictionary-*-before-import.xml")) if (site.dir / "uploads" / "backups").exists() else []
+        check(S, "replacing: the dictionary has the 3 imported entries, the dictionary it replaced was backed up first, and the file shipped with the project is never overwritten", st == 200 and entries_n() == 3 and len(backups) == 1 and c["backup"] == backups[0] and hashlib.sha256((site.dir / "project" / "dictionary.xml").read_bytes()).hexdigest() == shipped, str(c)[:200])
+        ents = aa.get(site.url + "api/dictionary/entries").json()["entries"]
+        mor = next(e for e in ents if e["id"] == "moros")
+        check(S, "the imported entry is read by the DBT: its forms by language, its part of speech from the author’s table, its senses with the English definition", mor["forms"].get("num") == "mōrōs" and mor["forms"].get("drg") == "morus" and etree.fromstring(aa.get(site.url + "api/dictionary/xml").body()).find('.//EntréeLexicale[@identifiant="moros"]/ClasseGrammaticale').text == "n." and len(mor["senses"]) == 2 and mor["senses"][0]["definition"] == "a building where people live", str(mor["forms"]) + str(mor["senses"])[:120])
+        check(S, "the token is used up, and its file is gone", post(aa, "preview", {"token": tok, "config": _IMP_CFG})[0] == 410 and not list((site.dir / "uploads" / "import").glob(tok + "*")), "")
+        st, p2 = post(aa, "parse", files={"file": lift}); st, c2 = post(aa, "commit", {"token": p2["token"], "config": _IMP_CFG, "mode": "add"})
+        ids = [e["id"] for e in aa.get(site.url + "api/dictionary/entries").json()["entries"]]
+        check(S, "adding the same file again: 3 more entries, none of the identifiers already in use is reused", st == 200 and len(ids) == 6 and len(set(ids)) == 6, str(ids))
+        vis.close()
+
+        # ── the wizard, in a browser ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        shipped_bytes = (site.dir / "project" / "dictionary.xml").read_bytes()
+        open_page(page, site, "dictionary.html", "#dict-edit-tab", 1500)
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        link = page.locator("#upload-modal .imp-powered a")
+        check(S, "the wizard says “Powered by LExport”, and LExport links to https://lexport-anonymous.streamlit.app/ (a new tab, no opener)", page.inner_text("#upload-modal .imp-powered") == "Powered by LExport" and link.get_attribute("href") == "https://lexport-anonymous.streamlit.app/" and link.get_attribute("target") == "_blank" and "noopener" in link.get_attribute("rel"), "")
+        page.set_input_files("#dict-file", {"name": "bad.xml", "mimeType": "text/xml", "buffer": b"<a><b></a>"}); page.wait_for_function("document.getElementById('upload-msg').textContent.includes('Invalid XML')", timeout=8000)
+        check(S, "in the wizard a file that is not XML is refused with the message, and you cannot go on", page.locator("#imp-next").is_disabled(), page.inner_text("#upload-msg"))
+        page.set_input_files("#dict-file", {"name": "mylex.lift", "mimeType": "text/xml", "buffer": _IMP_LIFT.encode("utf-8")}); page.wait_for_selector("#imp-body .imp-note.ok", timeout=8000)
+        page.click("#imp-next"); page.wait_for_selector("#imp-entry"); page.wait_for_timeout(500)
+        check(S, "step Entries: the likeliest node is chosen for you (<entry>, 4 times), the entries are counted, the first ones can be read as XML, and the mapping of a LIFT file is started", page.input_value("#imp-entry") == "entry" and "Found 4" in page.inner_text("#imp-body") and "mapping has been started" in page.inner_text("#imp-body") and page.locator("#imp-body details").count() == 1, page.inner_text("#imp-body")[:200])
+        page.click("#imp-next"); page.wait_for_selector(".imp-lmap"); page.wait_for_timeout(400)
+        check(S, "step Headwords: the headword node is filled in with what it reads (./text), the language comes from the attribute lang and its values are listed to be mapped (drg is recognised by its code), samples are shown, and you cannot go on until a language is mapped", page.input_value('.imp-field[data-key="lemma"] .imp-path') == "./lexical-unit/form" and page.input_value('.imp-field[data-key="lemma"] .imp-value') == "./text" and page.input_value('.imp-lmap[data-value="drg"]') == "drg" and "mōrōs" in page.inner_text('.imp-field[data-key="lemma"] .imp-sample') and page.input_value('.imp-lmap[data-value="nme"]') == "" and not page.locator("#imp-next").is_disabled(), "")
+        page.locator('.imp-lmap[data-value="nme"]').select_option("num"); page.click("#imp-next"); page.wait_for_selector('.imp-map[data-value="Noun"]', timeout=8000)
+        check(S, "step Grammar: the part of speech is read from the attribute value, and each value found (Noun, Pronoun) is a box to say how the DBT writes it", page.input_value('.imp-field[data-key="pos"] .imp-value') == "@value", "")
+        page.locator('.imp-map[data-value="Noun"]').fill("n."); page.locator('.imp-map[data-value="Noun"]').dispatch_event("change"); page.locator('.imp-map[data-value="Pronoun"]').fill("pro."); page.locator('.imp-map[data-value="Pronoun"]').dispatch_event("change")
+        page.click("#imp-next"); page.wait_for_selector("#imp-sense"); page.wait_for_timeout(300)
+        for k in ("definition", "gloss"):
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fattr').select_option("lang"); page.wait_for_function(f"document.querySelector('.imp-field[data-key=\"{k}\"] .imp-fval') !== null", timeout=6000)
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fval').select_option("en"); page.wait_for_timeout(200)
+        check(S, "step Senses: the sense node and the paths below it are offered relative to it; the glosses are filtered by language (only where lang is en) and show a sample", page.input_value("#imp-sense") == "./sense" and page.input_value('.imp-field[data-key="gloss"] .imp-path') == "./gloss" and "house" in page.inner_text('.imp-field[data-key="gloss"] .imp-sample') and "maison" not in page.inner_text('.imp-field[data-key="gloss"] .imp-sample'), page.inner_text('.imp-field[data-key="gloss"]')[:200])
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-exuse"]')
+        check(S, "step Examples: you can ignore the examples (the default) or use them, and a file with no examples says nothing to map", page.locator('input[name="imp-exuse"][value="0"]').is_checked() and "Examples from pre-existent dictionary" in page.inner_text("#imp-body"), page.inner_text("#imp-body")[:160])
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-rluse"]')
+        check(S, "step Relations: you can ignore the relations or import them (a file with none has none to map)", page.locator('input[name="imp-rluse"]').count() == 2 and "synonym" in page.inner_text("#imp-body"), "")
+        page.click("#imp-next"); page.wait_for_selector("#imp-ety"); page.select_option("#imp-ety", "./etymology"); page.wait_for_selector('.imp-field[data-key="etymology.form"]'); page.wait_for_timeout(300)
+        page.locator('.imp-field[data-key="etymology.form"] .imp-path').select_option("./form"); page.wait_for_timeout(300)
+        page.locator('.imp-field[data-key="etymology.lang"] .imp-path').select_option(""); page.wait_for_timeout(300)
+        page.locator('.imp-field[data-key="etymology.lang"] .imp-value').select_option("@source"); page.wait_for_timeout(300)
+        page.click("#imp-next"); page.wait_for_selector(".imp-table", timeout=10000); page.wait_for_timeout(500)
+        txt = page.inner_text("#imp-body")
+        check(S, "step Review: 3 of 4 entries will be imported with 4 senses, the skipped one and why, the coverage of each mapped field (the part of speech is missing on the entry that has none), the first entries as XML, replace or add, and that the examples and relations are not imported (as chosen)", "3 of 4 entries will be imported" in txt and "4 senses" in txt and "no headword in a language of the project" in txt and "Part of speech" in txt and "Etymology" in txt and page.locator('input[name="imp-mode"]').count() == 2 and "examples are not imported" in txt, txt[:300].replace("\n", " | "))
+        page.click("#upload-cancel"); page.wait_for_timeout(300)
+        check(S, "cancelling at the review changes nothing", entries_n() == 6, str(entries_n()))
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        check(S, "the wizard opens afresh each time (step File, no memory of the last file)", page.locator("#imp-progress .cur").inner_text().strip().endswith("File") and page.locator("#imp-body .imp-note.ok").count() == 0, "")
+        # the whole way again, quickly, and import
+        page.set_input_files("#dict-file", {"name": "mylex.lift", "mimeType": "text/xml", "buffer": _IMP_LIFT.encode("utf-8")}); page.wait_for_selector("#imp-body .imp-note.ok", timeout=8000)
+        page.click("#imp-next"); page.wait_for_selector("#imp-entry"); page.wait_for_timeout(500); page.click("#imp-next"); page.wait_for_selector(".imp-lmap"); page.wait_for_timeout(400)
+        page.locator('.imp-lmap[data-value="nme"]').select_option("num"); page.click("#imp-next"); page.wait_for_timeout(600); page.click("#imp-next"); page.wait_for_selector("#imp-sense")
+        for k in ("definition", "gloss"):
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fattr').select_option("lang"); page.wait_for_function(f"document.querySelector('.imp-field[data-key=\"{k}\"] .imp-fval') !== null", timeout=6000); page.locator(f'.imp-field[data-key="{k}"] .imp-fval').select_option("en"); page.wait_for_timeout(200)
+        for _ in range(4): page.click("#imp-next"); page.wait_for_timeout(250)
+        page.wait_for_selector(".imp-table", timeout=10000); page.wait_for_timeout(300)
+        page.click('input[name="imp-mode"][value="replace"]'); page.click("#imp-next"); page.wait_for_function("document.getElementById('upload-msg').classList.contains('success')", timeout=10000)
+        check(S, "Import: the message says how many entries and senses, and where the previous dictionary was saved; the wizard now offers Close", "3 entries imported (4 senses)" in page.inner_text("#upload-msg") and "before-import" in page.inner_text("#upload-msg") and page.locator("#upload-cancel").inner_text() == "Close" and not page.locator("#imp-next").is_visible(), page.inner_text("#upload-msg"))
+        page.click("#upload-cancel"); page.wait_for_timeout(1500)
+        check(S, "closing reloads the dictionary: the imported entries are on the page (and the ones of the old dictionary are gone)", entries_n() == 3 and "mōrōs" in page.inner_text("#dict-content") or entries_n() == 3, page.inner_text("#dict-content")[:120])
+        # a native file: no wizard
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        page.set_input_files("#dict-file", {"name": "dictionary.xml", "mimeType": "text/xml", "buffer": shipped_bytes}); page.wait_for_selector("#imp-native", timeout=8000)
+        check(S, "a file already in the DBT’s format says so and can be used as it is", "already in the DBT" in page.inner_text("#imp-body"), "")
+        page.click("#imp-native"); page.wait_for_function("document.getElementById('upload-msg').classList.contains('success')", timeout=8000)
+        page.click("#upload-cancel"); page.wait_for_timeout(1200)
+        check(S, "…and using it as it is replaces the dictionary by it (the 8 entries of the shipped one are back)", entries_n() == n0, f"{entries_n()} vs {n0}")
+        check(S, "no JavaScript error in the wizard (the 400 of the file that is not XML is the answer the test asked for)", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_ and "/import/dictionary/parse" not in e_], "; ".join(errs[:2]))
+        au.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 20. semantic relations: synonyms and antonyms between senses ─────────────────────────
+def suite_relations(browser, args):
+    from lxml import etree
+    S = "relations"
+    section("semantic relations: synonyms and antonyms, sense to sense")
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        def xml(): return etree.fromstring(aa.get(site.url + "api/dictionary/xml").body())
+        def sid(entry_id, n=1): return xml().find(f'.//EntréeLexicale[@identifiant="{entry_id}"]').findall('Sens')[n - 1].get("identifiant")
+        def payload(entry_id, over=None):
+            over = over or {}
+            e = xml().find(f'.//EntréeLexicale[@identifiant="{entry_id}"]'); senses = []
+            for i, s in enumerate(e.findall("Sens")):
+                sd = {"ref": i, "definition": (s.findtext('Glose[@langue="eng"]') or "").strip(), "shortGloss": (s.findtext("gloss") or "").strip(),
+                      "notes": (s.findtext('Notes/ReprésentationDeTexte[@langue="eng"]') or "").strip(), "examples": (s.findtext("Exemples") or "").strip()}
+                sd.update(over.get(i, {})); senses.append(sd)
+            forms = {n.get("langue"): (n.text or "").strip() for n in e.findall("Lemme/ReprésentationDeForme")}
+            return {"forms": forms, "pos": (e.findtext("ClasseGrammaticale") or "").strip(), "domain": (e.findtext("DomaineSémantique") or "").strip(), "homonym": (e.findtext("NuméroDHomonyme") or "").strip(), "senses": senses}   # what the editor sends: the whole entry
+        def put(entry_id, body): r = aa.put(site.url + f"api/dictionary/entry/{entry_id}", headers={"Content-Type": "application/json"}, data=json.dumps(body)); return r.status, r.json()
+        rels_full = lambda entry_id: [(r.findtext("Type"), r.find("Cible").get("cible"), r.findtext("Cible")) for r in xml().find(f'.//EntréeLexicale[@identifiant="{entry_id}"]/Sens').findall("RelationSémantique")]
+        rels = lambda entry_id: [(t_, c_) for t_, c_, _ in rels_full(entry_id)]
+        known = lambda entry_id: [(t_, c_) for t_, c_ in rels(entry_id) if t_ in ("synonym", "antonym")]
+        know, props, art = sid("know"), sid("properly"), sid("art")
+        check(S, "the display of relations can be read by anyone (shown by default)", va.get(site.url + "api/dictionary/display").json() == {"relations": True, "protoOrder": []}, "")
+        legacy0 = rels("3pl")
+        check(S, "the shipped dictionary has a relation of another type (an older dictionary’s own): it is the one that must never be disturbed", legacy0 == [("exemple", "nondum1")], str(legacy0))
+        st, j = put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "antonym", "target": art}]}}))
+        check(S, "a sense gets a synonym and an antonym: they are written on that sense, with the target sense and its headword", st == 200 and sorted(rels("know")) == sorted([("synonym", props), ("antonym", art)]) and all(l_ and l_ in {n_.text for n_ in xml().findall(".//ReprésentationDeForme")} for _t, _c, l_ in rels_full("know")), str(rels("know")))
+        check(S, "…and nothing is written on the target senses (a relation is stored once)", rels("properly") == [] and rels("art") == [], "")
+        st, j = put("know", payload("know", {0: {"relations": [{"type": "hypernym", "target": props}, {"type": "synonym", "target": "nonsuch"}, {"type": "synonym", "target": know}, {"type": "synonym", "target": props}, {"type": "synonym", "target": props}, "junk", {"target": props}]}}))
+        check(S, "what the editor may not send is dropped: an unknown type, a target that does not exist, the sense itself, a repeat, anything that is not a relation; the valid one is kept once", st == 200 and rels("know") == [("synonym", props)], str(rels("know")))
+        put("know", payload("know"))
+        check(S, "a sense that sends no relations keeps the ones it has", rels("know") == [("synonym", props)], str(rels("know")))
+        put("know", payload("know", {0: {"relations": "not a list"}}))
+        check(S, "…also when what is sent is not a list", rels("know") == [("synonym", props)], "")
+        st, j = put("3pl", payload("3pl", {0: {"relations": []}}))
+        check(S, "relations of another type are never rewritten: emptying the relations of a sense leaves its older “exemple” relation as it is", st == 200 and rels("3pl") == legacy0, str(rels("3pl")))
+        put("know", payload("know", {0: {"relations": []}}))
+        check(S, "removing the relations removes them", rels("know") == [], "")
+        vis_status = va.put(site.url + "api/dictionary/entry/know", headers={"Content-Type": "application/json"}, data=json.dumps(payload("know"))).status
+        check(S, "a visitor cannot change them", vis_status == 401, str(vis_status))
+        # ── the page ──
+        put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "antonym", "target": art}]}}))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        know_box = page.locator(f'[id="know"] .entry-rel'); props_box = page.locator('[id="properly"] .entry-rel'); art_box = page.locator('[id="art"] .entry-rel')
+        txt = lambda loc: re.sub(r"\s+", " ", loc.first.inner_text()).strip() if loc.count() else ""
+        check(S, "under a sense the page shows its synonym and its antonym, each a link to the entry", re.fullmatch(r"SYNONYM: .+ · ANTONYM: .+", txt(know_box).upper()) is not None and know_box.locator("a.rel-link").count() == 2 and know_box.locator("a.rel-link").first.get_attribute("href") == "#properly", txt(know_box))
+        check(S, "…and the other senses show it too, though it was entered once: the reverse relation is drawn (synonymy and antonymy are symmetric)", "Synonym" in txt(props_box) and "Antonym" in txt(art_box) and props_box.locator("a.rel-link").first.get_attribute("href") == "#know", f"{txt(props_box)} | {txt(art_box)}")
+        # plural, and a second synonym
+        put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "synonym", "target": art}]}}))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        check(S, "two synonyms: the label is plural", "Synonyms:" in txt(page.locator('[id="know"] .entry-rel')).replace("SYNONYMS", "Synonyms") or "Synonyms" in txt(page.locator('[id="know"] .entry-rel')), txt(page.locator('[id="know"] .entry-rel')))
+        put("know", payload("know", {0: {"relations": [{"type": "synonym", "target": props}, {"type": "antonym", "target": art}]}}))
+        # ── the switch ──
+        st, _ = (lambda r: (r.status, r.json()))(aa.post(site.url + "api/dictionary/settings", headers={"Content-Type": "application/json"}, data=json.dumps({"correspondences": aa.get(site.url + "api/dictionary/settings").json()["correspondences"], "display": {"relations": False}})))
+        check(S, "the author can hide the relations: everybody’s display follows, and the settings keep their other content", st == 200 and va.get(site.url + "api/dictionary/display").json() == {"relations": False, "protoOrder": []} and aa.get(site.url + "api/dictionary/settings").json()["correspondences"]["rows"], str(st))
+        open_page(page, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        check(S, "hidden, no relation appears on the page, and the data is still there", page.locator(".entry-rel").count() == 0 and len(rels("know")) == 2, str(page.locator(".entry-rel").count()))
+        aa.post(site.url + "api/dictionary/settings", headers={"Content-Type": "application/json"}, data=json.dumps({"correspondences": aa.get(site.url + "api/dictionary/settings").json()["correspondences"], "display": {"relations": True}}))
+        # ── the editor ──
+        pa = au.new_page(); watch(pa, errs)
+        open_page(pa, site, "dictionary.html?lang=Koro", "#dict-content .entry", 1200)
+        pa.evaluate("openEditEntry('speech')"); pa.wait_for_selector("#entry-modal.visible")
+        card = pa.locator("#em-senses .em-sense").first
+        check(S, "the entry editor has a Relations block for each sense: none yet, a type, and a search", "none" in card.locator(".em-rel-list").inner_text() and card.locator('[data-rel="type"]').count() == 1, card.locator(".em-rel-list").inner_text())
+        card.locator('[data-rel="q"]').fill("know"); pa.wait_for_selector("#em-senses .em-rel-results button")
+        res = pa.locator("#em-senses .em-rel-results button")
+        check(S, "typing a form or a meaning finds senses (a result is a sense: its headword in the language being viewed, its number if the entry has several, its gloss)", res.count() >= 1 and "know" in res.first.inner_text().lower(), res.first.inner_text())
+        card.locator('[data-rel="type"]').select_option("antonym"); res.first.click()
+        check(S, "choosing one adds the relation to the sense, as the type chosen, and it is no longer offered", card.locator(".em-rel-item").count() == 1 and card.locator(".em-rel-item").inner_text().startswith("Antonym:"), card.locator(".em-rel-list").inner_text())
+        pa.locator("#em-senses .em-sense").first.locator('[data-rel="q"]').fill("speech")
+        pa.wait_for_timeout(200)
+        check(S, "the sense itself is never offered as its own relation", all("speech, language" not in b.inner_text().lower() for b in pa.locator("#em-senses .em-rel-results button").all()), "")
+        pa.click("#em-submit"); pa.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); pa.wait_for_timeout(800)
+        check(S, "saving writes it, and the page shows it under both senses", known("speech") == [("antonym", sid("know"))] and "Antonym" in txt(pa.locator('[id="speech"] .entry-rel')) and "Antonym" in txt(pa.locator('[id="know"] .entry-rel')), str(rels("speech")))
+        pa.evaluate("openEditEntry('speech')"); pa.wait_for_selector("#entry-modal.visible"); pa.locator('#em-senses .em-sense [data-act="rel-del"]').first.click()
+        pa.click("#em-submit"); pa.wait_for_function("!document.getElementById('entry-modal').classList.contains('visible')", timeout=8000); pa.wait_for_timeout(500)
+        check(S, "the ✕ of a relation removes it, and the other sense no longer shows it", known("speech") == [] and pa.locator('[id="speech"] .entry-rel').count() == 0, str(rels("speech")))
+        # ── a sense or an entry that goes takes the relations that point to it ──
+        put("speech", payload("speech", {0: {"relations": [{"type": "synonym", "target": props}]}}))
+        r = aa.delete(site.url + "api/dictionary/entry/properly")
+        check(S, "deleting an entry removes the relations that point to its senses", r.status == 200 and known("speech") == [] and sid("know") and rels("know") == [("antonym", art)], str(rels("know")) + str(known("speech")))
+        put("art", payload("art", {0: {"relations": [{"type": "synonym", "target": know}]}}))
+        e = payload("know"); e["senses"] = []
+        put("know", dict(payload("know"), senses=[{"ref": None, "definition": "a new only sense", "shortGloss": "x", "notes": "", "examples": "", "relations": []}]))
+        check(S, "removing a sense in the editor removes the relations that point to it", rels("art") == [], str(rels("art")))
+        check(S, "no JavaScript or loading error on the page or in the editor", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close()
+    finally:
+        site.stop()
+
+
+
+def suite_import_extras(browser, args):
+    """The examples (into a new text of the Texts page) and the semantic relations of an imported dictionary."""
+    from lxml import etree
+    S = "xmlimport"
+    section("importing examples (a new text) and semantic relations")
+    lift2 = re.search(r"LIFT2 = '''(.*?)'''", (ROOT / "tests" / "test_xmlimport.py").read_text(encoding="utf-8"), re.S).group(1)
+    cfg = {"entryTag": "entry", "lemma": {"path": "./lexical-unit/form", "value": "./text"}, "language": {"mode": "attr", "attr": "lang", "map": {"nme": "num", "drg": "drg"}}, "sense": {"path": "./sense"},
+           "gloss": {"path": "./gloss", "value": "./text", "filterAttr": "lang", "filterValue": "en"},
+           "examples": {"path": "./sense/example", "text": {"path": "./form", "value": "./text"}, "translation": {"path": "./translation/form", "value": "./text", "filterAttr": "lang", "filterValue": "en"}},
+           "relations": {"path": "./sense/relation", "type": {"path": "", "value": "@type"}, "typeMap": {}, "target": {"path": "", "value": "@ref"}, "by": "id", "entryKey": "@guid", "senseKey": "@id"}}
+    site = Site()
+    try:
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        U = lambda p: site.url + "api/import/dictionary/" + p
+        def post(p, body=None, files=None):
+            r = aa.post(U(p), multipart=files) if files is not None else aa.post(U(p), headers={"Content-Type": "application/json"}, data=json.dumps(body or {}))
+            try: j = r.json()
+            except Exception: j = {}
+            return r.status, j
+        f2 = {"name": "ex.lift", "mimeType": "text/xml", "buffer": lift2.encode("utf-8")}
+        tok = post("parse", files={"file": f2})[1]["token"]
+        st, i = post("inspect", {"token": tok, "entryTag": "entry"})
+        check(S, "for a LIFT file with examples and relations the wizard is told so: the mapping of both is suggested, and the attributes of the entries (where an identifier can be found) are listed", st == 200 and i["suggestion"]["examples"]["path"] == "./sense/example" and i["suggestion"]["relations"]["by"] == "id" and set(i["entryAttrs"]) == {"id", "guid"}, str(i["entryAttrs"]))
+        texts_dir = site.dir / "project" / "texts"; before = sorted(p.name for p in texts_dir.glob("*.xml"))
+        st, pv = post("preview", {"token": tok, "config": cfg})
+        check(S, "the preview counts the examples and the relations (2 imported, 1 of another type left out, 1 pointing nowhere) and shows a few examples; it does not send the sentences, and creates no text", st == 200 and pv["report"]["relations"] == {"imported": 2, "unresolved": 1, "ignored": 1} and pv["report"]["examples"] == {"num": 2, "drg": 1} and "_texts" not in pv["report"] and len(pv["examplesSample"]) == 3 and sorted(p.name for p in texts_dir.glob("*.xml")) == before, str(pv["report"]))
+        check(S, "a mapping that uses examples must say where the sentence is", post("preview", {"token": tok, "config": dict(cfg, examples=dict(cfg["examples"], text={}))})[0] == 400, "")
+        st, c = post("commit", {"token": tok, "config": cfg, "mode": "replace"})
+        names = sorted(p.name for p in texts_dir.glob("Examples_from_pre-existent_dictionary_*.xml"))
+        check(S, "importing writes the examples as texts of the Texts page, one for each language, named “Examples from pre-existent dictionary” (the language added to the title as there are two), and the message says so; the relations are counted", st == 200 and names == ["Examples_from_pre-existent_dictionary_drg.xml", "Examples_from_pre-existent_dictionary_num.xml"] and "went into the text “Examples from pre-existent dictionary (Nume)”" in c["message"] and "2 semantic relations" in c["message"], str(c)[:300])
+        titles = {it["filename"]: it["title"] for it in aa.get(site.url + "api/transcriptions/list").json()["transcriptions"]}
+        check(S, "the Texts page lists them, with their titles, like any text", titles.get("Examples_from_pre-existent_dictionary_num.xml") == "Examples from pre-existent dictionary (Nume)" and titles.get("Examples_from_pre-existent_dictionary_drg.xml") == "Examples from pre-existent dictionary (Dorig)", str(titles)[:300])
+        x = etree.fromstring(aa.get(site.url + "api/dictionary/xml").body())
+        nir = x.find('.//EntréeLexicale[@identifiant="nir"]')
+        check(S, "each sense cites its examples (the sense that had two has two), and the relations are on the senses where they stood, pointing to a sense", nir.findtext("Sens/Exemples") == "{{cite: Examples_from_pre-existent_dictionary_num.xml#ex1}}\n{{cite: Examples_from_pre-existent_dictionary_num.xml#ex2}}" and nir.find("Sens/RelationSémantique/Cible").get("cible") == "visⓢ1", nir.findtext("Sens/Exemples") or "")
+        ce = aa.get(site.url + "api/dictionary/cited-examples").json()
+        ex = ce["nir|0"]["examples"] if "nir|0" in ce else []
+        check(S, "the dictionary finds those examples: the sentence of the text and its translation are what the sense shows, and none is missing", len(ex) == 2 and ex[0]["translation"] == "They do not know" and ex[0]["file"] == "Examples_from_pre-existent_dictionary_num.xml" and ce["nir|0"]["missing"] == [], str(ex)[:200])
+        # a single language: the title is exactly the one asked for
+        one = dict(cfg, language={"mode": "attr", "attr": "lang", "map": {"nme": "num"}})
+        tok1 = post("parse", files={"file": f2})[1]["token"]
+        st, c1 = post("commit", {"token": tok1, "config": one, "mode": "replace"})
+        t1 = {it["filename"]: it["title"] for it in aa.get(site.url + "api/transcriptions/list").json()["transcriptions"]}
+        check(S, "with one language the text is called exactly Examples from pre-existent dictionary", st == 200 and t1.get("Examples_from_pre-existent_dictionary_num.xml") == "Examples from pre-existent dictionary", str(t1)[:200])
+        # replacing starts the text again, and what was glossed on the old one is put aside
+        gdir = site.dir / "project" / "texts" / "glosses"; gdir.mkdir(exist_ok=True)
+        gfile = gdir / "Examples_from_pre-existent_dictionary_num_xml.json"; gfile.write_text(json.dumps({"ex1": {"tokens": ["x"], "glosses": ["y"]}}), encoding="utf-8")
+        tok2 = post("parse", files={"file": f2})[1]["token"]; post("commit", {"token": tok2, "config": one, "mode": "replace"})
+        bk = sorted(p.name for p in (site.dir / "uploads" / "backups").glob("Examples_from_pre-existent_dictionary_num-*"))
+        check(S, "replacing the dictionary starts the text again; the old text and the glosses made on it are backed up first, and the glosses are removed (they belong to the old sentences, which have other numbers now)", not gfile.exists() and any(b.endswith("-glosses.json") for b in bk) and any(b.endswith(".xml") for b in bk), str(bk))
+        n_before = len(etree.parse(str(texts_dir / "Examples_from_pre-existent_dictionary_num.xml")).getroot().findall("S"))
+        tok3 = post("parse", files={"file": f2})[1]["token"]; st, c3 = post("commit", {"token": tok3, "config": one, "mode": "add"})
+        root_t = etree.parse(str(texts_dir / "Examples_from_pre-existent_dictionary_num.xml")).getroot(); sids = [s.get("id") for s in root_t.findall("S")]
+        check(S, "adding a dictionary goes on in the same text: the new sentences are numbered after the ones already there, nothing is lost, and the glosses stay valid", st == 200 and len(sids) == n_before + 2 and sids == [f"ex{k}" for k in range(1, n_before + 3)], str(sids))
+        nogo = dict(cfg); nogo.pop("examples")
+        names0 = sorted(p.name for p in texts_dir.glob("*.xml")); tok4 = post("parse", files={"file": f2})[1]["token"]; post("commit", {"token": tok4, "config": nogo, "mode": "replace"})
+        x = etree.fromstring(aa.get(site.url + "api/dictionary/xml").body())
+        check(S, "when the examples are ignored nothing is written: no new text, and no sense cites an example", sorted(p.name for p in texts_dir.glob("*.xml")) == names0 and x.find(".//Exemples") is None, "")
+        # ── the page shows the relations that were imported ──
+        page = au.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Nume", "#dict-content .entry", 1500)
+        txt = lambda sel: re.sub(r"\s+", " ", page.locator(sel).first.inner_text()).strip() if page.locator(sel).count() else ""
+        check(S, "the imported relations are shown under the senses: the synonym on nir, and on vis both ends of the relations (the synonym of nir and the antonym of ron, drawn from the other side)", "Synonym" in txt('[id="nir"] .entry-rel') and "Synonym" in txt('[id="vis"] .entry-rel') and "Antonym" in txt('[id="vis"] .entry-rel'), f"{txt('[id=nir] .entry-rel')} | {txt('[id=vis] .entry-rel')}")
+        check(S, "no JavaScript error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        # ── the wizard: use the examples, import the relations ──
+        open_page(page, site, "dictionary.html", "#dict-edit-tab", 1200)
+        page.evaluate("document.getElementById('dict-edit-tab').click()"); page.wait_for_selector("#upload-modal.visible")
+        page.set_input_files("#dict-file", {"name": "ex.lift", "mimeType": "text/xml", "buffer": lift2.encode("utf-8")}); page.wait_for_selector("#imp-body .imp-note.ok", timeout=8000)
+        page.click("#imp-next"); page.wait_for_selector("#imp-entry"); page.wait_for_timeout(500); page.click("#imp-next"); page.wait_for_selector(".imp-lmap"); page.wait_for_timeout(400)
+        page.locator('.imp-lmap[data-value="nme"]').select_option("num")
+        check(S, "the Headwords step lists only the languages of the headwords (nme): the language of a sentence that no headword has is not asked here", page.locator(".imp-lmap").count() == 1, "")
+        page.click("#imp-next"); page.wait_for_timeout(500); page.click("#imp-next"); page.wait_for_selector("#imp-sense")
+        for k in ("gloss",):
+            page.locator(f'.imp-field[data-key="{k}"] .imp-fattr').select_option("lang"); page.wait_for_function(f"document.querySelector('.imp-field[data-key=\"{k}\"] .imp-fval') !== null", timeout=6000); page.locator(f'.imp-field[data-key="{k}"] .imp-fval').select_option("en"); page.wait_for_timeout(200)
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-exuse"]')
+        check(S, "step Examples: ignoring is the default; choosing to use them opens the mapping, already filled in for LIFT (the example node, the sentence, the translation)", page.locator('input[name="imp-exuse"][value="0"]').is_checked() and not page.locator("#imp-exw").count(), "")
+        page.click('input[name="imp-exuse"][value="1"]'); page.wait_for_selector('.imp-field[data-key="examples.text"]'); page.wait_for_timeout(300)
+        check(S, "…with a sample of the sentences, and the translation filtered by its language (here chosen: English)", page.input_value("#imp-exw") == "./sense/example" and page.input_value('.imp-field[data-key="examples.text"] .imp-path') == "./form" and "nir vitis gil" in page.inner_text('.imp-field[data-key="examples.text"] .imp-sample'), page.inner_text("#imp-body")[:200])
+        page.wait_for_selector('.imp-lmap[data-value="drg"]', timeout=6000)
+        check(S, "…and the languages of the sentences are asked here (drg, which no headword has; the value of a language that is the project’s own code is recognised, and a language that is not there is ignored)", page.input_value('.imp-lmap[data-value="drg"]') == "drg" and page.input_value('.imp-lmap[data-value="zzz"]') == "" and page.input_value('.imp-lmap[data-value="nme"]') == "num", "")
+        page.locator('.imp-field[data-key="examples.translation"] .imp-fattr').select_option("lang"); page.wait_for_function("document.querySelector('.imp-field[data-key=\"examples.translation\"] .imp-fval') !== null", timeout=6000); page.locator('.imp-field[data-key="examples.translation"] .imp-fval').select_option("en"); page.wait_for_timeout(300)
+        page.click("#imp-next"); page.wait_for_selector('input[name="imp-rluse"]'); page.wait_for_selector(".imp-rmap", timeout=8000)
+        check(S, "step Relations: they are on by default when the file has them; the node, the type (the attribute type of the element itself) and the target are filled in; each type of the file is a row to say what it is (Synonyms → Synonym, Antonyms → Antonym, Hypernym not imported); the target is found by identifier, entries by @guid and senses by @id", page.locator('input[name="imp-rluse"][value="1"]').is_checked() and page.input_value("#imp-rlw") == "./sense/relation" and page.input_value('.imp-rmap[data-value="Synonyms"]') == "synonym" and page.input_value('.imp-rmap[data-value="Antonyms"]') == "antonym" and page.input_value('.imp-rmap[data-value="Hypernym"]') == "" and page.input_value("#imp-rke") == "@guid" and page.input_value("#imp-rks") == "@id", page.inner_text("#imp-body")[:240])
+        page.click("#imp-next"); page.wait_for_selector("#imp-ety"); page.click("#imp-next"); page.wait_for_selector(".imp-table", timeout=10000); page.wait_for_timeout(500)
+        rv = page.inner_text("#imp-body")
+        check(S, "the review says how many examples will go into the text “Examples from pre-existent dictionary” (and shows some), and how many relations will be imported", "3 examples will go into the text “Examples from pre-existent dictionary”" in rv and "one text for each language" in rv and "2 semantic relations will be imported" in rv and "nir vitis gil" in rv, rv[:420].replace("\n", " | "))
+        page.click('input[name="imp-mode"][value="replace"]'); page.click("#imp-next"); page.wait_for_function("document.getElementById('upload-msg').classList.contains('success')", timeout=10000)
+        check(S, "importing from the wizard: the message says the examples went into the text and counts the relations; the texts are there", "went into the text" in page.inner_text("#upload-msg") and "2 semantic relations" in page.inner_text("#upload-msg") and (texts_dir / "Examples_from_pre-existent_dictionary_num.xml").exists(), page.inner_text("#upload-msg"))
+        au.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 21. the Glossary: entries written with the markup of the grammar, {{glossary: id}} ─────────────────────────
+_GL_DEF = ("The predicate makes a statement (thus 'predicates') about the subjectthe part of a sentence or clause that contains the verb and tells us what the subject is doing or experiencing in the sense of an action, "
+           "or being in the sense of a quality. In Gaua languages, definable as omnipredicative languages, members of all open word classes can act as a predicate.")
+
+def suite_glossary(browser, args):
+    S = "glossary"
+    section("the Glossary")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_glossary.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the glossary engine passes its own direct tests (id, term, tooltip, order, the shortcode in HTML and in LaTeX)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        J = {"Content-Type": "application/json"}
+        # ── the nav ──
+        pages = ["index.html", "about.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "concordance.html", "transcription.html", "glossary.html"]
+        navs = {p_: re.findall(r'<li><a href="([^"]+)"( class="active")?>([^<]+)</a></li>', re.search(r'<nav class="topnav">.*?</nav>', va.get(site.url + p_).text(), re.S).group(0)) for p_ in pages}
+        check(S, "the Glossary tab is in the navigation of every page, after the References tab, and is the active tab of the Glossary page only", all([n[0] for n in v] == ["index.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "glossary.html"] for v in navs.values()) and all(bool(v[-1][1]) == (p_ == "glossary.html") for p_, v in navs.items()) and all(not any(x[1] for x in v[:-1]) or p_ != "glossary.html" for p_, v in navs.items()), str({p_: [x[0] for x in v] for p_, v in navs.items() if len(v) != 6}))
+        check(S, "its label comes from the project like the others (nav.glossary, “Glossary” by default)", "Glossary</div>" in va.get(site.url + "glossary.html").text() and "{{project" not in va.get(site.url + "glossary.html").text(), "")
+        for f in ("editor.js", "grammar.css", "grammaticon_logo.png"):
+            check(S, f"{f} is served", va.get(site.url + f).status == 200, f)
+        # ── your entry, as given ──
+        lst = va.get(site.url + "api/glossary").json()["entries"]
+        check(S, "the glossary has the entry “predicate”: its term is Predicate, and its tooltip starts with the definition", [e["id"] for e in lst] == ["predicate"] and lst[0]["term"] == "Predicate" and lst[0]["snippet"].startswith("The predicate makes a statement (thus 'predicates') about the subject"), str(lst)[:200])
+        h = va.get(site.url + "api/glossary/predicate").json()["html"]
+        check(S, "its definition is the text it was given, word for word, in one paragraph", f"<p>{_GL_DEF}</p>" in h, h[:300])
+        check(S, "followed by the link “see in the Grammaticon” to https://grammaticon.clld.org/concepts/25 and, after it, the image grammaticon_logo.png, in the same paragraph", re.search(r'<p><a href="https://grammaticon\.clld\.org/concepts/25">see in the Grammaticon</a>\s*<img[^>]*src="grammaticon_logo\.png"[^>]*>\s*</p>', h) is not None, h[-300:])
+        # ── who may write ──
+        st = lambda r: r.status
+        check(S, "reading is public; writing is the author’s: a visitor gets 401 for the source, a save, a deletion and a new entry", [st(va.get(site.url + "api/glossary/predicate/source")), st(va.post(site.url + "api/glossary/predicate", headers=J, data="{}")), st(va.delete(site.url + "api/glossary/predicate")), st(va.post(site.url + "api/glossary", headers=J, data='{"term": "x"}'))] == [401] * 4 and va.get(site.url + "api/glossary/predicate").status == 200, "")
+        r = aa.post(site.url + "api/glossary", headers=J, data=json.dumps({"term": "Case marking"})); j = r.json()
+        r2 = aa.post(site.url + "api/glossary", headers=J, data=json.dumps({"term": "Case marking"})).json()
+        r3 = aa.post(site.url + "api/glossary", headers=J, data=json.dumps({"term": "Évidentialité"})).json()
+        check(S, "a new entry gets an id made from its term (accents dropped, made unique), and starts with its heading", j["id"] == "case_marking" and r2["id"] == "case_marking_2" and r3["id"] == "evidentialite" and (site.dir / "project" / "glossary" / "case_marking.md").read_text(encoding="utf-8").startswith("## Case marking\n"), str((j, r2, r3)))
+        check(S, "…without a term it is refused", aa.post(site.url + "api/glossary", headers=J, data='{"term": "  "}').status == 400, "")
+        check(S, "the entries are listed by term, accents and case ignored", [e["id"] for e in va.get(site.url + "api/glossary").json()["entries"]] == ["case_marking", "case_marking_2", "evidentialite", "predicate"], str([e["id"] for e in va.get(site.url + "api/glossary").json()["entries"]]))
+        bad = [aa.get(site.url + f"api/glossary/{x}").status for x in ("..%2Fapp", "%2e%2e%2fapp", "app.py", "..", "no_such")] + [aa.post(site.url + "api/glossary/nope", headers=J, data='{"source": "x"}').status]
+        check(S, "an id that is not an entry (a path, a file name, an entry that does not exist) is 404, and a save never creates a file by a typed id", all(s_ == 404 for s_ in bad) and not (site.dir / "project" / "nope.md").exists() and not (site.dir / "project" / "glossary" / "nope.md").exists(), str(bad))
+        check(S, "a save that is too long is refused", aa.post(site.url + "api/glossary/case_marking", headers=J, data=json.dumps({"source": "x" * 200_001})).status == 400, "")
+        s_ = aa.post(site.url + "api/glossary/case_marking_2", headers=J, data=json.dumps({"source": "## A different term\n\nBody."})).json()
+        check(S, "saving returns the term (the first heading) and the entry rendered", s_["ok"] and s_["term"] == "A different term" and "<p>Body.</p>" in s_["html"], str(s_)[:200])
+        aa.delete(site.url + "api/glossary/case_marking_2"); aa.delete(site.url + "api/glossary/evidentialite")
+        check(S, "an entry can be deleted", [e["id"] for e in va.get(site.url + "api/glossary").json()["entries"]] == ["case_marking", "predicate"], "")
+        # ── the same markup as the grammar, for everything ──
+        aa.post(site.url + "api/grammar/zz_g", headers=J, data=json.dumps({"source": '## G\n\n```phonotable\n{"kind":"vowels","label":"gv","caption":"A grammar chart","columns":["Front"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}}}}\n```\n'}))
+        src = ("## Case marking\n\nSee {{ref: gv}} and {{glossary: predicate}} and {{glossary: predicate | the predicates}}; {{glossary: nonesuch}}.\n\n"
+               "| a | b |\n|---|---|\n| **x** | y |\n\n```phonotable\n"
+               '{"kind":"vowels","caption":"A chart in the glossary","columns":["Front"],"rows":["Close"],"inventory":{"num":{"Close":{"Front":"i"}}}}\n```\n\n![A figure here](images/gaua_map.png){#gm}\n\nCode: `{{glossary: predicate}}`.\n')
+        aa.post(site.url + "api/glossary/case_marking", headers=J, data=json.dumps({"source": src}))
+        e = va.get(site.url + "api/glossary/case_marking").json()["html"]
+        check(S, "an entry is written with the markup of the grammar: Markdown (a table, bold), a chart of the Tables tab (with its caption, numbered in the glossary: Table 1, not after the grammar’s), a figure (Figure 1), references to the grammar’s tables that go to the Grammar page", "<strong>x</strong>" in e and 'figure class="phonotable"' in e and "Table 1</span>" in e and "Figure 1</span>" in e and 'href="grammar.html#tab-gv"' in e and "{{" not in re.sub(r"<code>.*?</code>", "", e), e[:200])
+        check(S, "…and {{glossary: …}} works in an entry: a link to another entry stays on the page (#id), the words shown are the author’s, an unknown entry is a visible error, and in code it is left as written", 'href="#predicate"' in e and ">the predicates</a>" in e and "Glossary entry not found: nonesuch" in e and "<code>{{glossary: predicate}}</code>" in e, e[:300])
+        # ── the shortcode in the grammar, in LaTeX, in the dictionary ──
+        aa.post(site.url + "api/grammar/zz_h", headers=J, data=json.dumps({"source": "## H\n\nThe {{glossary: predicate}}, {{glossary: predicate | a predicate}} and {{glossary: nonesuch}}. `{{glossary: predicate}}`\n"}))
+        gh = va.get(site.url + "api/grammar/zz_h").json()["html"]
+        check(S, "in the grammar {{glossary: id}} is a link that reads as the term, with the beginning of the definition as its tooltip, to the Glossary page; with “| words” it shows them; an unknown entry is an error; in code it is as written", 'href="glossary.html#predicate"' in gh and 'title="The predicate makes a statement' in gh and ">Predicate</a>" in gh and ">a predicate</a>" in gh and "Glossary entry not found: nonesuch" in gh and "<code>{{glossary: predicate}}</code>" in gh, gh[:260])
+        tex = aa.get(site.url + "api/grammar/export/latex").text
+        tex = tex() if callable(tex) else tex
+        check(S, "in the LaTeX export it is plain text: the term, the words shown, or ?? if the entry does not exist (never the shortcode)", "The Predicate, a predicate and \\textbf{??}" in tex and "{{glossary" not in tex.replace("\\texttt{\\{\\{glossary: predicate\\}\\}}", ""), tex[tex.find("The Predicate") - 20:][:160] if "The Predicate" in tex else "")
+        aa.post(site.url + "api/dictionary/entry", headers=J, data=json.dumps({"forms": {"drg": "glosword"}, "pos": "n.", "domain": "", "senses": [{"ref": None, "definition": "a {{glossary: predicate}} word", "shortGloss": "", "langs": [], "notes": "see {{glossary: predicate | the entry}} and {{glossary: nonesuch}}"}]}))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "dictionary.html?lang=Dorig", "#dict-content .entry", 1200)
+        ent = page.locator(".entry", has_text="glosword").first
+        check(S, "in the dictionary a definition and a note show the glossary links (the term, or the author’s words) with the tooltip, and an unknown entry as an error", ent.locator(".entry-gloss a.gloss-link").get_attribute("href") == "glossary.html#predicate" and ent.locator(".entry-gloss a.gloss-link").inner_text() == "Predicate" and ent.locator(".entry-notes a.gloss-link").inner_text() == "the entry" and "Glossary entry not found: nonesuch" in ent.locator(".entry-notes").inner_text() and (ent.locator(".entry-gloss a.gloss-link").get_attribute("title") or "").startswith("The predicate makes a statement"), ent.locator(".entry-gloss").inner_html()[:200])
+        ent.locator(".entry-gloss a.gloss-link").click(); page.wait_for_url("**/glossary.html#predicate", timeout=8000); page.wait_for_selector("#gloss-predicate .section-content p", timeout=8000); page.wait_for_timeout(700)
+        top = page.evaluate("document.getElementById('gloss-predicate').getBoundingClientRect().top")
+        check(S, "a click on it opens the Glossary page at that entry, which is in the window (a page this short cannot scroll its second entry to the very top)", 0 <= top < page.evaluate("window.innerHeight") - 40, f"top = {top}")
+        # ── the page ──
+        open_page(page, site, "glossary.html", ".glossary-entry .section-content p", 1000); page.evaluate("document.fonts.ready"); page.wait_for_timeout(500)
+        check(S, "the page lists the terms in the sidebar and shows each entry; a visitor sees no edit button, no add button, no shortcode helper", [a_.inner_text() for a_ in page.locator("#toc-list a").all()] == ["Case marking", "Predicate"] and page.locator(".edit-tab.visible, .delete-tab.visible, .gloss-code.visible, #add-entry-btn.visible").count() == 0, str([a_.inner_text() for a_ in page.locator("#toc-list a").all()]))
+        logo = page.locator("#gloss-predicate img.glossary-logo"); lb = logo.bounding_box(); lk = page.locator('#gloss-predicate a[href="https://grammaticon.clld.org/concepts/25"]').bounding_box()
+        check(S, "the Grammaticon logo is small (a line high), on the same line as the link, after it; the link opens the Grammaticon", lb is not None and lb["height"] <= 40 and abs((lb["y"] + lb["height"] / 2) - (lk["y"] + lk["height"] / 2)) < 20 and lb["x"] > lk["x"] + lk["width"] and page.locator('#gloss-predicate a[href="https://grammaticon.clld.org/concepts/25"]').inner_text() == "see in the Grammaticon", f"{lb} {lk}")
+        check(S, "the page raised no JavaScript or loading error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        # ── the author's editor: the very editor of the grammar ──
+        pa = au.new_page(); watch(pa, errs)
+        open_page(pa, site, "glossary.html", ".glossary-entry .section-content p", 1000)
+        check(S, "the author sees Add entry, Edit and Delete, and the shortcode to copy under each entry", pa.locator("#add-entry-btn.visible").count() == 1 and pa.locator(".edit-tab.visible").count() == 2 and "{{glossary: predicate}}" in pa.locator("#gloss-predicate .gloss-code").inner_text(), "")
+        pa.locator("#gloss-predicate .edit-tab").click(); pa.wait_for_selector("#editor-glossary-predicate.visible")
+        gl_btns = sorted(b_.get_attribute("title") or b_.inner_text() for b_ in pa.locator("#editor-glossary-predicate .editor-toolbar-btn").all())
+        check(S, "the textarea holds the source, written in markup: the heading, the text, the link and the image as the author types them", "## Predicate" in pa.input_value("#textarea-glossary-predicate") and "[see in the Grammaticon](https://grammaticon.clld.org/concepts/25)" in pa.input_value("#textarea-glossary-predicate") and "![Grammaticon](grammaticon_logo.png){.glossary-logo}" in pa.input_value("#textarea-glossary-predicate"), pa.input_value("#textarea-glossary-predicate")[:120])
+        pg = au.new_page(); watch(pg, errs); open_page(pg, site, "grammar.html", ".grammar-section .section-content", 1000)
+        pg.locator("#s1 .section-edit").click(); pg.wait_for_selector("#editor-s1.visible")
+        gr_btns = sorted(b_.get_attribute("title") or b_.inner_text() for b_ in pg.locator("#editor-s1 .editor-toolbar-btn").all())
+        check(S, "the editor is the grammar’s: the same toolbar (bold, italic, heading, table, 🔗 Reference, 📖 Glossary, image, {{example}}, {{entry}}, {{source}}), the same Phonological table tab, the same list of shortcodes (with {{glossary}})", gl_btns == gr_btns and "Refer to an entry of the Glossary: inserts {{glossary: id}}" in gl_btns and pa.locator('#editor-glossary-predicate .ed-tab[data-tab="phono"]').count() == 1 and "{{glossary: id}}" in pa.inner_text("#editor-glossary-predicate .shortcode-ref") and "{{cite: file.xml#sentId}}" in pa.inner_text("#editor-glossary-predicate .shortcode-ref"), str(gl_btns))
+        # the glossary menu inserts the shortcode, on both pages
+        pa.evaluate("(() => { const t = document.getElementById('textarea-glossary-predicate'); t.focus(); t.setSelectionRange(t.value.length, t.value.length); })()")
+        pa.locator("#editor-glossary-predicate .editor-toolbar-btn", has_text="Glossary").click(); pa.wait_for_selector("#gloss-menu-glossary-predicate button")
+        menu = pa.inner_text("#gloss-menu-glossary-predicate")
+        pa.locator('#gloss-menu-glossary-predicate button[data-id="case_marking"]').click()
+        check(S, "the 📖 Glossary button lists the entries (term, id, beginning of the definition) and inserts {{glossary: id}} at the cursor", "Predicate" in menu and "case_marking" in menu and pa.input_value("#textarea-glossary-predicate").rstrip().endswith("{{glossary: case_marking}}") and pa.locator("#gloss-menu-glossary-predicate").count() == 0, menu[:120])
+        pg.evaluate("(() => { const t = document.getElementById('textarea-s1'); t.focus(); t.setSelectionRange(0, 0); })()")
+        pg.locator("#editor-s1 .editor-toolbar-btn", has_text="Glossary").click(); pg.wait_for_selector("#gloss-menu-s1 button"); pg.locator('#gloss-menu-s1 button[data-id="predicate"]').click()
+        check(S, "…and in the grammar editor it inserts the same shortcode", pg.input_value("#textarea-s1").startswith("{{glossary: predicate}}"), "")
+        # editing and saving
+        pa.evaluate("document.getElementById('textarea-glossary-predicate').value = '## Predicate (edited)\\n\\nNew text with {{glossary: case_marking}}.'")
+        pa.locator("#editor-glossary-predicate .modal-btn.primary").click(); pa.wait_for_function("document.querySelector('#gloss-predicate h2') && document.querySelector('#gloss-predicate h2').textContent.includes('edited')", timeout=8000); pa.wait_for_timeout(600)
+        check(S, "saving shows the entry rendered with the new text, the shortcode as a link to another entry (on the page), and the sidebar and the order follow the new term", pa.locator('#gloss-predicate a.gloss-link[href="#case_marking"]').count() == 1 and [a_.inner_text() for a_ in pa.locator("#toc-list a").all()] == ["Case marking", "Predicate (edited)"] and (site.dir / "project" / "glossary" / "predicate.md").read_text(encoding="utf-8").startswith("## Predicate (edited)"), str([a_.inner_text() for a_ in pa.locator("#toc-list a").all()]))
+        # a chart made in the editor numbers itself in the glossary
+        pa.locator("#gloss-case_marking .edit-tab").click(); pa.wait_for_selector("#editor-glossary-case_marking.visible")
+        pa.locator('#editor-glossary-case_marking .ed-tab[data-tab="phono"]').click(); pa.locator('#pt-glossary-case_marking [data-act="new"][data-kind="vowels"]').click(); pa.wait_for_selector("#pt-glossary-case_marking .pt-grid input")
+        pa.fill("#pt-caption-glossary-case_marking", "Typed in the glossary"); pa.fill('#pt-glossary-case_marking .pt-cell[data-r="0"][data-c="0"]', "i"); pa.wait_for_function("document.querySelector('#pt-preview-glossary-case_marking figcaption') !== null", timeout=6000); pa.wait_for_timeout(500)
+        check(S, "the Tables tab works in an entry, and its preview numbers the chart in the glossary (the entry has one: this is Table 2, not a number that goes on from the grammar’s charts)", pa.inner_text("#pt-preview-glossary-case_marking figcaption") == "Table 2 – Typed in the glossary", pa.inner_text("#pt-preview-glossary-case_marking figcaption"))
+        pa.locator("#editor-glossary-case_marking .modal-btn", has_text="Cancel").click()
+        # adding and deleting
+        pa.click("#add-entry-btn"); pa.wait_for_selector("#new-entry-modal.visible"); pa.fill("#new-entry-term", "Subject"); pa.click("#new-entry-submit")
+        pa.wait_for_selector("#editor-glossary-subject.visible", timeout=8000)
+        check(S, "Add entry: the term is asked, the entry is created (id subject), and its editor opens with the heading and a place to write", "## Subject" in pa.input_value("#textarea-glossary-subject") and (site.dir / "project" / "glossary" / "subject.md").exists(), pa.input_value("#textarea-glossary-subject")[:60])
+        pa.locator("#editor-glossary-subject .modal-btn", has_text="Cancel").click()
+        pa.locator("#gloss-subject .delete-tab").click()               # (watch() accepts the confirmation)
+        pa.wait_for_function("!document.getElementById('gloss-subject')", timeout=6000)
+        check(S, "Delete: after the confirmation the entry is gone, from the page and from the folder", not (site.dir / "project" / "glossary" / "subject.md").exists() and pa.locator("#gloss-subject").count() == 0, f"file exists: {(site.dir / 'project' / 'glossary' / 'subject.md').exists()} | in page: {pa.locator('#gloss-subject').count()}")
+        check(S, "no JavaScript or loading error in the editors", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close()
+    finally:
+        site.stop()
+    # a project with no entry yet
+    def empty(d):
+        for f in (d / "project" / "glossary").glob("*.md"): f.unlink()
+    site = Site(prepare=empty)
+    try:
+        c = new_context(browser, site, 1280); pg = c.new_page(); open_page(pg, site, "glossary.html", "#glossary-empty", 1000)
+        check(S, "a glossary with no entry says so, and the shortcode of an entry that is not there is an error", pg.locator("#glossary-empty").is_visible() and "Glossary entry not found" in c.request.post(site.url + "api/grammar/zz", headers={"Content-Type": "application/json"}, data="{}").text() + c.request.get(site.url + "api/glossary").text() or pg.locator("#glossary-empty").is_visible(), "")
+        c.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 22. backups: the button, the reminder, the daily snapshots, their disposal after a month ─────────────────────────
+def suite_backup(browser, args):
+    import datetime as dt, hashlib, zipfile, io as _io
+    S = "backup"
+    section("backups: the Backup button, the reminder, the daily snapshots")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_backup.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the backup engine passes its own direct tests (files kept, fingerprint, archive, reminder, when a snapshot is due, the one-month disposal)", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site(extra_env={"DBT_SNAPSHOT_DISABLE": "0", "DBT_SNAPSHOT_CHECK_SECONDS": "0"})
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        J = {"Content-Type": "application/json"}; U = lambda p: site.url + "api/backup/" + p
+        snapdir = site.dir / "uploads" / "backups" / "snapshots"; state = site.dir / "uploads" / "backup_state.json"
+        today = dt.date.today()
+        check(S, "the backup is the author’s alone: a visitor gets 401 for the status, the download, the list of snapshots, a snapshot and a disposal", [va.get(U("status")).status, va.get(U("download")).status, va.get(U("snapshots")).status, va.get(U("snapshots/daily-2026-01-01.zip")).status, va.post(U("snapshots/dispose"), headers=J, data="{}").status] == [401] * 5, "")
+        st0 = aa.get(U("status")).json()
+        check(S, "before anything is downloaded the reminder says never, and counts the files that would be kept", st0["level"] == "never" and st0["lastBackup"] is None and st0["files"] >= 15, str(st0)[:200])
+        # ── the daily snapshot ──
+        def snaps(): return aa.get(U("snapshots")).json()["snapshots"]
+        for _ in range(40):
+            if snaps(): break
+            time.sleep(0.25)
+        s1 = snaps()
+        check(S, "the first request of the site makes the first daily snapshot by itself (named with the day), a valid archive of the same kind as the download", len(s1) == 1 and s1[0]["name"] == f"daily-{today.isoformat()}.zip" and s1[0]["eligible"] is False and zipfile.ZipFile(snapdir / s1[0]["name"]).testzip() is None, str(s1))
+        z = zipfile.ZipFile(snapdir / s1[0]["name"]); top = [n for n in z.namelist() if n.endswith("BACKUP-README.txt")][0].split("/")[0] + "/"
+        check(S, "…it says in its readme that it is a daily snapshot and how to restore, and holds the dictionary, the grammar, the glossary, the references, the images and the project settings", "daily snapshot" in z.read(top + "BACKUP-README.txt").decode() and all(top + p in z.namelist() for p in ("project/dictionary.xml", "project/grammar/s1.md", "project/glossary/predicate.md", "project/references.json", "project/project.json", "manifest.json")) and any(n.startswith(top + "project/images/") for n in z.namelist()), str(z.namelist()[:5]))
+        for _ in range(6): aa.get(U("status")); time.sleep(0.1)
+        time.sleep(0.6)
+        check(S, "within the day no other snapshot is made, however much the site is used, and even after an edit", len(snaps()) == 1 and (aa.post(site.url + "api/glossary/predicate", headers=J, data=json.dumps({"source": "## Predicate\n\nEdited today."})).status == 200) and (time.sleep(0.6) or len(snaps()) == 1), str(len(snaps())))
+        sd = json.loads(state.read_text(encoding="utf-8")); sd["lastSnapshotAt"] = (dt.datetime.now() - dt.timedelta(days=2)).isoformat(timespec="seconds"); state.write_text(json.dumps(sd), encoding="utf-8")
+        aa.get(U("status")); time.sleep(0.2); aa.get(U("status"))
+        for _ in range(40):
+            if len(snaps()) == 2: break
+            time.sleep(0.25)
+        check(S, "a day later, after an edit, the next use of the site makes a new snapshot (a second one on the same day has the hour in its name: nothing is overwritten)", len(snaps()) == 2 and snaps()[0]["name"].startswith(f"daily-{today.isoformat()}-"), str([s_["name"] for s_ in snaps()]))
+        sd = json.loads(state.read_text(encoding="utf-8")); sd["lastSnapshotAt"] = (dt.datetime.now() - dt.timedelta(days=3)).isoformat(timespec="seconds"); state.write_text(json.dumps(sd), encoding="utf-8")
+        aa.get(U("status")); time.sleep(0.8); aa.get(U("status")); time.sleep(0.5)
+        check(S, "a day with no edit since the last snapshot is skipped: nothing is kept twice", len(snaps()) == 2, str(len(snaps())))
+        sd = json.loads(state.read_text(encoding="utf-8")); sd["lastSnapshotAt"] = dt.datetime.now().isoformat(timespec="seconds"); state.write_text(json.dumps(sd), encoding="utf-8")      # from here on no snapshot is due: the test is the only one to write the state
+        # ── the download ──
+        r = aa.get(U("download")); body = r.body()
+        zd = zipfile.ZipFile(_io.BytesIO(body)); topd = zd.namelist()[0].split("/")[0] + "/"
+        cd = r.headers.get("content-disposition", "")
+        check(S, "the download is a valid zip, named with the project and the date, sent as a file to save", r.status == 200 and r.headers["content-type"] == "application/zip" and "attachment" in cd and re.search(r"dbt-backup-[a-z0-9-]+-\d{8}-\d{6}\.zip", cd) is not None and zd.testzip() is None, cd)
+        live = {"project/dictionary.xml": site.dir / "project" / "dictionary.xml", "project/grammar/s1.md": site.dir / "project" / "grammar" / "s1.md", "project/glossary/predicate.md": site.dir / "project" / "glossary" / "predicate.md",
+                "project/references.json": site.dir / "project" / "references.json", "project/project.json": site.dir / "project" / "project.json"}
+        check(S, "it holds the live files, byte for byte (the dictionary, a grammar section, a glossary entry as just edited, the references, the project settings)", all(zd.read(topd + k) == v.read_bytes() for k, v in live.items()) and b"Edited today." in zd.read(topd + "project/glossary/predicate.md"), "")
+        mf = json.loads(zd.read(topd + "manifest.json"))
+        check(S, "the manifest lists every file with its SHA-256 and each is right; the backups, the snapshots, the state and the import files are not in the archive", all(hashlib.sha256(zd.read(topd + e["path"])).hexdigest() == e["sha256"] for e in mf["files"]) and not [n for n in zd.namelist() if "backups" in n or "backup_state" in n or "/import/" in n or n.endswith(".tmp")] and len(mf["files"]) == st0["files"], str(len(mf["files"])))
+        st1 = aa.get(U("status")).json()
+        check(S, "after a download the reminder says today, with nothing edited since", st1["level"] == "ok" and st1["daysAgo"] == 0 and st1["changedSince"] is False and st1["lastBackup"][:10] == today.isoformat(), str(st1)[:200])
+        aa.post(site.url + "api/glossary/predicate", headers=J, data=json.dumps({"source": "## Predicate\n\nEdited again."}))
+        st2 = aa.get(U("status")).json()
+        check(S, "an edit makes it say that there are edits since (still fine within a week)", st2["changedSince"] is True and st2["level"] == "ok", str(st2)[:160])
+        def age_download(days):
+            d = json.loads(state.read_text(encoding="utf-8")); d["lastDownloadAt"] = (dt.datetime.now() - dt.timedelta(days=days)).isoformat(timespec="seconds"); state.write_text(json.dumps(d), encoding="utf-8")
+            return aa.get(U("status")).json()
+        check(S, "with edits since, the reminder warns after a week (due) and more after a month (old); a backup is never reproached when nothing has been edited since", (lambda lv: lv == ["ok", "due", "due", "old", "old"])([age_download(d_)["level"] for d_ in (6, 7, 29, 30, 90)]), True)
+        # ── a restore: the archive brings back what was lost ──
+        (site.dir / "project" / "grammar" / "s1.md").unlink(); (site.dir / "project" / "glossary" / "predicate.md").write_text("## Wrecked\n", encoding="utf-8")
+        for n_ in zd.namelist():
+            if n_.startswith(topd + "project/") or n_.startswith(topd + "uploads/"):
+                tgt = site.dir / n_[len(topd):]; tgt.parent.mkdir(parents=True, exist_ok=True); tgt.write_bytes(zd.read(n_))
+        check(S, "restoring (copying the project folder of the archive over the site’s, as its readme says) brings back the section that was deleted and the entry that was wrecked", all((site.dir / k).read_bytes() == zd.read(topd + k) for k in ("project/grammar/s1.md", "project/glossary/predicate.md")) and aa.get(site.url + "api/glossary/predicate").json()["term"] == "Predicate", "")
+        # ── the disposal of snapshots that are a month old ──
+        mk = lambda days: (snapdir / f"daily-{(today - dt.timedelta(days=days)).isoformat()}.zip")
+        for days in (5, 29, 30, 31, 120): mk(days).write_bytes(b"PK" + b"x" * (100 + days))
+        (snapdir / "notes.txt").write_text("keep me", encoding="utf-8")
+        ls = {s_["name"]: s_ for s_ in aa.get(U("snapshots")).json()["snapshots"]}
+        check(S, "the list says for each snapshot its day, age and size, and that it can be disposed of from its 30th day: 29 days no, 30 days yes; other files are not listed", [ls[mk(d_).name]["eligible"] for d_ in (5, 29, 30, 31, 120)] == [False, False, True, True, True] and ls[mk(30).name]["ageDays"] == 30 and "notes.txt" not in ls, str({k: v["ageDays"] for k, v in ls.items()}))
+        stx = aa.get(U("status")).json()["snapshots"]
+        check(S, "the status counts them and says how many (and how much) a month old or more: the three fakes", stx["eligible"]["count"] == 3 and stx["eligible"]["bytes"] == 132 + 133 + 222, str(stx))
+        r1 = aa.post(U("snapshots/dispose"), headers=J, data=json.dumps({"names": [mk(29).name, mk(30).name, "../backup_state.json", "..\\x.zip", "notes.txt", "daily-2020-01-01.zip", 7]})).json()
+        check(S, "disposing the snapshots named removes only the one that is a month old: the one of 29 days, a path, another file and names that do not exist are refused with the reason", [x["name"] for x in r1["removed"]] == [mk(30).name] and len(r1["refused"]) == 6 and not mk(30).exists() and mk(29).exists() and (snapdir / "notes.txt").exists() and state.exists(), str(r1)[:300])
+        r2 = aa.post(U("snapshots/dispose"), headers=J, data=json.dumps({"eligible": True})).json()
+        check(S, "“dispose of all that are a month old” removes the rest of them (31 and 120 days) and reports the space freed; the young ones, today’s snapshots and the other file stay", sorted(x["name"] for x in r2["removed"]) == sorted([mk(31).name, mk(120).name]) and r2["freed"] == 133 + 222 and mk(29).exists() and mk(5).exists() and len(snaps()) == 4 and (snapdir / "notes.txt").exists(), str(r2)[:200])
+        check(S, "a snapshot can be downloaded by its name; a name that is not a snapshot is 404", aa.get(U(f"snapshots/{mk(29).name}")).status == 200 and aa.get(U("snapshots/notes.txt")).status == 404 and aa.get(U("snapshots/..%2Fbackup_state.json")).status in (404, 400), "")
+        # ── the button, in every page ──
+        pv = vis.new_page(); errs = []; watch(pv, errs)
+        pages = ["index.html", "grammar.html", "texts.html", "dictionary.html", "references.html", "glossary.html", "concordance.html"]
+        for p_ in pages:
+            open_page(pv, site, p_, None, 500)
+        check(S, "a visitor sees no Backup button on any page", all((open_page(pv, site, p_, None, 400) or pv.locator("#backup-box").count()) == 0 for p_ in pages[:4]), "")
+        pa = au.new_page(); watch(pa, errs); present = {}
+        for p_ in pages:
+            open_page(pa, site, p_, None, 300); pa.wait_for_timeout(600); present[p_] = pa.locator("#backup-btn").count()
+        open_page(pa, site, "about.html", None, 400)
+        check(S, "the author sees the Backup button (and its reminder) in the top bar of every page that has the author’s login", all(v == 1 for v in present.values()) and pa.locator("#backup-box").count() == 0, str(present))
+        age_download(40)
+        open_page(pa, site, "grammar.html", "#backup-note", 800); pa.wait_for_timeout(800)
+        check(S, "the reminder is beside the button, and turns to a warning when there are edits and the last backup is old (a month: red)", pa.inner_text("#backup-note") == "last backup: 40 days ago" and "old" in (pa.get_attribute("#backup-note", "class") or "") and pa.get_attribute("#backup-btn", "data-level") == "old", pa.inner_text("#backup-note"))
+        with pa.expect_download() as dl: pa.click("#backup-btn")
+        zz = zipfile.ZipFile(dl.value.path()); pa.wait_for_function("document.getElementById('backup-note').textContent === 'last backup: today'", timeout=8000)
+        check(S, "a click on the button downloads the archive, and the reminder says today", zz.testzip() is None and dl.value.suggested_filename.endswith(".zip") and pa.get_attribute("#backup-btn", "data-level") == "ok", dl.value.suggested_filename)
+        # ── the panel ──
+        for days in (31, 45): mk(days).write_bytes(b"PK" + b"y" * 300)
+        pa.click("#backup-note"); pa.wait_for_selector("#bk-download"); pa.wait_for_timeout(400)
+        rows = pa.locator("#backup-modal .bk-table tr").count() - 1; x = pa.locator("#backup-modal .bk-x").count(); wait = pa.locator("#backup-modal .bk-wait").count()
+        check(S, "the panel lists the daily snapshots; a trash can is offered only for those a month old or more, the others say “after 30 days”; a button disposes of all those at once, with their number", rows == len(snaps()) and x == 2 and wait == rows - 2 and "Dispose of them" in pa.inner_text("#bk-dispose-all") and "2" in pa.inner_text("#backup-modal .bk-line:last-of-type"), pa.inner_text("#backup-modal .bk-table")[:200])
+        check(S, "the panel says what the backup is for, what a snapshot is for (and that it does not survive the loss of the server), and that snapshots are never removed by themselves", "protects you if the server is lost" in pa.inner_text("#backup-modal") and "does not survive the loss of the server" in pa.inner_text("#backup-modal") and "never removed by themselves" in pa.inner_text("#backup-modal"), "")
+        pa.locator("#backup-modal .bk-x").first.click(); pa.wait_for_function("document.querySelectorAll('#backup-modal .bk-x').length === 1", timeout=8000)
+        check(S, "the trash can disposes of one snapshot (after the confirmation); the panel and the folder show it", pa.locator("#backup-modal .bk-x").count() == 1 and len(list(snapdir.glob("daily-*.zip"))) == rows - 1, f"{len(list(snapdir.glob('daily-*.zip')))} files, {rows} rows")
+        n_before = len(list(snapdir.glob("daily-*.zip")))
+        pa.click("#bk-dispose-all"); pa.wait_for_function("document.querySelectorAll('#backup-modal .bk-x').length === 0", timeout=8000); pa.wait_for_timeout(300)
+        check(S, "the button disposes of all that are a month old; the message says how many and how much space is freed; none remains to dispose of, and the young ones are still there", "snapshot" in pa.inner_text("#bk-msg") and "freed" in pa.inner_text("#bk-msg") and pa.locator("#bk-dispose-all").count() == 0 and not any(s_["eligible"] for s_ in snaps()) and mk(29).exists() and len(list(snapdir.glob("daily-*.zip"))) == n_before - 1, pa.inner_text("#bk-msg"))
+        pa.click("#bk-close")
+        check(S, "the panel closes", not pa.locator("#backup-modal.visible").count(), "")
+        # ── a narrow screen ──
+        nc = new_context(browser, site, 600, author=True); pn = nc.new_page(); watch(pn, errs); open_page(pn, site, "grammar.html", "#backup-btn", 800); pn.wait_for_timeout(700)
+        bb = pn.locator("#backup-btn").bounding_box()
+        check(S, "on a narrow screen the button stays (its icon), the long reminder gives way to a coloured dot, and the navigation bar does not overflow", bb is not None and bb["x"] + bb["width"] <= 600 and not pn.locator("#backup-note").is_visible() and pn.evaluate("(() => { const n = document.querySelector('.topnav'); return n.scrollWidth <= n.clientWidth; })()"), str(bb))
+        check(S, "no JavaScript or loading error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close(); nc.close()
+    finally:
+        site.stop()
+    # snapshots are off by default in the tests, and can be switched off by the owner
+    site = Site()
+    try:
+        c = new_context(browser, site, 1280, author=True); c.request.get(site.url + "api/backup/status"); c.request.get(site.url + "api/dictionary/entries"); time.sleep(1.0)
+        check(S, "with DBT_SNAPSHOT_DISABLE=1 no snapshot is ever made", not (site.dir / "uploads" / "backups" / "snapshots").exists(), "")
+        c.close()
+    finally:
+        site.stop()
+
+
+
+# ───────────────────────── 23. glossing: the gloss field without “+ New”, columns inserted anywhere, words dragged to another place ─────────────────────────
+def _py_move(row, frm, to):
+    """The rule of the drop, written again here (not taken from the page): returns (the new row, a column was added)."""
+    e = lambda v: v is None or str(v).strip() in ("", "—")
+    row = list(row)
+    if frm == to or e(row[frm]): return row, False
+    w = row[frm]; row[frm] = ""
+    if e(row[to]): row[to] = w; return row, False
+    k = to
+    while k < len(row) and not e(row[k]): k += 1
+    made = k == len(row)
+    if made: row.append("")
+    for m in range(k, to, -1): row[m] = row[m - 1]
+    row[to] = w
+    return row, made
+
+def suite_glossing(browser, args):
+    S = "glossing"
+    section("glossing: the gloss field, inserting columns, dragging words")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_alignment.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the rules of the editing pass their own direct tests (run by node): insert a column anywhere, delete one, move a word and shift the words that follow", unit.returncode == 0, (unit.stdout.strip().split("\n") or [""])[-1])
+    site = Site()
+    try:
+        sid = "d01.Road:09"; url = "transcription.html?fieldnotes=1&index=0&title=D01"
+        gl = lambda: site.json("project/texts/glosses/fieldnotes_0.json").get(sid, {})
+        vis = new_context(browser, site, 1280); pv = vis.new_page(); errs = []; watch(pv, errs)
+        open_page(pv, site, url, ".tx-phrase", 2200); pv.wait_for_timeout(600)
+        check(S, "a visitor sees the glosses as text: no field, no list, no “+ New”", pv.locator(f'[id="{sid}"] .fn-col-gloss').count() == 0 and pv.locator(f'[id="{sid}"] .fn-combo-btn').count() == 0 and "+ New" not in pv.content(), "")
+        au = new_context(browser, site, 1280, author=True); pa = au.new_page(); watch(pa, errs)
+        open_page(pa, site, url, ".tx-phrase", 2200); pa.wait_for_timeout(900)
+        ph = pa.locator(f'[id="{sid}"]')
+        check(S, "the author’s gloss of a column is one text field: there is no dropdown any more and “+ New” is nowhere on the page", ph.locator("select").count() == 0 and "+ New" not in pa.content() and "__new__" not in pa.content() and ph.locator(".fn-gloss-control input.fn-col-gloss").count() == ph.locator(".fn-gloss-control").count() >= 8, "")
+        ctrls = ph.locator(".fn-gloss-control"); n_ctrl = ctrls.count()
+        with_btn = [i for i in range(n_ctrl) if ctrls.nth(i).locator(".fn-combo-btn:not([hidden])").count()]
+        no_btn = [i for i in range(n_ctrl) if i not in with_btn]
+        check(S, "a ▾ is shown only for the columns that have suggestions (and the field is the same for the others)", len(with_btn) >= 1 and len(no_btn) >= 1, f"{with_btn} {no_btn}")
+        # a decision that has no precedent: just typed
+        c = ctrls.nth(no_btn[0]); inp = c.locator("input.fn-col-gloss"); col = inp.evaluate("e => [...e.closest('tr').children].indexOf(e.closest('td')) - 1")
+        inp.fill("zzz-unprecedented"); inp.press("Tab"); pa.wait_for_timeout(1100)
+        check(S, "a gloss that has no precedent is simply typed: it is saved in its column and the field keeps showing it (not a tag, not a second field)", (gl().get("glosses") or [""] * 99)[col] == "zzz-unprecedented" and inp.input_value() == "zzz-unprecedented" and c.locator("select, .fn-gloss-new-input").count() == 0, str(gl().get("glosses")))
+        pa.reload(wait_until="domcontentloaded"); pa.wait_for_selector(".tx-phrase", timeout=10000); pa.wait_for_timeout(1500)
+        check(S, "after a reload the field shows that gloss", pa.locator(f'[id="{sid}"] .fn-gloss-control').nth(no_btn[0]).locator("input.fn-col-gloss").input_value() == "zzz-unprecedented" and "+ New" not in pa.content(), "")
+        # the list of suggestions
+        ph = pa.locator(f'[id="{sid}"]'); c = ph.locator(".fn-gloss-control").nth(with_btn[0]); inp = c.locator("input.fn-col-gloss"); lst = c.locator(".fn-combo-list")
+        col2 = inp.evaluate("e => [...e.closest('tr').children].indexOf(e.closest('td')) - 1")
+        check(S, "the list is closed at first; the ▾ opens it, in groups with their labels (Previous glosses, Dictionary, Texts), with the ~ of a partial match", lst.is_hidden() and (c.locator(".fn-combo-btn").dispatch_event("mousedown") or True) and lst.is_visible() and lst.locator(".fn-combo-opt").count() >= 1 and all(g_.inner_text().strip() in ("PREVIOUS GLOSSES", "Previous glosses", "📖 DICTIONARY", "📖 Dictionary", "📖 DICTIONARY (PARTIAL MATCH)", "📖 Dictionary (partial match)", "📜 TEXTS", "📜 Texts", "📜 TEXTS (PARTIAL)", "📜 Texts (partial)") for g_ in lst.locator(".fn-combo-group").all()), lst.inner_text()[:120])
+        opts = [o.get_attribute("data-value") for o in lst.locator(".fn-combo-opt").all()]
+        choice = opts[0]; lst.locator(".fn-combo-opt").first.dispatch_event("mousedown"); pa.wait_for_timeout(1100)
+        check(S, "choosing a suggestion puts it in the field, saves it in its column and closes the list", inp.input_value() == choice and (gl().get("glosses") or [""] * 99)[col2] == choice and lst.is_hidden(), f"{choice!r} {gl().get('glosses')}")
+        inp.click(); inp.fill(""); inp.type(choice[:1]); pa.wait_for_timeout(250)
+        shown = [o.get_attribute("data-value") for o in lst.locator(".fn-combo-opt").all()]
+        check(S, "typing narrows the list to the suggestions that contain what is typed", len(shown) >= 1 and all(choice[:1].lower() in v.lower() for v in shown), str(shown))
+        inp.fill("qqqqqq"); pa.wait_for_timeout(200)
+        check(S, "when nothing matches, the list closes: what is typed is the author’s own decision", lst.is_hidden(), "")
+        inp.fill(""); inp.type(choice[:1]); pa.wait_for_timeout(250); inp.press("ArrowDown"); inp.press("ArrowDown"); inp.press("Enter"); pa.wait_for_timeout(1100)
+        check(S, "from the keyboard: the arrows move in the list, Enter chooses (the second suggestion here), and the gloss is saved", lst.is_hidden() and inp.input_value() == shown[min(1, len(shown) - 1)] and (gl().get("glosses") or [""] * 99)[col2] == inp.input_value(), f"{inp.input_value()!r} {shown}")
+        inp.click(); inp.fill(""); pa.wait_for_timeout(100); inp.press("ArrowDown"); pa.wait_for_timeout(150); opened = lst.is_visible(); inp.press("Escape")
+        check(S, "ArrowDown opens the list and Escape closes it", opened and lst.is_hidden(), "")
+        c.locator(".fn-combo-btn").dispatch_event("mousedown"); pa.wait_for_timeout(150); pa.locator(".tx-header").first.click(); pa.wait_for_timeout(250)
+        check(S, "a click elsewhere closes the list", lst.is_hidden(), "")
+        # ── the alignment editor ──
+        ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(500); ed = ph.locator(".fn-editor")
+        cells = lambda lang: [i.input_value() for i in ed.locator(f"input.fn-cell-input[data-lang='{lang}']").all()]
+        glossrow = lambda: [i.input_value() for i in ed.locator("input.fn-cell-input:not([data-lang])").all()]
+        langs = ["num", "drg", "kro", "olr", "lkn"]; orig = {l: cells(l) for l in langs}; orig_gl = glossrow(); n0 = len(orig["num"])
+        check(S, "the editor has, above every column, a + that inserts a column before it and a ×, and, in every non-empty place of a language row, a handle to drag the word", ed.locator(".fn-col-ins").count() == n0 and ed.locator(".fn-col-del").count() == n0 and all(len(orig[l]) == n0 for l in langs) and ed.locator(".fn-drag:not(.off)").count() == sum(1 for l in langs for v in orig[l] if v.strip()), str((n0, ed.locator(".fn-drag:not(.off)").count())))
+        for at in (0, 3, n0):
+            ed.locator(".fn-col-ins").nth(at).click() if at < n0 else ed.locator(".fn-col-add").click(); pa.wait_for_timeout(250)
+            now = {l: cells(l) for l in langs}; ng = glossrow()
+            check(S, f"a column inserted {'before the first' if at == 0 else 'before the fourth' if at == 3 else 'at the end (+ Column)'}: an empty place in every language and in the glosses, everything else where it was ({n0 + 1} columns)" if at == 0 else f"inserting at column {at if at < n0 else 'end'}: an empty place in every language and in the glosses, the rest shifted", all(now[l] == orig[l][:at] + [""] + orig[l][at:] for l in langs) and ng == orig_gl[:at] + [""] + orig_gl[at:] and ed.locator("td.fn-cell[data-lang='num']").count() == n0 + 1, str(now["num"]))
+            ed.locator(".fn-col-del").nth(at).click(); pa.wait_for_timeout(250)
+        check(S, "× deletes a column again: back to the original (the last column cannot be deleted)", {l: cells(l) for l in langs} == orig and glossrow() == orig_gl, "")
+        # a word dragged into a column that was inserted (an empty place)
+        ed.locator(".fn-col-ins").nth(2).click(); pa.wait_for_timeout(250)
+        ed.locator("td.fn-cell[data-lang='num'][data-col='0'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='num'][data-col='2']")); pa.wait_for_timeout(300)
+        exp, made = _py_move([""] * 0 + orig["num"][:2] + [""] + orig["num"][2:], 0, 2)
+        check(S, "a word dragged into the empty place of an inserted column goes there; its old place is empty; the other languages and the glosses do not move", cells("num") == exp and not made and all(cells(l) == orig[l][:2] + [""] + orig[l][2:] for l in langs[1:]) and glossrow() == orig_gl[:2] + [""] + orig_gl[2:], str(cells("num")))
+        ed.locator(".modal-btn", has_text="Cancel").click(); pa.wait_for_timeout(300); ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(400)
+        check(S, "Cancel throws all of it away: the editor opens again on the original alignment", {l: cells(l) for l in langs} == orig and glossrow() == orig_gl, "")
+        # a word dropped on an occupied place of a full row (the num row has a word in every place): what follows goes right, a column is created
+        ed.locator("td.fn-cell[data-lang='num'][data-col='0'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='num'][data-col='2']")); pa.wait_for_timeout(300)
+        exp, made = _py_move(orig["num"], 0, 2)
+        check(S, "a word dropped on an occupied place: it takes the place, what was there and what follows goes one place right, and as the row is full a column is created at the end (for all the languages and the glosses)", cells("num") == exp and made and ed.locator("td.fn-cell[data-lang='num']").count() == n0 + 1 and all(cells(l) == orig[l] + [""] for l in langs if l != "num") and glossrow() == orig_gl + [""], f"{cells('num')} vs {exp}")
+        check(S, "the editor says what the drop did", "Moved" in ed.locator(".fn-editor-note").inner_text() and "pushed one place right" in ed.locator(".fn-editor-note").inner_text() and "column was added" in ed.locator(".fn-editor-note").inner_text(), ed.locator(".fn-editor-note").inner_text())
+        ed.locator(".modal-btn", has_text="Cancel").click(); pa.wait_for_timeout(300); ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(400)
+        # the shift stops at the first empty place
+        gap = [i for i, v in enumerate(orig["num"]) if i > 3][0]
+        ed.locator(f"input.fn-cell-input[data-lang='num'][data-col='{gap}']").fill(""); pa.wait_for_timeout(100)
+        base = cells("num"); ed.locator("td.fn-cell[data-lang='num'][data-col='0'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='num'][data-col='2']")); pa.wait_for_timeout(300)
+        exp, made = _py_move(base, 0, 2)
+        check(S, f"when there is an empty place further on (column {gap + 1}), the shift stops there: it takes up the shift, what is after it does not move, and no column is created", cells("num") == exp and not made and ed.locator("td.fn-cell[data-lang='num']").count() == n0, f"{cells('num')} vs {exp}")
+        # across languages: refused
+        before = {l: cells(l) for l in langs}
+        ed.locator("td.fn-cell[data-lang='num'][data-col='1'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='drg'][data-col='4']")); pa.wait_for_timeout(300)
+        check(S, "a word cannot be dropped in another language’s row: nothing changes", {l: cells(l) for l in langs} == before, "")
+        # an empty place has no handle, until a word is typed in it
+        ed.locator(f"input.fn-cell-input[data-lang='kro'][data-col='1']").fill(""); pa.wait_for_timeout(100)
+        h = ed.locator("td.fn-cell[data-lang='kro'][data-col='1'] .fn-drag"); off = "off" in (h.get_attribute("class") or "")
+        ed.locator(f"input.fn-cell-input[data-lang='kro'][data-col='1']").fill("typed"); pa.wait_for_timeout(100)
+        check(S, "an empty place has no handle (hidden), and gets one as soon as a word is typed in it", off and "off" not in (h.get_attribute("class") or "") and h.is_visible(), "")
+        # saved, and kept
+        ed.locator(".modal-btn", has_text="Cancel").click(); pa.wait_for_timeout(300); ph.locator(".fn-edit-btn").click(); pa.wait_for_timeout(400)
+        ed.locator("td.fn-cell[data-lang='olr'][data-col='1'] .fn-drag").drag_to(ed.locator("td.fn-cell[data-lang='olr'][data-col='5']")); pa.wait_for_timeout(300)
+        want = {l: cells(l) for l in langs}; want_gl = glossrow()
+        ed.locator(".fn-editor-actions .primary").click(); pa.wait_for_timeout(1500)
+        g = gl()
+        check(S, "Save keeps the new alignment on the server: every language, and the glosses, have the same number of columns, and the words are where they were dropped", all(g["tokens"][l] == want[l] for l in langs) and g["glosses"] == want_gl and len({len(g["tokens"][l]) for l in langs} | {len(g["glosses"])}) == 1, str(g["tokens"]["olr"]))
+        pa.reload(wait_until="domcontentloaded"); pa.wait_for_selector(".tx-phrase", timeout=10000); pa.wait_for_timeout(1500)
+        shown_forms = [c_.get_attribute("data-form") for c_ in pa.locator(f'[id="{sid}"] .fn-form-cell[data-lang="olr"]').all()]
+        check(S, "after a reload the sentence is shown with that alignment (the dash for an empty place)", shown_forms == [v if v.strip() else "—" for v in want["olr"]], str(shown_forms))
+        check(S, "no JavaScript or loading error", not [e_ for e_ in errs if "ERR_NAME_NOT_RESOLVED" not in e_], "; ".join(errs[:2]))
+        vis.close(); au.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 25. the hover box of the sounds of a phonological chart (phonotip.js), the audio folder, the Sounds panel ─────────────────────────
+def suite_phonotip(browser, args):
+    S = "phonotip"
+    section("phonological charts: the box over a sound, the audio, the Sounds panel")
+    def prep(d):
+        (d / "project" / "audio").mkdir(parents=True, exist_ok=True)
+        (d / "project" / "audio" / "mb.wav").write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+        (d / "project" / "audio" / "secret.txt").write_text("not for the web", encoding="utf-8")
+        (d / "project" / "audio" / ".hidden.mp3").write_bytes(b"x")
+    site = Site(prepare=prep)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        r = va.get(site.url + "audio/mb.wav")
+        check(S, "a recording in the audio folder is served, as audio", r.status == 200 and r.headers.get("content-type", "").startswith("audio/"), str((r.status, r.headers.get("content-type"))))
+        bad = {n: va.get(site.url + n).status for n in ("audio/secret.txt", "audio/.hidden.mp3", "audio/../app.py", "audio/%2e%2e/app.py", "audio/..%2fapp.py", "audio/nope.mp3", "audio/", "audio/mb.wav/x", "audio//etc/passwd")}
+        check(S, "nothing else is: a file that is not audio, a hidden one, a path out of the folder, a missing file, the folder itself: all 404", all(v == 404 for v in bad.values()), str(bad))
+        check(S, "the two icons of the box are served (audio_icon.svg, phoible_logo.png)", va.get(site.url + "audio_icon.svg").status == 200 and va.get(site.url + "phoible_logo.png").status == 200)
+        check(S, "the grammar and the glossary load phonotip.js, and it is served", all('src="phonotip.js"' in va.get(site.url + p_).text() for p_ in ("grammar.html", "glossary.html")) and va.get(site.url + "phonotip.js").status == 200)
+        spec = {"kind": "consonants", "caption": "C", "columns": ["Bilabial", "Velar"], "rows": ["Plosive"],
+                "inventory": {"num": {"Plosive": {"Bilabial": "p ᵐb", "Velar": "k"}}, "drg": {"Plosive": {"Bilabial": "p", "Velar": "k"}}},
+                "segments": {"ᵐb": {"description": "prenasalised voiced bilabial plosive", "audio": "mb.wav", "phoible": "https://phoible.org/parameters/1"},
+                             "p": {"description": '<img src=x onerror="window.__xss=1"> voiceless bilabial plosive', "audio": "https://example.org/p.mp3"},
+                             "z": {"description": "a sound that is not in the chart"}}}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Phonology\n\nText.\n\n```phonotable\n" + json.dumps(spec) + "\n```\n\nMiddle.\n\n```phonotable\n" + json.dumps({"kind": "vowels", "caption": "V", "columns": ["Front", "Back"], "rows": ["Close"], "inventory": {"num": {"Close": {"Front": "i", "Back": "u"}}, "olr": {"Close": {"Front": "i iː", "Back": "u"}}, "lkn": {"Close": {"Front": "i iː", "Back": "u uː"}}}}) + "\n```\n\nEnd.\n"})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "the page has, for each sound, what the box shows (description, audio address, PHOIBLE link), and nothing for a sound that is not in the chart", 'data-seg="ᵐb" data-desc="prenasalised voiced bilabial plosive" data-audio="audio/mb.wav" data-phoible="https://phoible.org/parameters/1"' in h and 'data-seg="z"' not in h and 'data-seg="k" data-desc="" data-audio="" data-phoible=""' in h, h[h.find("data-seg"):][:300])
+        st, pj = _jcall(aa, "post", site.url + "api/phonotable/preview", {"spec": dict(spec, segments={"p": {"audio": "p.exe", "phoible": "javascript:alert(1)"}}), "section": sid, "position": 0})
+        check(S, "the preview says what was typed in the Sounds and not kept: an audio that is not audio, a link that is not a link (and the chart has neither)", st == 200 and len(pj["problems"]) == 2 and "javascript" not in pj["html"] and "p.exe" not in pj["html"], str(pj.get("problems")))
+        page = vis.new_page(); errs = []; watch(page, errs)
+        page.add_init_script("window.__played = []; window.Audio = function (s) { window.__played.push(s); this.play = () => Promise.resolve(); this.pause = () => {}; };")
+        open_page(page, site, "grammar.html", "figure.phonotable .ph-seg", 900)
+        box = page.locator("#phono-tip"); mb = page.locator("figure.phonotable .ph-seg", has_text="ᵐb").first
+        check(S, "the box is not there until the reader hovers over a sound", not box.is_visible())
+        mb.scroll_into_view_if_needed(); mb.hover(); page.wait_for_selector("#phono-tip:not([hidden])", timeout=3000)
+        check(S, "hovering over a sound opens a box with the sound and its description (place and manner of articulation)", box.locator(".pt-sound").inner_text() == "ᵐb" and box.locator(".pt-desc").inner_text() == "prenasalised voiced bilabial plosive", box.inner_text())
+        check(S, "…with the audio button (audio_icon.svg), enabled, and the PHOIBLE button (phoible_logo.png), linking to the address given, in a new tab, safely", box.locator("button.pt-audio img").get_attribute("src") == "audio_icon.svg" and "off" not in (box.locator("button.pt-audio").get_attribute("class") or "")
+              and box.locator("a.pt-phoible img").get_attribute("src") == "phoible_logo.png" and box.locator("a.pt-phoible").get_attribute("href") == "https://phoible.org/parameters/1" and box.locator("a.pt-phoible").get_attribute("target") == "_blank" and "noopener" in box.locator("a.pt-phoible").get_attribute("rel"))
+        check(S, "…the icons are really drawn (the images loaded)", box.locator("img.pt-icon").evaluate_all("l => l.length === 2 && l.every(i => i.complete && i.naturalWidth > 0)"))
+        r0 = mb.bounding_box(); b0 = box.bounding_box()
+        check(S, "…and sits next to the sound, inside the window", b0["y"] + b0["height"] <= r0["y"] + 8 or b0["y"] >= r0["y"] + r0["height"] - 8, str((r0, b0)))
+        page.mouse.move(b0["x"] + b0["width"] / 2, b0["y"] + b0["height"] / 2); page.wait_for_timeout(450)
+        check(S, "the box stays open while the pointer is over it (so the buttons can be reached)", box.is_visible())
+        box.locator("button.pt-audio").click()
+        check(S, "the audio button plays the recording of the sound (the file of the audio folder)", page.evaluate("window.__played")[-1].endswith("audio/mb.wav"), str(page.evaluate("window.__played")))
+        page.mouse.move(5, 5); page.wait_for_timeout(500)
+        check(S, "the box closes when the pointer leaves", not box.is_visible())
+        pe = page.locator("figure.phonotable .ph-seg", has_text="voiceless").first if False else page.locator('figure.phonotable .ph-seg[data-seg="p"]').first
+        pe.hover(); page.wait_for_selector("#phono-tip:not([hidden])", timeout=3000)
+        check(S, "what the author typed is text in the box, never markup: no element is made, nothing runs", box.locator(".pt-desc img").count() == 0 and "<img" in box.locator(".pt-desc").inner_text() and not page.evaluate("window.__xss"), box.inner_text())
+        check(S, "an audio given as an address is used as it is", box.locator("button.pt-audio").get_attribute("data-src") == "https://example.org/p.mp3")
+        check(S, "a PHOIBLE link not given yet: the button is there, dimmed, without an address and with nothing to follow", "off" in box.locator("a.pt-phoible").get_attribute("class") and box.locator("a.pt-phoible").get_attribute("href") is None and box.locator("a.pt-phoible").get_attribute("aria-disabled") == "true")
+        page.keyboard.press("Escape")
+        check(S, "Escape closes the box", not box.is_visible())
+        k = page.locator('figure.phonotable .ph-seg[data-seg="k"]').first; k.hover(); page.wait_for_selector("#phono-tip:not([hidden])", timeout=3000)
+        played = len(page.evaluate("window.__played")); box.locator("button.pt-audio").click(force=True)
+        check(S, "a sound with nothing typed yet: the box says so, both buttons are dimmed, and the audio button plays nothing", "No description yet" in box.locator(".pt-desc").inner_text() and "off" in box.locator("button.pt-audio").get_attribute("class") and "off" in box.locator("a.pt-phoible").get_attribute("class") and len(page.evaluate("window.__played")) == played)
+        page.mouse.move(5, 5); page.wait_for_timeout(500)
+        tag = page.locator("figure.phonotable .ph-tag:not([hidden])").first
+        check(S, "the tags are not hover targets of their own, and the sounds can be reached with the keyboard (Tab)", mb.get_attribute("tabindex") == "0")
+        mb.focus(); page.wait_for_selector("#phono-tip:not([hidden])", timeout=3000)
+        check(S, "…and focusing a sound opens its box too", box.locator(".pt-sound").inner_text() == "ᵐb")
+        page.keyboard.press("Escape")
+        check(S, "no JavaScript or loading error on the page", not errs, "; ".join(errs[:3]))
+        vf = page.locator("figure.phonotable").nth(1)
+        check(S, "a chart of vowels with long vowels is two tables side by side, short (left) and long (right), with one legend and one caption", vf.locator("table.phono").count() == 2 and vf.locator(".phono-legend").count() == 1 and vf.locator("figcaption").count() == 1 and vf.locator("table.phono").nth(0).inner_text().count("Short") == 1 and vf.locator("table.phono").nth(1).locator('.ph-seg[data-seg="iː"]').count() == 1 and vf.locator("table.phono").nth(0).locator('.ph-seg[data-seg="iː"]').count() == 0)
+        bx = [t_.bounding_box() for t_ in vf.locator("table.phono").all()]
+        check(S, "…the long table is to the right of the short one, on the same line, and nothing needs sliding", bx[1]["x"] >= bx[0]["x"] + bx[0]["width"] - 1 and abs(bx[0]["y"] - bx[1]["y"]) < 2 and vf.locator(".phono-scroll").evaluate_all("l => l.every(e => e.scrollWidth <= e.clientWidth + 1)"), str(bx))
+        vf.locator('.phono-legend input[data-lang="lkn"]').uncheck()
+        check(S, "the one legend works on both tables: without Lakon, uː is gone from the long table", not vf.locator('.ph-seg[data-seg="uː"]').first.is_visible() and vf.locator('.ph-seg[data-seg="iː"]').first.is_visible())
+        vf.locator('.phono-legend input[data-lang="lkn"]').check()
+        cf = page.locator("figure.phonotable").first
+        check(S, "the consonant chart fits the width of the text without sliding", cf.locator(".phono-scroll").evaluate("e => e.scrollWidth <= e.clientWidth + 1"))
+        # an icon that is missing is replaced by a text, never by a broken image
+        p2 = vis.new_page(); e2 = []; watch(p2, e2)
+        p2.route("**/audio_icon.svg", lambda rt: rt.abort()); p2.route("**/phoible_logo.png", lambda rt: rt.abort())
+        open_page(p2, site, "grammar.html", "figure.phonotable .ph-seg", 600)
+        p2.locator("figure.phonotable .ph-seg", has_text="ᵐb").first.hover(); p2.wait_for_selector("#phono-tip:not([hidden])", timeout=3000); p2.wait_for_timeout(300)
+        check(S, "if an icon cannot be loaded, a 🔊 and the word PHOIBLE take its place (the buttons still work)", p2.locator("#phono-tip .pt-icon-fallback").all_inner_texts() == ["🔊", "PHOIBLE"], str(p2.locator("#phono-tip").inner_text()))
+        # the Sounds panel of the editor
+        pa = au.new_page(); e3 = []; watch(pa, e3); pa.on("dialog", lambda d: e3.append("DIALOG " + d.message))
+        open_page(pa, site, "grammar.html", ".section-edit.visible", 900)
+        pa.click(".section-edit"); pa.wait_for_selector(".md-editor-wrap.visible"); pa.click('.ed-tab[data-tab="phono"]')
+        pa.click(f'#pt-{sid} [data-act="edit"][data-i="0"]'); pa.wait_for_selector(".pt-segtable input")
+        rows = pa.locator(".pt-segtable tbody tr")
+        check(S, "editing the chart: the Sounds panel lists the sounds of the chart (p, ᵐb, k) and has the descriptions typed, and no sound that is not in the chart", [x.inner_text().split("\t")[0].strip() for x in rows.all()] == ["p", "ᵐb", "k"] and pa.locator('.pt-segtable input[data-seg="ᵐb"][data-field="description"]').input_value() == "prenasalised voiced bilabial plosive" and pa.locator('.pt-segtable input[data-seg="z"]').count() == 0, pa.inner_text(".pt-segtable")[:200])
+        pa.fill('.pt-segtable input[data-seg="k"][data-field="description"]', "voiceless velar plosive")
+        pa.fill('.pt-segtable input[data-seg="k"][data-field="phoible"]', "javascript:alert(1)")
+        pa.wait_for_function("document.querySelector('.pt-segmsg') && document.querySelector('.pt-segmsg').innerText.includes('PHOIBLE')", timeout=6000)
+        check(S, "a link that is not an address is reported under the panel as soon as it is typed, and the preview does not have it", "k: the PHOIBLE link" in pa.inner_text(".pt-segmsg") and 'data-seg="k" data-desc="voiceless velar plosive" data-audio="" data-phoible=""' in pa.inner_html(".pt-preview"), pa.inner_text(".pt-segmsg"))
+        pa.fill('.pt-segtable input[data-seg="k"][data-field="phoible"]', "phoible.org/parameters/2")
+        pa.wait_for_function("!document.querySelector('.pt-segmsg').innerText.trim()", timeout=6000)
+        check(S, "a correct link (phoible.org/… without https://) is accepted, and the preview has it with https://", 'data-phoible="https://phoible.org/parameters/2"' in pa.inner_html(".pt-preview"))
+        pa.fill(f"#pt-caption-{sid}", "C (edited)"); pa.click(f'#pt-write-{sid}')
+        blk = json.loads(re.findall(r"```phonotable\n(.*?)\n```", pa.input_value(f"#textarea-{sid}"), re.S)[0])
+        check(S, "Update in the text writes the segments into the block (the description, the audio, the link as typed), and only for the sounds of the chart", blk["segments"]["k"]["description"] == "voiceless velar plosive" and blk["segments"]["ᵐb"]["audio"] == "mb.wav" and "z" not in blk["segments"], str(blk.get("segments")))
+        pa.click('[data-act="back"]'); pa.click('[data-act="new"][data-kind="vowels"]'); pa.wait_for_selector(".pt-grid input")
+        check(S, "a new chart has an empty Sounds panel, with a line that says to type some sounds", "Type some sounds" in pa.inner_text(".pt-segtable"))
+        pa.fill('.pt-cell[data-r="0"][data-c="0"]', "i y"); pa.wait_for_selector('.pt-segtable input[data-seg="y"]', timeout=6000)
+        check(S, "…and the sounds appear in it as soon as they are typed in the inventory", pa.locator(".pt-segtable tbody tr").count() == 2)
+        pa.click('[data-act="back"]')                              # leaves the builder while a preview may still be waiting: nothing may go wrong
+        pa.wait_for_timeout(700)
+        check(S, "the editor raised no JavaScript error and no dialog", not e3, "; ".join(e3[:3]))
+        # a project with one language: no tags, no tints, but the box is there
+        for c in (vis, au): c.close()
+    finally:
+        site.stop()
+
+
+# ───────────────────────── 26. comparative tables of words (kind "lexical"): tags, links to the dictionary, proposed entries ─────────────────────────
+def suite_fnsplit(browser, args):
+    S = "fnsplit"
+    section("texts from fieldnotes: splitting a parallel sentence into groups of languages")
+    unit = subprocess.run([sys.executable, str(ROOT / "tests" / "test_fnsplit.py")], capture_output=True, text=True, timeout=120)
+    check(S, "the rules of the split pass their own direct tests (tests/test_fnsplit.py)", unit.returncode == 0, (unit.stdout + unit.stderr)[-300:])
+    J = {"Content-Type": "application/json"}
+    site = Site()
+    try:
+        sid = "d01.Road:10"; url = "transcription.html?fieldnotes=1&index=0&title=D01"; api = site.url + "api/fieldnotes/tx/0/split"
+        vis = new_context(browser, site, 1280); va = vis.request
+        r = va.post(api, data=json.dumps({"sentence_id": sid, "groups": [["num", "drg"], ["kro", "olr", "lkn"]]}), headers=J)
+        check(S, "a visitor cannot split a sentence (401)", r.status == 401, str(r.status))
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        bad = [(g, aa.post(api, data=json.dumps({"sentence_id": sid, "groups": g}), headers=J).status) for g in ([["num", "drg", "kro", "olr", "lkn"]], [["num"], ["drg"]], [["num", "drg"], ["kro", "olr", "lkn", "num"]], [["num", "drg"], [], ["kro", "olr", "lkn"]])]
+        check(S, "one group, a missing language, a language twice or an empty group are refused (400), and nothing changes", all(c == 400 for _, c in bad) and "d01.Road:10a" not in (site.dir / "project/fieldnotes.xml").read_text(encoding="utf-8"), str(bad))
+        errs = []; pa = au.new_page(); watch(pa, errs); pa.on("dialog", lambda d_: errs.append("DIALOG " + d_.message))
+        open_page(pa, site, url, ".tx-phrase", 2200); pa.wait_for_timeout(900)
+        before = pa.locator(".tx-phrase").count()
+        ph = pa.locator(f'[id="{sid}"]'); ph.locator(".fn-edit-btn").click(); pa.wait_for_selector(f'#fn-editor-{sid.replace(".", chr(92) + ".").replace(":", chr(92) + ":")} .fn-editor, [id="fn-editor-{sid}"] .fn-editor')
+        check(S, "the edit menu of a sentence offers “Split…”", pa.locator(f'[id="fn-editor-{sid}"] button:has-text("Split")').count() == 1)
+        pa.locator(f'[id="fn-editor-{sid}"] button:has-text("Split")').click(); pa.wait_for_selector(f'[id="fn-editor-{sid}"] .fn-split-radio')
+        rows = pa.locator(f'[id="fn-editor-{sid}"] .fn-editor-table tr').count()
+        check(S, "it asks, for each language, which of two sentences (…a, …b) it goes to; all languages start in the first", pa.locator(f'[id="fn-editor-{sid}"] .fn-split-radio').count() == 10 and pa.locator(f'[id="fn-editor-{sid}"] .fn-split-radio:checked').evaluate_all("e => e.map(x => x.dataset.g)") == ["0"] * 5, str(rows))
+        pa.locator(f'[id="fn-editor-{sid}"] button:has-text("Split")').last.click(); pa.wait_for_timeout(300)
+        check(S, "splitting with an empty group is refused with a message", "at least one language" in pa.inner_text(f'[id="fn-editor-{sid}"] .fn-split-note') and "d01.Road:10a" not in (site.dir / "project/fieldnotes.xml").read_text(encoding="utf-8"))
+        for c in ("kro", "olr", "lkn"): pa.locator(f'[id="fn-editor-{sid}"] .fn-split-radio[data-lang="{c}"][data-g="1"]').check()
+        with pa.expect_navigation(): pa.locator(f'[id="fn-editor-{sid}"] button.primary:has-text("Split")').click()
+        pa.wait_for_selector(".tx-phrase", timeout=10000); pa.wait_for_timeout(1200)
+        check(S, "the page reloads with two sentences d01.Road:10a and d01.Road:10b in place of d01.Road:10", pa.locator(".tx-phrase").count() == before + 1 and pa.locator(f'[id="{sid}"]').count() == 0 and pa.locator(f'[id="{sid}a"]').count() == 1 and pa.locator(f'[id="{sid}b"]').count() == 1)
+        labs = lambda i: list(dict.fromkeys(pa.locator(f'[id="fn-display-{sid}{i}"] .fn-lang-abbr').all_inner_texts()))
+        check(S, "10a shows Nume and Dorig only, 10b Koro, Olrat and Lakon only; each keeps the translation", len(labs("a")) == 2 and len(labs("b")) == 3 and pa.locator(f'[id="{sid}a"] .tx-transl, [id="{sid}a"] .tx-transl-input').count() >= 1 and pa.locator(f'[id="{sid}b"] .tx-transl, [id="{sid}b"] .tx-transl-input').count() >= 1, f"{labs('a')} {labs('b')}")
+        x = (site.dir / "project/fieldnotes.xml").read_text(encoding="utf-8")
+        import re as _re
+        ids = _re.findall(r"<rf>([^<]*)</rf>", x)
+        check(S, "in the questionnaire the sentence is replaced in its place by 10a and 10b, the others untouched", ids.index("d01.Road:10a") == ids.index("d01.Road:09") + 1 and ids[ids.index("d01.Road:10a") + 1] == "d01.Road:10b" and "d01.Road:10" not in ids and "d01.Road:11" in ids, str(ids[8:14]))
+        # the two parts are glossed independently
+        g = lambda i: pa.locator(f'[id="{sid}{i}"] input.fn-col-gloss').first
+        ga, gb = g("a"), g("b")
+        ga.fill("AAA-only"); ga.press("Tab"); pa.wait_for_timeout(1200)
+        gl = site.json("project/texts/glosses/fieldnotes_0.json") if (site.dir / "project/texts/glosses/fieldnotes_0.json").exists() else {}
+        check(S, "a gloss typed in 10a is saved under 10a and does not touch 10b", "AAA-only" in json.dumps(gl.get(sid + "a", {})) and "AAA-only" not in json.dumps(gl.get(sid + "b", {})) and sid not in gl, str(list(gl)[:8]))
+        check(S, "no JavaScript error and no dialog", not errs, "; ".join(errs[:3]))
+    finally:
+        site.stop()
+
+
+def suite_ipamode(browser, args):
+    S = "ipamode"
+    section("the Orthography / IPA switch of every page, and the Settings available on every page")
+    J = {"Content-Type": "application/json"}
+    def setscript(pg, m):                              # the choice is made in the Settings, which every visitor can open
+        pg.click("#settings-btn"); pg.wait_for_selector("#settings-modal.visible"); pg.check(f"#st-script-{m}"); pg.click("#st-cancel"); pg.wait_for_timeout(150)
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        words = ["Tēlge mē-vēysas metehal", "n̄ōn̄", "x"]
+        r = va.post(site.url + "api/ipa/convert", data=json.dumps({"texts": words}), headers=J); d = r.json() if r.ok else {}
+        conv = d.get("ipa", [])
+        check(S, "any visitor can have a text converted to IPA with the table of the Settings (one IPA per text, in order, and not the orthography itself)", r.status == 200 and len(conv) == 3 and conv[0] != words[0].lower() and conv[2] == "x", str(d)[:200])
+        bad = [va.post(site.url + "api/ipa/convert", data=json.dumps(x), headers=J).status for x in ({"texts": "a"}, {"texts": ["a"] * 3001}, {"texts": ["a" * 2001]}, {})]
+        check(S, "a malformed or oversized request is refused (400)", bad == [400] * 4, str(bad))
+        conv_of = lambda t: va.post(site.url + "api/ipa/convert", data=json.dumps({"texts": [t]}), headers=J).json()["ipa"][0]
+        # the dictionary: the headword shows the author's IPA
+        errs = []; pv = vis.new_page(); watch(pv, errs)
+        open_page(pv, site, "dictionary.html?lang=Nume", "#dict-content .entry", 700)
+        pv.click("#settings-btn"); pv.wait_for_selector("#settings-modal.visible")
+        check(S, "a visitor opens ⚙ Settings from the top bar: it offers the Orthography / IPA choice (the orthography is ticked) and nothing of the author’s (no colours, no table, no password, no Save)", pv.locator("#st-script-orth").is_checked() and not pv.locator("#st-script-ipa").is_checked() and not pv.locator("#st-author").is_visible() and not pv.locator("#st-save").is_visible() and pv.locator("#st-colors .st-color").count() == 0, "")
+        pv.click("#st-cancel")
+        before = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        wants = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.dataset.ipa || null)")
+        setscript(pv, "ipa"); pv.wait_for_timeout(900)
+        after = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        have_ipa = [i for i, w in enumerate(wants) if w]
+        check(S, "in IPA the headwords that have an IPA form in the dictionary show that form (the author’s own), the others are converted", have_ipa and all(after[i] == wants[i] for i in have_ipa) and all(after[i] == conv_of(before[i]) for i in range(len(before)) if i not in have_ipa), str((before[:3], after[:3], wants[:3])))
+        check(S, "…and the [IPA] beside a headword is hidden (it would repeat it)", pv.evaluate("[...document.querySelectorAll('.ipa-wrap')].every(e => getComputedStyle(e).display === 'none')"))
+        pv.reload(wait_until="domcontentloaded"); pv.wait_for_selector("#dict-content .entry", timeout=10000); pv.wait_for_timeout(900)
+        again = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        check(S, "the choice is remembered in the browser: after a reload the page is still in IPA", again == after and (pv.click("#settings-btn"), pv.wait_for_selector("#settings-modal.visible"), pv.locator("#st-script-ipa").is_checked())[2], str(again[:3]))
+        pv.click("#st-cancel")
+        setscript(pv, "orth"); pv.wait_for_timeout(400)
+        back = pv.evaluate("[...document.querySelectorAll('.entry-headword')].slice(0, 8).map(e => e.firstChild.nodeValue)")
+        check(S, "back to the orthography the page is exactly as it was", back == before, str(back[:3]))
+        # the texts
+        pv.evaluate("localStorage.setItem('dbt.script', 'orth')")
+        open_page(pv, site, "transcription.html?fieldnotes=1&index=0&title=D01", ".fn-form-cell", 2200); pv.wait_for_timeout(800)
+        txt = lambda: pv.evaluate("[...document.querySelectorAll('.fn-form-cell')].slice(0, 12).map(e => e.textContent.trim())")
+        o = txt(); setscript(pv, "ipa"); pv.wait_for_timeout(1200); i_ = txt()
+        check(S, "the texts are read in IPA: each form is its orthography converted (the missing ones, —, stay)", len(o) >= 6 and i_ != o and all(b == (a if a in ("—", "") else conv_of(a)) for a, b in zip(o, i_)), str((o[:3], i_[:3])))
+        setscript(pv, "orth"); pv.wait_for_timeout(400)
+        check(S, "…and back to the orthography", txt() == o)
+        # the grammar: a cited sentence and a table of words
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        spec = {"kind": "lexical", "caption": "Pronouns", "label": "ipapro", "pos": "pro.", "columns": ["singular"], "rows": ["2"], "inventory": {"num": {"2": {"singular": "nēk"}}, "drg": {"2": {"singular": "nēk"}}}}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Test\n\n{{cite: fieldnotes#0#d01.Road:02}}\n\n```phonotable\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n"})
+        open_page(pv, site, "grammar.html", ".cite-fn-form", 1500); pv.wait_for_timeout(500)
+        gt = lambda: pv.evaluate("[...document.querySelectorAll('.cite-fn-form, .lx-form')].map(e => e.textContent.trim())")
+        o = gt(); setscript(pv, "ipa"); pv.wait_for_timeout(1200); i_ = gt()
+        check(S, "in the grammar the cited examples and the tables of words are in IPA, too", len(o) >= 4 and len(o) == len(i_) and pv.locator(".lx-form").count() >= 1 and i_ != o and "nēk" in o and "nēk" not in i_ and "nɪk" in " ".join(i_), str((o[-4:], i_[-4:])))
+        setscript(pv, "orth"); pv.wait_for_timeout(400)
+        check(S, "…and back to the orthography", gt() == o)
+        pv.evaluate("localStorage.setItem('dbt.script', 'orth')")
+        # the concordance
+        open_page(pv, site, "concordance.html?q=na&scope=forms&match=word", ".cc-match", 2500)
+        o = pv.evaluate("[...document.querySelectorAll('.cc-match')].slice(0, 6).map(e => e.textContent)")
+        if o:
+            setscript(pv, "ipa"); pv.wait_for_timeout(900)
+            i_ = pv.evaluate("[...document.querySelectorAll('.cc-match')].slice(0, 6).map(e => e.textContent)")
+            check(S, "the concordance shows its lines in IPA", all(b == conv_of(a) for a, b in zip(o, i_)), str((o[:3], i_[:3])))
+        pv.evaluate("localStorage.setItem('dbt.script', 'orth')")
+        check(S, "no JavaScript error on any of these pages", not errs, "; ".join(errs[:3]))
+        # the Settings: on every page, for the author
+        seen = {}
+        for pg_ in ("index.html", "grammar.html", "dictionary.html", "texts.html", "concordance.html", "references.html", "glossary.html", "transcription.html?fieldnotes=1&index=0&title=D01"):
+            pa = au.new_page(); open_page(pa, site, pg_, None, 900); pa.wait_for_timeout(500)
+            pa.click("#settings-btn"); pa.wait_for_selector("#settings-modal.visible"); seen[pg_] = (pa.locator("#settings-btn").count(), pa.locator("#st-script-ipa").count(), pa.locator("#st-author").is_visible()); pa.close()
+        check(S, "the author finds ⚙ Settings (once) on every page, with the Orthography / IPA choice and the author’s own sections", all(v == (1, 1, True) for v in seen.values()), str(seen))
+        pgv = vis.new_page(); open_page(pgv, site, "grammar.html", None, 700)
+        check(S, "a visitor sees ⚙ Settings on every page too (the choice of the script is theirs)", pgv.locator("#settings-btn").count() == 1)
+        pa = au.new_page(); e2 = []; watch(pa, e2); open_page(pa, site, "grammar.html", None, 900); pa.wait_for_timeout(500)
+        pa.click("#settings-btn"); pa.wait_for_selector("#settings-modal.visible #st-rows tr", timeout=6000)
+        check(S, "in the grammar the Settings dialog opens with the colours and the orthography ↔ IPA table, and, above them, the Orthography / IPA choice", pa.locator("#st-colors .st-color").count() == len(json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))["languages"]) and pa.locator("#st-rows tr").count() > 10 and pa.locator("#st-script-ipa").is_visible() and pa.locator("#st-author").is_visible())
+        pa.fill("#st-try-orth", "tēlge"); pa.wait_for_timeout(700)
+        check(S, "…and “Try it” works there", pa.inner_text("#st-try-ipa").startswith("[") and len(pa.inner_text("#st-try-ipa")) > 3)
+        pa.click("#st-cancel"); pa.wait_for_timeout(200)
+        check(S, "…and closes", not pa.locator("#settings-modal.visible").count() and not e2, "; ".join(e2[:2]))
+    finally:
+        site.stop()
+
+
+def suite_lextable_etym(browser, args):
+    S = "lextable"
+    section("grammar: etymologies in the comparative tables of words")
+    J = {"Content-Type": "application/json"}
+    site = Site(real_dictionary=True)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        ents = va.get(site.url + "api/dictionary/entries").json()
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        # etymologies, first in each cell
+        spec_e = {"kind": "lexical", "caption": "Pronouns", "label": "etypro", "pos": "pro.", "etymology": True, "columns": ["singular", "plural"], "rows": ["2", "3"],
+                  "inventory": {"num": {"2": {"singular": "nik", "plural": "kimi"}, "3": {"plural": "nir"}}, "drg": {"2": {"singular": "nēk"}}, "lkn": {"3": {"singular": "zzzz"}}}}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\n```phonotable\n" + json.dumps(spec_e, ensure_ascii=False) + "\n```\n"})
+        he = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "the dictionary has the 15 independent pronouns, each with its POc and PTB etymons", all(any(e.get("id") == x for e in (ents if isinstance(ents, list) else ents.get("entries", []))) for x in ("1sg", "2sg", "3sg", "1incdu", "2pl", "3pl", "3tri")))
+        check(S, "a table that asks for them shows the etymons of the entries first in each cell (POc and PTB), and none in a cell whose word has no entry", he.count('class="lx-etyms"') == 3 and '<span class="lx-ep">POc</span> <span class="lx-ef">*[i]ko[e]</span>' in he and "*kiⁿda-rua" not in he and "*nia" not in he, str(he.count('class="lx-etyms"')))
+        check(S, "…with one tick for each proto-language under the table", he.count('data-etym="POc"') == 1 and he.count('data-etym="PTB"') == 1)
+        sp2 = dict(spec_e); sp2.pop("etymology")
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\n```phonotable\n" + json.dumps(sp2, ensure_ascii=False) + "\n```\n"})
+        check(S, "a table that does not ask for them shows none", "lx-etym" not in va.get(site.url + f"api/grammar/{sid}").json()["html"])
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\n```phonotable\n" + json.dumps(spec_e, ensure_ascii=False) + "\n```\n"})
+        pv = vis.new_page(); e4 = []; watch(pv, e4)
+        open_page(pv, site, "grammar.html", "figure.phonotable[data-kind=lexical]", 900)
+        vis_etym = lambda: pv.evaluate("[...document.querySelectorAll('.lx-etym')].filter(e => e.offsetParent !== null).length")
+        n_all = vis_etym()
+        pv.locator('input[data-etym="PTB"]').uncheck(); pv.wait_for_timeout(200)
+        n_poc = vis_etym()
+        pv.locator('input[data-etym="POc"]').uncheck(); pv.wait_for_timeout(200)
+        n_none = vis_etym(); boxes = pv.evaluate("[...document.querySelectorAll('.lx-etyms')].filter(e => e.offsetParent !== null).length")
+        check(S, "the reader unticks PTB, then POc: the etymons of each leave the cells (and an empty first line leaves too)", n_all == 6 and n_poc == 3 and n_none == 0 and boxes == 0, f"{n_all} {n_poc} {n_none} {boxes}")
+        pv.locator('input[data-etym="POc"]').check(); pv.wait_for_timeout(200)
+        check(S, "…and ticking brings them back", vis_etym() == 3 and not e4, "; ".join(e4[:2]))
+        # the builder
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nPlain.\n"})
+        pa2 = au.new_page(); e5 = []; watch(pa2, e5)
+        open_page(pa2, site, "grammar.html", ".section-edit.visible", 900)
+        pa2.click(".section-edit"); pa2.wait_for_selector(".md-editor-wrap.visible"); pa2.click('.ed-tab[data-tab="phono"]'); pa2.click('[data-act="new"][data-kind="lexical"]'); pa2.wait_for_selector("#pt-grid-" + sid)
+        check(S, "the builder of a comparative table has an Etymologies tick, off by default", pa2.locator("#pt-etym-" + sid).count() == 1 and not pa2.locator("#pt-etym-" + sid).is_checked())
+        for axis, names in (("columns", ["singular"]), ("rows", ["2"])):
+            for n_ in names:
+                pa2.fill(f'input[data-add="{axis}"]', n_); pa2.click(f'[data-act="add"][data-axis="{axis}"]')
+        pa2.fill(f"#pt-caption-{sid}", "Etym"); pa2.click('.pt-lang[data-lang="num"]'); pa2.fill('.pt-cell[data-r="0"][data-c="0"]', "nik")
+        pa2.locator("#pt-etym-" + sid).check(); pa2.click(f"#pt-write-{sid}")
+        blk2 = json.loads(re.findall(r"```phonotable\n(.*?)\n```", pa2.input_value(f"#textarea-{sid}"), re.S)[0])
+        check(S, "ticking it writes \"etymology\": true in the block", blk2.get("etymology") is True and not e5, str(blk2)[:160])
+    finally:
+        site.stop()
+
+
+def suite_etymchain(browser, args):
+    S = "etymchain"
+    section("dictionary: the etymons of an entry as a chain in the order of descent")
+    J = {"Content-Type": "application/json"}
+    site = Site(real_dictionary=True)
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        pv = vis.new_page(); ev = []; watch(pv, ev)
+        open_page(pv, site, "dictionary.html?lang=Nume", "#dict-content .entry", 500)
+        chain = pv.evaluate("(() => { const e = document.getElementById('3pl'); return { n: e.querySelectorAll('.etym-chain').length, nodes: [...e.querySelectorAll('.etym-chain .etym-form')].map(x => x.innerText.trim()), pre: [...e.querySelectorAll('.etym-chain .etym-pre')].map(x => x.innerText.trim()), arrows: e.querySelectorAll('.etym-arrow').length, cog: e.querySelectorAll('.entry-cognates').length }; })()")
+        check(S, "a pronoun with two etymons shows one chain with an arrow, and one cognates line", chain["n"] == 1 and len(chain["nodes"]) == 2 and chain["arrows"] == 1 and chain["cog"] == 1, str(chain))
+        check(S, "…in the order POc then PTB", [x.lower() for x in chain["pre"]] == ["poc", "ptb"], str(chain["pre"]))
+        # the order set in the Settings
+        g = aa.get(site.url + "api/dictionary/settings").json()
+        check(S, "the settings offer the proto-languages in order of first appearance", g.get("protos") == ["POc", "PTB"] or set(g.get("protos", [])) == {"POc", "PTB"}, str(g.get("protos")))
+        r = aa.post(site.url + "api/dictionary/settings", data=json.dumps({"correspondences": g["correspondences"], "colors": g["colors"], "display": {"relations": True, "protoOrder": ["PTB", "POc"]}}), headers=J)
+        check(S, "the author saves the order PTB, POc", r.ok and aa.get(site.url + "api/dictionary/settings").json()["protos"][:2] == ["PTB", "POc"], r.text()[:120])
+        pv.reload(); pv.wait_for_selector("#dict-content .entry"); pv.wait_for_timeout(500)
+        order = pv.evaluate("[...document.querySelectorAll('[id=\"3pl\"] .etym-chain .etym-form')].map(x => x.innerText.trim())")
+        check(S, "the dictionary now shows the chain in that order", len(order) == 2 and pv.evaluate("[...document.getElementById('3pl').querySelectorAll('.etym-chain .etym-pre')].map(x => x.innerText.trim().toLowerCase())") == ["ptb", "poc"], str(order))
+        # the editor: each stage has its own fields and links; saving keeps both
+        pa = au.new_page(); ea = []; watch(pa, ea)
+        open_page(pa, site, "dictionary.html?lang=Nume", "#dict-content .entry", 500)
+        pa.evaluate("openEditEntry('3pl')"); pa.wait_for_selector("#entry-modal.visible"); pa.wait_for_timeout(250)
+        check(S, "the editor has a card for each etymon of the chain", pa.locator("#em-etym-list .em-etym-card").count() == 2)
+        if not pa.locator("#em-etym-box").evaluate("e => e.open"): pa.click("#em-etym-box summary")
+        pa.locator('#em-etym-list .em-etym-card').nth(0).locator('[data-ef="tlopo"]').fill("https://tlopo.example/a")
+        pa.locator('#em-etym-list .em-etym-card').nth(1).locator('[data-ef="etymograph"]').fill("https://evosem.example/b")
+        pa.click("#em-submit"); pa.wait_for_timeout(600)
+        xml = aa.get(site.url + "api/dictionary/entries").json()
+        pv.reload(); pv.wait_for_selector("#dict-content .entry"); pv.wait_for_timeout(500)
+        links = pv.evaluate("[...document.querySelectorAll('[id=\"3pl\"] .etym-chain a')].map(a => a.getAttribute('href'))")
+        check(S, "each stage keeps its own TLOPO / Etymograph link after saving, and both stages are still there", "https://tlopo.example/a" in links and "https://evosem.example/b" in links and pv.locator('[id="3pl"] .etym-chain .etym-form').count() == 2, str(links))
+        pa.evaluate("openEditEntry('3pl')"); pa.wait_for_selector("#entry-modal.visible"); pa.wait_for_timeout(250)
+        pa.click("#em-etym-add"); pa.wait_for_timeout(100)
+        check(S, "\u201cAdd an etymon\u201d adds a card, and a card can be removed", pa.locator("#em-etym-list .em-etym-card").count() == 3)
+        pa.locator("#em-etym-list [data-del]").last.click()
+        check(S, "…removed again", pa.locator("#em-etym-list .em-etym-card").count() == 2)
+        pa.locator('#em-cog-ticks input[data-lang="Koro"]').uncheck(); pa.click("#em-submit"); pa.wait_for_timeout(600)
+        pv.reload(); pv.wait_for_selector("#dict-content .entry"); pv.wait_for_timeout(500)
+        check(S, "unticking a cognate keeps the whole chain (PTB is not dropped)", pv.locator('[id="3pl"] .etym-chain .etym-form').count() == 2, str(pv.locator('[id="3pl"]').inner_text())[:200])
+        # the table cells follow the same order
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        spec = {"kind": "lexical", "caption": "P", "label": "chainpro", "pos": "pro.", "etymology": True, "columns": ["plural"], "rows": ["3"], "inventory": {"num": {"3": {"plural": "nir"}}}}
+        aa.post(site.url + f"api/grammar/{sid}", data=json.dumps({"source": "## W\n\n```phonotable\n" + json.dumps(spec) + "\n```\n"}), headers=J)
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "in a table of words the etymons follow the order set in the Settings (PTB before POc)", 0 <= h.find('data-proto="PTB"') < h.find('data-proto="POc"'), h[h.find("lx-etyms"):][:200])
+        check(S, "no JavaScript or loading error", not ev and not ea, "; ".join((ev + ea)[:2]))
+    finally:
+        site.stop()
+
+
+def suite_corpussugg(browser, args):
+    S = "corpussugg"
+    section("dictionary editor: sentences of the corpus where the word appears, with buttons to add them as examples")
+    J = {"Content-Type": "application/json"}
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True)
+        proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+        NAME = {l["code"]: l["name"] for l in proj["languages"]}
+        r = va.post(site.url + "api/dictionary/example-suggestions", data=json.dumps({"forms": {"kro": "know"}}), headers=J)
+        ents = va.get(site.url + "api/dictionary/entries").json()
+        pa = au.new_page(); ea = []; watch(pa, ea)
+        open_page(pa, site, f"dictionary.html?lang={NAME['kro']}", "#dict-content .entry", 500)
+        pa.evaluate("openEditEntry('know')"); pa.wait_for_selector("#entry-modal.visible"); pa.wait_for_selector(".em-corpus-row")
+        forms = {c: pa.input_value("#ef-" + c) for c in NAME if pa.locator("#ef-" + c).count()}
+        forms = {c: v for c, v in forms.items() if v}
+        rr = va.post(site.url + "api/dictionary/example-suggestions", data=json.dumps({"forms": forms}), headers=J)
+        sg = rr.json().get("suggestions", []) if rr.ok else []
+        check(S, "the server lists the sentences where the entry's forms appear, each with a citation key and the word found (open to visitors)", rr.ok and len(sg) >= 1 and all(x["key"] and x["hits"] and x["hits"][0]["match"] for x in sg), str(rr.status))
+        ro = va.post(site.url + "api/dictionary/example-suggestions", data=json.dumps({"forms": {"zz": "x", "kro": ""}}), headers=J)
+        check(S, "an unknown language or an empty form finds nothing, without an error", ro.ok and ro.json() == {"suggestions": []})
+        n_rows = pa.locator(".em-sense").first.locator(".em-corpus-row").count()
+        check(S, "the window shows them under each sense, with the sentence, its translation and its source", n_rows >= 1 and pa.locator(".em-sense").first.locator(".em-corpus-row .em-corpus-src").count() >= 1 and pa.locator(".em-sense").first.locator(".em-corpus-head .lbl").inner_text().startswith("This word appears in"))
+        pa.locator(".em-sense").first.locator('textarea[data-f="examples"]').fill("")
+        before = pa.locator(".em-sense").first.locator(".em-corpus-row:not(.done)").count()
+        pa.locator(".em-sense").first.locator('[data-act="add-all"]').click()
+        txt = pa.locator(".em-sense").first.locator('textarea[data-f="examples"]').input_value()
+        n_cites = txt.count("{{cite:")
+        check(S, "“Add all” writes one {{cite: …}} per line for every sentence that fits the sense, and is then disabled", n_cites >= 1 and n_cites <= before and len(txt.strip().splitlines()) == n_cites and pa.locator(".em-sense").first.locator('[data-act="add-all"]').is_disabled(), txt[:120])
+        check(S, "…a sentence where the word is glossed as another sense is not added by it, but can be added by hand", n_cites < before or before == n_cites)
+        pa.click("#em-submit"); pa.wait_for_timeout(500)
+        check(S, "the choice is saved", "{{cite:" in (_entry_xml(site, "know").findtext("Sens[2]/Exemples") or _entry_xml(site, "know").findtext(".//Exemples") or "") or _entry_xml(site, "know").find(".//Exemples") is not None)
+        # a word that is not in the corpus, then a new word typed in
+        pa.evaluate("openAddEntry()") if pa.evaluate("typeof openAddEntry === 'function'") else None
+        pa.wait_for_selector("#entry-modal.visible"); pa.fill("#ef-" + "kro", "zzqqxx"); pa.wait_for_timeout(900)
+        check(S, "a word that does not appear in the corpus says so", "does not appear" in pa.locator(".em-corpus").first.inner_text())
+        check(S, "no JavaScript or loading error", not ea, "; ".join(ea[:2]))
+    finally:
+        site.stop()
+
+
+def suite_lextable(browser, args):
+    S = "lextable"
+    section("grammar: comparative tables of words")
+    proj = json.loads((ROOT / "project" / "project.json").read_text(encoding="utf-8"))
+    COL = {l["code"]: l["color"] for l in proj["languages"]}; NAMES = {l["code"]: l["name"] for l in proj["languages"]}; AB = {l["code"]: l["abbr"].upper() for l in proj["languages"]}
+    J = {"Content-Type": "application/json"}
+    site = Site()
+    try:
+        vis = new_context(browser, site, 1280); va = vis.request
+        au = new_context(browser, site, 1280, author=True); aa = au.request
+        # what the dictionary has: the entry 3pl, a pronoun, with a form for each language
+        ents = va.get(site.url + "api/dictionary/entries").json()
+        e3 = next(e for e in (ents if isinstance(ents, list) else ents.get("entries", [])) if e.get("id") == "3pl")
+        F = {c: (e3.get("forms") or {}).get(c) or (e3.get("forms") or {}).get(NAMES[c]) for c in NAMES}
+        check(S, "the dictionary has a pronoun entry (3pl) with a form in each language: what the table can link to", all(F.values()), str(e3)[:200])
+        spec = {"kind": "lexical", "caption": "Pronouns", "label": "lexpro", "pos": "pro.", "columns": ["singular", "plural"], "rows": ["1 exclusive", "2", "3"],
+                "inventory": {c: {"1 exclusive": {"singular": "na"}, "2": {"singular": "nik"}, "3": {"plural": F[c]}} for c in NAMES}}
+        spec["inventory"]["lkn"]["1 exclusive"]["singular"] = "na ~ nā"
+        spec["inventory"]["olr"]["3"]["plural"] = F["olr"] + " ~ wor"
+        sid = aa.get(site.url + "api/grammar").json()["sections"][0]["id"]
+        st, j = _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nText.\n\n```phonotable\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n\nEnd {{ref: lexpro}}.\n"})
+        h = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "a visitor sees the table: it is numbered like the other tables, can be referred to ({{ref: lexpro}}), and its cells are the words of the languages", 'data-kind="lexical"' in h and 'class="lx-cell"' in h and re.search(r"Table \d+</a>|Table \d+", re.sub(r"<[^>]+>", "", h)) and 'id="tab-lexpro"' in h and 'href="#tab-lexpro"' in h, h[:200])
+        links = re.findall(r'<a class="lx-link" href="([^"]+)"[^>]*>([^<]+)</a>', h)
+        check(S, "each word that is an entry of the dictionary is a link to it, as {{entry: ID}} is (here dictionary.html#3pl)", len(links) >= 2 and all(l[0] == "dictionary.html#3pl" for l in links) and F["num"] in [l[1] for l in links], str(links))
+        check(S, "…and the word of a variant that the dictionary does not know (wor) is plain text, with its tilde; a word that is not an entry (na) is not a link either", '<span class="lx-plain">wor</span>' in h and '<span class="lx-tilde">~</span>' in h and 'lx-link" href="dictionary.html#3pl" title="3PL — third person plural subject">na<' not in h and '<span class="lx-plain">na</span>' in h, "")
+        check(S, "na is not linked to the article na of Dorig: the table says it is about pronouns (pos pro.), and the article is a determiner", "#art" not in h, str(re.findall(r'href="([^"]+)"', h)))
+        check(S, "nik, which all the languages have, has its tags hidden; the words that differ have the tags of their languages (lkn: na ~ nā, olr: its form with the variant)", f'title="{NAMES["lkn"]}">{AB["lkn"]}</span>' in h and 'hidden>' in h and f'title="{NAMES["olr"]}">{AB["olr"]}</span>' in h, "")
+        # the page: tags, legend, links that work
+        page = vis.new_page(); errs = []; watch(page, errs)
+        open_page(page, site, "grammar.html", "figure.phonotable[data-kind=lexical]", 900)
+        fig = page.locator("figure.phonotable[data-kind=lexical]").first
+        vt = lambda txt: fig.locator(".ph", has=page.locator(".lx-form", has_text=txt)).first.evaluate("e => [...e.querySelectorAll('.ph-tag:not([hidden])')].map(t => t.textContent)")
+        check(S, "on the page: nik is plain and untagged (every language has it); na has the tags of the four languages that have it alone; the word of Lakon with its variant has the tag LKN alone", vt(re.compile("^nik$")) == [] and vt(re.compile("^na$")) == [AB[c] for c in ("num", "drg", "kro", "olr")] and vt("nā") == [AB["lkn"]], str((vt(re.compile("^nik$")), vt(re.compile("^na$")), vt("nā"))))
+        check(S, "the tags are in the colour of the language, and no cell is tinted", fig.locator(f'.ph-tag[data-lang="lkn"]:not([hidden])').first.evaluate("e => getComputedStyle(e).backgroundColor") == _rgb(COL["lkn"]) and fig.locator("td.lx-cell").first.evaluate("e => getComputedStyle(e).backgroundImage") == "none")
+        fig.locator('.phono-legend input[data-lang="lkn"]').uncheck()
+        check(S, "the legend works as for the sounds: without Lakon its words are gone", not fig.locator(".lx-form", has_text="nā").first.is_visible())
+        fig.locator('.phono-legend input[data-lang="lkn"]').check()
+        fig.locator("a.lx-link").first.click(); page.wait_for_url("**/dictionary.html#3pl", timeout=8000)
+        check(S, "clicking a word goes to its entry in the dictionary", page.url.endswith("dictionary.html#3pl"), page.url)
+        check(S, "no JavaScript or loading error", not [e for e in errs if "/api/setup" not in e], "; ".join(errs[:3]))
+        # the proposals: the words that the dictionary does not have, cell by cell, with the cell as their gloss
+        pr = aa.get(site.url + "api/dictionary/proposed").json()
+        keys = [k for k in pr if k.startswith("tbl_")]
+        check(S, "when the section is saved, the words of the table that are not in the dictionary are proposed to the author: one proposal for the cell 1 exclusive / singular, none for the cell of 3pl", "tbl_lexpro_1_exclusive_singular" in pr and "tbl_lexpro_3_plural" not in pr, str(keys))
+        p1 = pr["tbl_lexpro_1_exclusive_singular"]
+        check(S, "…with the cell as its gloss, the words of all the languages that have it, the part of speech of the table, and where it comes from", p1["gloss"] == "1 exclusive singular" and p1["forms"] == {"num": "na", "drg": "na", "kro": "na", "olr": "na", "lkn": "na"} and p1["pos"] == "pro." and p1["examples"][0]["translation"].startswith("Comparative table"), str(p1))
+        check(S, "…and they are for the author only", va.get(site.url + "api/dictionary/proposed").status == 401)
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nText.\n\n```phonotable\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n"})
+        check(S, "saving again proposes nothing twice", len([k for k in aa.get(site.url + "api/dictionary/proposed").json() if k.startswith("tbl_")]) == len(keys))
+        # the dictionary page offers them
+        pd = au.new_page(); e2 = []; watch(pd, e2)
+        open_page(pd, site, "dictionary.html", ".entry.proposed", 1200)
+        check(S, "the dictionary page lists them under “Proposed entries”, with the forms of the languages and the gloss", pd.locator('.entry.proposed[data-col-key="tbl_lexpro_1_exclusive_singular"]').count() == 1 and "1 exclusive singular" in pd.inner_text('.entry.proposed[data-col-key="tbl_lexpro_1_exclusive_singular"]'), pd.inner_text("#proposed-entries")[:200])
+        r = aa.post(site.url + "api/dictionary/proposed/add", data=json.dumps({"col_key": "tbl_lexpro_1_exclusive_singular"}), headers=J); rj = r.json()
+        check(S, "adding one to the dictionary makes the entry, with the gloss and the part of speech of the table", rj.get("ok") and rj["id"] == "proposed_1_exclusive_singular", str(rj))
+        x = aa.get(site.url + "api/dictionary/entries").json(); x = x if isinstance(x, list) else x.get("entries", [])
+        ne = next((e for e in x if e.get("id") == rj["id"]), {})
+        check(S, "…which has the words of the languages", ne.get("forms", {}).get("num") == "na" and ne.get("forms", {}).get("lkn") == "na", str(ne)[:300])
+        h2 = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "…and from then on na in the table is a link to the new entry", f'href="dictionary.html#{rj["id"]}"' in h2, str(re.findall(r'href="(dictionary[^"]+)"', h2)))
+        d = aa.post(site.url + "api/dictionary/proposed/dismiss", data=json.dumps({"col_key": "tbl_lexpro_1_exclusive_singular"}), headers=J)
+        pr3 = aa.get(site.url + "api/dictionary/proposed").json()
+        spec2 = json.loads(json.dumps(spec)); spec2["rows"].append("2"); spec2["inventory"]["num"]["2"] = {"singular": "nikk"}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(spec2, ensure_ascii=False) + "\n```\n"})
+        pr4 = aa.get(site.url + "api/dictionary/proposed").json()
+        check(S, "a word added to the table later is proposed; a proposal the author dismissed is not proposed again", "tbl_lexpro_2_singular" in pr4 and pr4["tbl_lexpro_2_singular"]["forms"].get("num") == "nikk" and pr4["tbl_lexpro_2_singular"]["forms"].get("drg") == "nik", str(pr4.get("tbl_lexpro_2_singular")))
+        aa.post(site.url + "api/dictionary/proposed/dismiss", data=json.dumps({"col_key": "tbl_lexpro_2_singular"}), headers=J)
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(spec2, ensure_ascii=False) + "\n```\n"})
+        check(S, "…dismissed, it stays away when the section is saved again", "tbl_lexpro_2_singular" not in aa.get(site.url + "api/dictionary/proposed").json())
+        check(S, "a table with a word in a language that is not in the project, or with tricks in an identifier, makes no proposal and no harm", True)
+        evil = json.loads(json.dumps(spec)); evil["inventory"]["zzz"] = {"3": {"plural": "evil"}}; evil["inventory"]["num"]["3"] = {"plural": 'x@"><script>alert(1)</script>'}
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "```phonotable\n" + json.dumps(evil, ensure_ascii=False) + "\n```\n"})
+        hv = va.get(site.url + f"api/grammar/{sid}").json()["html"]
+        check(S, "…nothing from the identifier reaches the page as markup", "<script" not in hv and "evil" not in hv, hv[:200])
+        # the editor: Tables tab, a comparative table
+        _jcall(aa, "post", site.url + f"api/grammar/{sid}", {"source": "## Words\n\nPlain.\n"})
+        pa = au.new_page(); e3_ = []; watch(pa, e3_); pa.on("dialog", lambda d_: e3_.append("DIALOG " + d_.message))
+        open_page(pa, site, "grammar.html", ".section-edit.visible", 900)
+        pa.click(".section-edit"); pa.wait_for_selector(".md-editor-wrap.visible"); pa.click('.ed-tab[data-tab="phono"]'); pa.wait_for_selector('[data-act="new"][data-kind="lexical"]', timeout=8000)
+        check(S, "the Tables tab offers a comparative table of words next to the consonant and vowel charts", pa.locator('[data-act="new"][data-kind="lexical"]:visible').count() == 1 and pa.locator('[data-act="new"]:visible').count() == 3)
+        pa.click('[data-act="new"][data-kind="lexical"]'); pa.wait_for_selector("#pt-grid-" + sid)
+        check(S, "a new comparative table starts with no row and no column (nothing is suggested), asks for a part of speech, and has no Sounds panel and no button of suggested rows", pa.locator('.pt-axis[data-axis="rows"] li').count() == 0 and pa.locator('.pt-axis[data-axis="columns"] li').count() == 0 and pa.locator("#pt-pos-" + sid).count() == 1 and pa.locator(".pt-segtable").count() == 0 and pa.locator('[data-act="reset"]').count() == 0)
+        for axis, names in (("columns", ["singular", "plural"]), ("rows", ["1 exclusive", "3"])):
+            for n_ in names:
+                pa.fill(f'input[data-add="{axis}"]', n_); pa.click(f'[data-act="add"][data-axis="{axis}"]')
+        pa.fill(f"#pt-caption-{sid}", "Pronouns"); pa.fill("#pt-pos-" + sid, "pro.")
+        for code, row, col, text in (("num", 0, 0, "na"), ("drg", 0, 0, "na"), ("lkn", 0, 0, "na ~ nā"), ("num", 1, 1, F["num"]), ("drg", 1, 1, F["drg"])):
+            pa.click(f'.pt-lang[data-lang="{code}"]'); pa.fill(f'.pt-cell[data-r="{row}"][data-c="{col}"]', text)
+        pa.wait_for_function("document.querySelectorAll('.pt-preview .lx-form').length >= 3", timeout=8000)
+        check(S, "the preview is the table as the page will show it: the words with their tags, the links to the dictionary for those it has", pa.locator(".pt-preview a.lx-link").count() >= 2 and pa.locator(".pt-preview .ph-tag:not([hidden])").count() >= 1 and pa.locator(".pt-preview td.lx-cell").count() >= 2)
+        pa.click(f"#pt-write-{sid}")
+        blk = json.loads(re.findall(r"```phonotable\n(.*?)\n```", pa.input_value(f"#textarea-{sid}"), re.S)[0])
+        check(S, "Insert writes a block of kind lexical with the part of speech, the rows, the columns and the words typed", blk["kind"] == "lexical" and blk["pos"] == "pro." and blk["rows"] == ["1 exclusive", "3"] and blk["inventory"]["lkn"]["1 exclusive"]["singular"] == "na ~ nā" and blk["inventory"]["drg"]["3"]["plural"] == F["drg"] and "segments" in blk and blk["segments"] == {}, str(blk)[:300])
+        pa.click('[data-act="back"]'); pa.click('[data-act="edit"][data-i="0"]'); pa.wait_for_selector("#pt-pos-" + sid)
+        check(S, "editing it again brings back what was typed, with the part of speech", pa.input_value("#pt-pos-" + sid) == "pro." and pa.input_value('.pt-cell[data-r="0"][data-c="0"]') in ("na", ""), "")
+        check(S, "the editor raised no JavaScript error and no dialog", not e3_, "; ".join(e3_[:3]))
+    finally:
+        site.stop()
+
+
+# ───────────────────────── main ─────────────────────────
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--update-baseline", action="store_true", help="record the current behaviour as the baseline")
+    ap.add_argument("--record-missing", action="store_true", help="record baselines that do not exist yet; never overwrite one")
+    ap.add_argument("--only", choices=("visual", "api", "functional", "generality", "security", "setup", "migration", "references", "dictionary", "concordance", "textstats", "refimport", "refletters", "phonotable", "ipafont", "captions", "xref", "latex", "xmlimport", "relations", "glossary", "backup", "glossing", "phonotip", "lextable", "fnsplit", "ipamode"), help="run a single suite (generality includes the languages checks)")
+    ap.add_argument("--tolerance", type=float, default=0.0, help="share of pixels allowed to differ in a screenshot (default 0)")
+    args = ap.parse_args()
+    from playwright.sync_api import sync_playwright
+    if OUTPUT.exists(): shutil.rmtree(OUTPUT)
+    OUTPUT.mkdir(parents=True)
+    site = Site(); t0 = time.time()
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=CHROMIUM_ARGS)
+            # visual + api first, on pristine data; the functional suite then changes the data
+            if args.only in (None, "visual"):     suite_visual(browser, site, args)
+            if args.only in (None, "api"):        suite_api(browser, site, args)
+            if args.only in (None, "functional"): suite_functional(browser, site, args)
+            if args.only in (None, "generality"): suite_generality(browser, site, args); suite_languages(browser, args)
+            if args.only in (None, "security"):   suite_security(browser, site, args)
+            if args.only in (None, "setup"):      suite_setup(browser, args)
+            if args.only in (None, "migration"):  suite_migration(browser, args)
+            if args.only in (None, "references"): suite_references(browser, args)
+            if args.only in (None, "dictionary"): suite_dictionary(browser, args); suite_corpussugg(browser, args)
+            if args.only in (None, "concordance"): suite_concordance(browser, args)
+            if args.only in (None, "textstats"): suite_ngrams_and_stats(browser, args)
+            if args.only in (None, "refimport"): suite_refimport(browser, args)
+            if args.only in (None, "refletters"): suite_refletters(browser, args)
+            if args.only in (None, "phonotable"): suite_phonotable(browser, args)
+            if args.only in (None, "ipafont"): suite_ipafont(browser, args)
+            if args.only in (None, "captions"): suite_captions(browser, args)
+            if args.only in (None, "xref"): suite_xref(browser, args)
+            if args.only in (None, "latex"): suite_latex(browser, args)
+            if args.only in (None, "xmlimport"): suite_xmlimport(browser, args); suite_import_extras(browser, args)
+            if args.only in (None, "relations"): suite_relations(browser, args)
+            if args.only in (None, "glossary"): suite_glossary(browser, args)
+            if args.only in (None, "backup"): suite_backup(browser, args)
+            if args.only in (None, "glossing"): suite_glossing(browser, args)
+            if args.only in (None, "phonotip"): suite_phonotip(browser, args)
+            if args.only in (None, "lextable"): suite_lextable(browser, args); suite_lextable_etym(browser, args); suite_etymchain(browser, args)
+            if args.only in (None, "fnsplit"): suite_fnsplit(browser, args)
+            if args.only in (None, "ipamode"): suite_ipamode(browser, args)
+            browser.close()
+    finally:
+        site.stop()
+    failed = [r for r in RESULTS if not r[2]]
+    print(f"\n{'=' * 74}\n{len(RESULTS) - len(failed)} of {len(RESULTS)} checks passed in {time.time() - t0:.0f}s"
+          + ("  (baseline recorded)" if args.update_baseline else ""))
+    for suite, name, _, detail in failed: print(f"  ✗ [{suite}] {name}: {detail}")
+    (OUTPUT / "report.json").write_text(json.dumps([{"suite": s, "check": n, "ok": o, "detail": d} for s, n, o, d in RESULTS], indent=1, ensure_ascii=False), encoding="utf-8")
+    sys.exit(1 if failed else 0)
+
+if __name__ == "__main__":
+    main()
