@@ -4753,12 +4753,13 @@ def project_js():
     return Response(js, mimetype='application/javascript', headers={'Cache-Control': 'no-cache'})
 
 # ── Static files: only the site's own pages and images, never code or data ────
+_SITE_DIRS = ('pages', 'logos')                         # where the pages (with their CSS and JS) and the images live, served flat
 _PUBLIC_EXT = {'.html', '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf'}
 _FONT_FILE = re.compile(r'fonts/(?:[A-Za-z0-9][A-Za-z0-9._-]*\.woff2|OFL\.txt)')   # no sub-folder, no other type
 
 @app.route('/')
 def index():
-    return _serve_page('index.html')
+    return _serve_page(os.path.join(_SITE_DIRS[0], 'index.html'))
 
 
 @app.route('/<path:filename>')
@@ -4776,15 +4777,17 @@ def static_files(filename):
         if not _FONT_FILE.fullmatch(filename):
             abort(404)
         return send_from_directory('fonts', filename[len('fonts/'):])
-    # Files directly in the site folder, with a public extension. Not source code (.py), not data (.xml, .json,
-    # .md), not the data folders (uploads, project, ...), not hidden files.
+    # The site's own files: the pages with their stylesheets and scripts (pages/) and the images (logos/), asked for by their name alone,
+    # as they have always been (/grammar.html, /style.css, /etymograph_icon.png). Only a public extension, and only from those two
+    # folders: never source code (.py), data (.xml, .json, .md), the data folders (uploads, project, ...), hidden files.
     if '/' in filename or filename.startswith('.') or os.path.splitext(filename)[1].lower() not in _PUBLIC_EXT:
         abort(404)
-    if not os.path.isfile(filename):
+    folder = next((d for d in _SITE_DIRS if os.path.isfile(os.path.join(d, filename))), None)
+    if folder is None:
         abort(404)
     if filename.endswith('.html'):
-        return _serve_page(filename)
-    return send_from_directory('.', filename)
+        return _serve_page(os.path.join(folder, filename))
+    return send_from_directory(folder, filename)
 
 
 # ── First-run setup ────────────────────────────────────────────────────────────
