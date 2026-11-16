@@ -373,6 +373,11 @@ types its word in each cell, as it is written in the dictionary. The caption, th
   dictionary writes it) in that language. If several entries have it, the table links only if one of them is grammatical material. `na@ID` names the entry
   by its identifier, when the word alone is not enough. The **part of speech** field of the table (`pro.`) keeps `na`, the pronoun, from `na`, the article:
   only the entries of that part of speech are considered.
+- **Etymologies in the table.** Tick **Etymologies** in the table's builder (`"etymology": true` in the block) and the first line of each cell gives the
+  etymons (POc, PTB…) of the dictionary entries that the cell's words are links to, as the entry's `<Étymologie>` has them (an etymon limited to some
+  languages with `langues` is shown for those only). Under the table, one tick per proto-language lets the reader hide them. A cell whose words have no
+  entry, or an entry with no etymon, shows no line; a table that does not ask for them shows none. The 15 independent pronouns of the Gaua languages
+  (`1sg` … `3pl`) are entries of the dictionary with their POc and PTB etymons, and the table of pronouns shows them.
 - **Proposed entries.** When the section is saved (and when the application starts), the words of the table that the dictionary does not have are proposed to the author in
   the dictionary page, under *Proposed entries*, in the way the words of confirmed texts are: one proposal for each cell of the table (a row and a column), with
   the missing words of the languages that have them, the cell as its gloss (*1 exclusive singular*) and the part of speech of the table; *Add to dictionary* makes the entry,
