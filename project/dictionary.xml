@@ -1,10 +1,4 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!--
-  Digital Boasian Trilogy — Gaua Languages (Banks Islands, Vanuatu)
-  Comparative Dictionary · LEXICA XML format (B. Galliot)
-  Adapted for 5 source languages: ReprésentationDeForme carries a langue= attribute.
-  Documentation: Alexandre François & Fabio Meroni · HéLiCéO
--->
 <RessourceLexicale>
 
   <InformationsGlobales>
