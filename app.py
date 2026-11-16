@@ -4622,7 +4622,7 @@ def _block_home_langstrip():
     from urllib.parse import quote
     cells = []
     for l in _LANGS:
-        href = f"about.html#{_anchor(l)}" if ABOUT else f"dictionary.html?lang={quote(l['name'])}"
+        href = f"#{_anchor(l)}" if ABOUT else f"dictionary.html?lang={quote(l['name'])}"
         cells.append(f'  <a class="lang-cell" href="{_esc(href)}" style="text-decoration:none;">\n'
                      f'    <span class="ldot" style="background:var(--c-{l["code"]});"></span>\n'
                      f'    <span class="lname">{_esc(l["name"])}</span>\n  </a>')
@@ -4677,6 +4677,19 @@ def _block_about_toc():
             out.extend(f'      <li class="sub"><a href="#{_anchor(l)}">{_esc(l["name"])}</a></li>\n' for l in _LANGS)
     return ''.join(out)
 
+def _block_about_shell():
+    """The second part of the home page: the whole about page (contents on the left, the text with a section for each language on the right).
+    A project without an about page shows its map section instead (if it has one)."""
+    if not ABOUT:
+        return _block_home_map()
+    ab = ABOUT
+    side = (f'<div class="sidebar-map">\n      <img src="{_esc(ab["sidebarImage"])}" alt="{_esc(ab.get("sidebarImageAlt", ""))}">\n    </div>'
+            if ab.get('sidebarImage') else '')
+    return ('<div class="about-shell" id="about">\n  <aside class="about-sidebar">\n    <span class="sidebar-label">On this page</span>\n'
+            f'    <ul class="about-toc" id="about-toc">\n{_block_about_toc()}    </ul>\n    {side}\n  </aside>\n  <main class="about-main">\n'
+            f'    <div class="page-title">{ab.get("title", "")}</div>\n    <div class="page-subtitle">{ab.get("subtitle", "")}</div>\n\n'
+            f'{_block_about_sections()}  </main>\n</div>')
+
 def _page_blocks():
     """{{block:name}} in a page: HTML generated from the project's languages and page content."""
     h, ab = HOME or {}, ABOUT or {}
@@ -4688,7 +4701,7 @@ def _page_blocks():
         'home.intro': '\n'.join(f'<p style="margin-top:1rem;">{_prose(p)}</p>' for p in intro),
         'home.card.grammar': _prose(cards['grammar']), 'home.card.texts': _prose(cards['texts']),
         'home.card.dictionary': _prose(cards['dictionary']),
-        'home.langstrip': _block_home_langstrip(), 'home.map': _block_home_map(),
+        'home.langstrip': _block_home_langstrip(), 'home.map': _block_home_map(), 'about.shell': _block_about_shell(),
         'about.toc': _block_about_toc(), 'about.sections': _block_about_sections(),
         'about.sidebarmap': (f'<div class="sidebar-map">\n      <img src="{_esc(ab["sidebarImage"])}" alt="{_esc(ab.get("sidebarImageAlt", ""))}">\n    </div>'
                              if ab.get('sidebarImage') else ''),
@@ -4753,8 +4766,10 @@ def static_files(filename):
     target = PROJECT['redirects'].get(filename)          # an old page name that now lives under another one
     if target:
         return redirect('/' + target, code=301)
-    if filename == 'about.html' and ABOUT is None:      # a project without an about page
-        abort(404)
+    if filename == 'about.html':                        # the about page is now the second part of the home page
+        if ABOUT is None:
+            abort(404)
+        return redirect('/index.html', code=301)       # (a link with a #language keeps its #language)
     if filename == 'setup.html':                        # reached only through /setup, and only before the setup
         abort(404)
     if filename.startswith('fonts/'):                    # the one folder that is served: the web fonts, and their license
