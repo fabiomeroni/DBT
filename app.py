@@ -2468,15 +2468,16 @@ def _with_pos(found, pos):
         return found
     return [x for x in found if (x[1].findtext('ClasseGrammaticale') or '').strip().lower().rstrip('.').startswith(pos)]
 
-def _etymons_for(el, code):
-    """[(proto-language, proto-form)] of the entry that apply to the language `code` (an etymon without a list of languages applies to all of them)."""
+def _etymons_for(el, code, order=()):
+    """[(proto-language, proto-form)] of the entry that apply to the language `code` (an etymon without a list of languages applies to all of them),
+    in the order of descent of the Settings (oldest proto-language first)."""
     out = []
     for et in el.findall('Étymologie/Étymon'):
         langs = _langs_attr(et)
         form, proto = (et.findtext('Forme') or '').strip(), (et.findtext('Langue') or '').strip()
         if form and proto and (langs is None or code in langs) and (proto, form) not in out:
             out.append((proto, form))
-    return out
+    return sorted(out, key=lambda x: order.index(x[0]) if x[0] in order else len(order))
 
 def _entry_resolver():
     """resolver(language, word, id) -> (entry id, gloss, etymologies) or None, for the links of a comparative table: the entry that has the word as its form in
@@ -2485,14 +2486,15 @@ def _entry_resolver():
     index, glosses = _dictionary_index()
     d = get_dict_xml()
     els = {el.get('identifiant', ''): el for el in d.findall('.//EntréeLexicale')} if d is not None else {}
+    order = _proto_order()
     def resolve(code, word, ident='', pos=''):
         if ident:
-            return (ident, glosses[ident], _etymons_for(els[ident], code)) if ident in glosses else None
+            return (ident, glosses[ident], _etymons_for(els[ident], code, order)) if ident in glosses else None
         found = _with_pos(index.get((code, _clean_form(word)), []), pos)
         if len(found) > 1:
             gram = [x for x in found if _entry_is_grammatical(x[1])]
             found = gram if len(gram) == 1 else found
-        return (found[0][0], glosses.get(found[0][0], ''), _etymons_for(found[0][1], code)) if len(found) == 1 else None
+        return (found[0][0], glosses.get(found[0][0], ''), _etymons_for(found[0][1], code, order)) if len(found) == 1 else None
     return resolve
 
 def _slug_key(s, n=24):
@@ -2904,16 +2906,20 @@ def _apply_etymons(el, payload):
     anything else it holds is kept. A language belongs to one etymon only: the first one listing it keeps it."""
     ety_el = _entry_child(el, 'Étymologie')
     existing = ety_el.findall('Étymon') if ety_el is not None else []
-    used, ordered, taken = set(), [], set()
+    used, ordered, taken, chains = set(), [], set(), {}
     def declared(d):           # a proto-form, or at least two languages named as cognates
         return bool(str(d.get('form') or '').strip()) or (isinstance(d.get('langs'), list) and len({c for c in d['langs'] if c in LANG_CODES}) >= 2)
     items = [d for d in payload[:20] if isinstance(d, dict) and declared(d)]
     for ed in items:
         if isinstance(ed.get('langs'), list):
-            mine = [c for c in LANG_CODES if c in {str(x) for x in ed['langs']} and c not in taken]
-            taken.update(mine)
+            asked = frozenset(c for c in LANG_CODES if c in {str(x) for x in ed['langs']})
+            if asked in chains:                # the same languages as an earlier etymon: the two are stages of one chain (POc > PTB), they share them
+                mine = chains[asked]
+            else:
+                mine = [c for c in LANG_CODES if c in asked and c not in taken]
+                taken.update(mine); chains[asked] = mine
             if not mine and len(items) > 1:
-                continue                       # every language it asked for belongs to another etymon
+                continue                       # every language it asked for belongs to another chain
             ed = dict(ed, langs=mine)
         ref, node = ed.get('ref'), None
         if isinstance(ref, int) and 0 <= ref < len(existing) and ref not in used:
@@ -3375,14 +3381,43 @@ def colors_js():
 
 _DISPLAY_DEFAULT = {'relations': True}
 
+def _clean_protos(v):
+    """The proto-languages in the order of descent the author gave (oldest first): a list of short, distinct names."""
+    out = []
+    for x in (v if isinstance(v, list) else [])[:30]:
+        x = re.sub(r'\s+', ' ', str(x or '')).strip()[:30]
+        if x and x not in out:
+            out.append(x)
+    return out
+
 def _display_current():
-    """How the dictionary is shown (the author's choices, read by everyone): whether the semantic relations appear under the senses."""
+    """How the dictionary is shown (the author's choices, read by everyone): whether the semantic relations appear under the senses, and the order of
+    descent of the proto-languages (protoOrder: the etymons of an entry read POc > PTB …)."""
     try:
         with open(_SETTINGS_PATH, encoding='utf-8') as f:
             d = json.load(f).get('display')
     except (OSError, ValueError, AttributeError):
         d = None
-    return {'relations': bool(d.get('relations', True)) if isinstance(d, dict) else True}
+    d = d if isinstance(d, dict) else {}
+    return {'relations': bool(d.get('relations', True)), 'protoOrder': _clean_protos(d.get('protoOrder'))}
+
+def _merge_display(new):
+    cur = _display_current()
+    if not isinstance(new, dict):
+        return cur
+    return {'relations': bool(new.get('relations', cur['relations'])),
+            'protoOrder': _clean_protos(new['protoOrder']) if 'protoOrder' in new else cur['protoOrder']}
+
+def _proto_order():
+    """The proto-languages in the author's order, then the others in the order they first appear in the dictionary."""
+    seen = _display_current()['protoOrder'][:]
+    d = get_dict_xml()
+    if d is not None:
+        for et in d.iter('Étymon'):
+            l = (et.findtext('Langue') or '').strip()
+            if l and l not in seen:
+                seen.append(l)
+    return seen
 
 @app.route('/api/dictionary/display')
 def dictionary_display():
@@ -3395,7 +3430,7 @@ def dictionary_settings():
         return jsonify({'error': 'Unauthorized'}), 401
     if request.method == 'GET':
         cfg, custom = _cfg_current()
-        return jsonify({'correspondences': cfg, 'defaults': _DEFAULT_CORR, 'custom': custom, 'display': _display_current(),
+        return jsonify({'correspondences': cfg, 'defaults': _DEFAULT_CORR, 'custom': custom, 'display': _display_current(), 'protos': _proto_order(),
                         'colors': _colors_current(), 'default_colors': _DEFAULT_COLORS, 'color_names': _COLOR_NAMES})
     data = request.get_json(silent=True) or {}
     cfg, err = _clean_corr(data.get('correspondences'))
@@ -3409,7 +3444,7 @@ def dictionary_settings():
         tmp = _SETTINGS_PATH + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump({'correspondences': cfg, 'colors': cols,
-                       'display': {'relations': bool((data['display'] or {}).get('relations', True))} if isinstance(data.get('display'), dict) else _display_current()},
+                       'display': _merge_display(data.get('display'))},
                       f, ensure_ascii=False, indent=2)
         os.replace(tmp, _SETTINGS_PATH)
         _corr_cache['compiled'] = None
