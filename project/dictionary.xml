@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <!--
   Digital Boasian Trilogy — Gaua Languages (Banks Islands, Vanuatu)
   Comparative Dictionary · LEXICA XML format (B. Galliot)
@@ -32,13 +32,25 @@
     <EntréeLexicale identifiant="3pl">
       <Lemme>
         <ReprésentationDeForme langue="num">nir</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">nɪr</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">nɪr</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">nɪj</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">ɣɪː</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="drg">nēr</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">nēr</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">nēy</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">gēē</ReprésentationDeForme>
+      <FormePhonétique langue="num">nir</FormePhonétique><FormePhonétique langue="drg">nɪr</FormePhonétique><FormePhonétique langue="kro">nɪr</FormePhonétique><FormePhonétique langue="olr">nɪj</FormePhonétique><FormePhonétique langue="lkn">ɣɪː</FormePhonétique></Lemme>
       <ClasseGrammaticale>pro.</ClasseGrammaticale>
       <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*[k]ira</Forme>
+          <Glose langue="eng">third person plural</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*[k]ira</Forme>
+          <Glose langue="eng">third person plural</Glose>
+        </Étymon>
+      </Étymologie>
       <Sens identifiant="3plⓢ1">
         <NuméroDeSens>1</NuméroDeSens>
         <Glose langue="eng">3PL — third person plural subject</Glose>
@@ -61,12 +73,12 @@
     ══════════════════════════════════════════════════════════ -->
     <EntréeLexicale identifiant="nondum1">
       <Lemme>
-        <ReprésentationDeForme langue="num">βitis</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">sɔwsɛ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">tɪ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">tɪ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">atɪ</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="num">vitis</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">sowse</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">tē</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">tē</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">atē</ReprésentationDeForme>
+      <FormePhonétique langue="num">βitis</FormePhonétique><FormePhonétique langue="drg">sɔwsɛ</FormePhonétique><FormePhonétique langue="kro">tɪ</FormePhonétique><FormePhonétique langue="olr">tɪ</FormePhonétique><FormePhonétique langue="lkn">atɪ</FormePhonétique></Lemme>
       <ClasseGrammaticale>part.</ClasseGrammaticale>
       <DomaineSémantique>Grammar</DomaineSémantique>
       <Sens identifiant="nondum1ⓢ1">
@@ -92,12 +104,12 @@
     ══════════════════════════════════════════════════════════ -->
     <EntréeLexicale identifiant="know">
       <Lemme>
-        <ReprésentationDeForme langue="num">ɣil</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">βrɪɣɪl</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">rɔŋ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">rɔŋ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">rɔŋ</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="num">gil</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">vrēgēl</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">ron̄</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">ron̄</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">ron̄</ReprésentationDeForme>
+      <FormePhonétique langue="num">ɣil</FormePhonétique><FormePhonétique langue="drg">βrɪɣɪl</FormePhonétique><FormePhonétique langue="kro">rɔŋ</FormePhonétique><FormePhonétique langue="olr">rɔŋ</FormePhonétique><FormePhonétique langue="lkn">rɔŋ</FormePhonétique></Lemme>
       <ClasseGrammaticale>v.tr.</ClasseGrammaticale>
       <DomaineSémantique>Cognition</DomaineSémantique>
       <Sens identifiant="knowⓢ1">
@@ -118,12 +130,12 @@
     ══════════════════════════════════════════════════════════ -->
     <EntréeLexicale identifiant="properly">
       <Lemme>
-        <ReprésentationDeForme langue="num">liŋliŋi</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">taβul</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">taβul</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">βɪlɪː</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">kɛrɛ</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="num">lin̄lin̄i</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">tavul</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">tavul</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">vēlēē</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">kere</ReprésentationDeForme>
+      <FormePhonétique langue="num">liŋliŋi</FormePhonétique><FormePhonétique langue="drg">taβul</FormePhonétique><FormePhonétique langue="kro">taβul</FormePhonétique><FormePhonétique langue="olr">βɪlɪː</FormePhonétique><FormePhonétique langue="lkn">kɛrɛ</FormePhonétique></Lemme>
       <ClasseGrammaticale>adv.</ClasseGrammaticale>
       <DomaineSémantique>Manner</DomaineSémantique>
       <Sens identifiant="properlyⓢ1">
@@ -145,11 +157,11 @@
     <EntréeLexicale identifiant="nondum2">
       <Lemme>
         <ReprésentationDeForme langue="num">mi</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">tɛ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">wʊsmɛlɛ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">wʊsmɛlɛ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">aβʊh.malɛ</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="drg">te</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">wōsmele</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">wōsmele</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">avōh.male</ReprésentationDeForme>
+      <FormePhonétique langue="num">mi</FormePhonétique><FormePhonétique langue="drg">tɛ</FormePhonétique><FormePhonétique langue="kro">wʊsmɛlɛ</FormePhonétique><FormePhonétique langue="olr">wʊsmɛlɛ</FormePhonétique><FormePhonétique langue="lkn">aβʊh.malɛ</FormePhonétique></Lemme>
       <ClasseGrammaticale>part.</ClasseGrammaticale>
       <DomaineSémantique>Grammar</DomaineSémantique>
       <Sens identifiant="nondum2ⓢ1">
@@ -177,10 +189,10 @@
       <Lemme>
         <ReprésentationDeForme langue="num">u</ReprésentationDeForme>
         <ReprésentationDeForme langue="drg">na</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">ɔ</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">o</ReprésentationDeForme>
         <ReprésentationDeForme langue="olr">—</ReprésentationDeForme>
         <ReprésentationDeForme langue="lkn">—</ReprésentationDeForme>
-      </Lemme>
+      <FormePhonétique langue="num">u</FormePhonétique><FormePhonétique langue="drg">na</FormePhonétique><FormePhonétique langue="kro">ɔ</FormePhonétique></Lemme>
       <ClasseGrammaticale>det.</ClasseGrammaticale>
       <DomaineSémantique>Grammar</DomaineSémantique>
       <Sens identifiant="artⓢ1">
@@ -202,11 +214,11 @@
     <EntréeLexicale identifiant="speech">
       <Lemme>
         <ReprésentationDeForme langue="num">luwluw</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">lŋa</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">βalβalaw</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">ususraː</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">ɛlŋa</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="drg">ln̄a</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">valvalaw</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">ususraa</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">eln̄a</ReprésentationDeForme>
+      <FormePhonétique langue="num">luwluw</FormePhonétique><FormePhonétique langue="drg">lŋa</FormePhonétique><FormePhonétique langue="kro">βalβalaw</FormePhonétique><FormePhonétique langue="olr">ususraː</FormePhonétique><FormePhonétique langue="lkn">ɛlŋa</FormePhonétique></Lemme>
       <ClasseGrammaticale>n.</ClasseGrammaticale>
       <DomaineSémantique>Language</DomaineSémantique>
       <Étymologie>
@@ -241,12 +253,12 @@
     ══════════════════════════════════════════════════════════ -->
     <EntréeLexicale identifiant="poss">
       <Lemme>
-        <ReprésentationDeForme langue="num">namɣin</ReprésentationDeForme>
-        <ReprésentationDeForme langue="drg">‑ɣɪn</ReprésentationDeForme>
-        <ReprésentationDeForme langue="kro">namɪɣɪn</ReprésentationDeForme>
-        <ReprésentationDeForme langue="olr">mʊʧ</ReprésentationDeForme>
-        <ReprésentationDeForme langue="lkn">‑nɣɪʧ</ReprésentationDeForme>
-      </Lemme>
+        <ReprésentationDeForme langue="num">namgin</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">-gēn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">namēgēn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">mōj</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">-ngēj</ReprésentationDeForme>
+      <FormePhonétique langue="num">namɣin</FormePhonétique><FormePhonétique langue="drg">-ɣɪn</FormePhonétique><FormePhonétique langue="kro">namɪɣɪn</FormePhonétique><FormePhonétique langue="olr">mʊt͡ʃ</FormePhonétique><FormePhonétique langue="lkn">-nɣɪt͡ʃ</FormePhonétique></Lemme>
       <ClasseGrammaticale>poss.</ClasseGrammaticale>
       <DomaineSémantique>Grammar</DomaineSémantique>
       <Sens identifiant="possⓢ1">
@@ -259,6 +271,538 @@
         <Notes>
           <ReprésentationDeTexte langue="eng">Possessive marker encoding the 1st person inclusive plural possessor (speaker + addressee + others). Appears as a suffix or clitic on the possessed noun. The inclusive/exclusive distinction in possessives is a well-preserved Oceanic feature across all five languages.</ReprésentationDeTexte>
         </Notes>
+      </Sens>
+    </EntréeLexicale>
+
+      <!-- ══════════ PRONOUN — 1SG ══════════ -->
+    <EntréeLexicale identifiant="1sg">
+      <Lemme>
+        <ReprésentationDeForme langue="num">na</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">na</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">na</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">na</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">na</ReprésentationDeForme>
+        <FormePhonétique langue="num">na</FormePhonétique>
+        <FormePhonétique langue="drg">na</FormePhonétique>
+        <FormePhonétique langue="kro">na</FormePhonétique>
+        <FormePhonétique langue="olr">na</FormePhonétique>
+        <FormePhonétique langue="lkn">na</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*[i]au</Forme>
+          <Glose langue="eng">first person singular</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*nau</Forme>
+          <Glose langue="eng">first person singular</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1sgⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1SG — first person singular independent pronoun</Glose>
+        <gloss>1SG</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1SG — first person singular independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 2SG ══════════ -->
+    <EntréeLexicale identifiant="2sg">
+      <Lemme>
+        <ReprésentationDeForme langue="num">nik</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">nēk</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">nēk</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">nēk</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">nēk</ReprésentationDeForme>
+        <FormePhonétique langue="num">nik</FormePhonétique>
+        <FormePhonétique langue="drg">nɪk</FormePhonétique>
+        <FormePhonétique langue="kro">nɪk</FormePhonétique>
+        <FormePhonétique langue="olr">nɪk</FormePhonétique>
+        <FormePhonétique langue="lkn">nɪk</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*[i]ko[e]</Forme>
+          <Glose langue="eng">second person singular</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*(n)iᵑgo</Forme>
+          <Glose langue="eng">second person singular</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="2sgⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">2SG — second person singular independent pronoun</Glose>
+        <gloss>2SG</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">2SG — second person singular independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 3SG ══════════ -->
+    <EntréeLexicale identifiant="3sg">
+      <Lemme>
+        <ReprésentationDeForme langue="num">ni</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">ni</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">ni</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">nē</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">ni</ReprésentationDeForme>
+        <FormePhonétique langue="num">ni</FormePhonétique>
+        <FormePhonétique langue="drg">ni</FormePhonétique>
+        <FormePhonétique langue="kro">ni</FormePhonétique>
+        <FormePhonétique langue="olr">nɪ</FormePhonétique>
+        <FormePhonétique langue="lkn">ni</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*ia</Forme>
+          <Glose langue="eng">third person singular</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*nia</Forme>
+          <Glose langue="eng">third person singular</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="3sgⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">3SG — third person singular independent pronoun</Glose>
+        <gloss>3SG</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">3SG — third person singular independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 1INC.DU ══════════ -->
+    <EntréeLexicale identifiant="1incdu">
+      <Lemme>
+        <ReprésentationDeForme langue="num">duru</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">dār</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">duru</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">jōrō</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">wōjō</ReprésentationDeForme>
+        <FormePhonétique langue="num">ⁿduru</FormePhonétique>
+        <FormePhonétique langue="drg">ⁿdaːr</FormePhonétique>
+        <FormePhonétique langue="kro">ⁿduru</FormePhonétique>
+        <FormePhonétique langue="olr">ʧʊrʊ</FormePhonétique>
+        <FormePhonétique langue="lkn">wʊʧʊ</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*kita=rua</Forme>
+          <Glose langue="eng">first person inclusive dual</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*kiⁿda-rua</Forme>
+          <Glose langue="eng">first person inclusive dual</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1incduⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1INC.DU — first person inclusive dual independent pronoun</Glose>
+        <gloss>1INC.DU</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1INC.DU — first person inclusive dual independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 1EXC.DU ══════════ -->
+    <EntréeLexicale identifiant="1excdu">
+      <Lemme>
+        <ReprésentationDeForme langue="num">kamar</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">kmār</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">kemär</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">kēmēy</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">gamaa</ReprésentationDeForme>
+        <FormePhonétique langue="num">kamar</FormePhonétique>
+        <FormePhonétique langue="drg">kmaːr</FormePhonétique>
+        <FormePhonétique langue="kro">kɛmɛ ar</FormePhonétique>
+        <FormePhonétique langue="olr">kɪmɪj</FormePhonétique>
+        <FormePhonétique langue="lkn">ɣamaː</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*ka[m]i=rua</Forme>
+          <Glose langue="eng">first person exclusive dual</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*Kama-rua</Forme>
+          <Glose langue="eng">first person exclusive dual</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1excduⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1EXC.DU — first person exclusive dual independent pronoun</Glose>
+        <gloss>1EXC.DU</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1EXC.DU — first person exclusive dual independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 2DU ══════════ -->
+    <EntréeLexicale identifiant="2du">
+      <Lemme>
+        <ReprésentationDeForme langue="num">kumur</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">kmur</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">kumur</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">kumuy</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">gamuu</ReprésentationDeForme>
+        <FormePhonétique langue="num">kumur</FormePhonétique>
+        <FormePhonétique langue="drg">kmur</FormePhonétique>
+        <FormePhonétique langue="kro">kumur</FormePhonétique>
+        <FormePhonétique langue="olr">kumuj</FormePhonétique>
+        <FormePhonétique langue="lkn">ɣamuː</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*kamiu=rua</Forme>
+          <Glose langue="eng">second person dual</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*Kamu-rua</Forme>
+          <Glose langue="eng">second person dual</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="2duⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">2DU — second person dual independent pronoun</Glose>
+        <gloss>2DU</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">2DU — second person dual independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 3DU ══════════ -->
+    <EntréeLexicale identifiant="3du">
+      <Lemme>
+        <ReprésentationDeForme langue="num">ruru</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">rār</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">(i)rru</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">nōrō</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">wōrō</ReprésentationDeForme>
+        <FormePhonétique langue="num">ruru</FormePhonétique>
+        <FormePhonétique langue="drg">raːr</FormePhonétique>
+        <FormePhonétique langue="kro">(i)rru</FormePhonétique>
+        <FormePhonétique langue="olr">nʊrʊ</FormePhonétique>
+        <FormePhonétique langue="lkn">wʊrʊ</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*[k]ira=rua</Forme>
+          <Glose langue="eng">third person dual</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*[i]ra-rua</Forme>
+          <Glose langue="eng">third person dual</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="3duⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">3DU — third person dual independent pronoun</Glose>
+        <gloss>3DU</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">3DU — third person dual independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 1INC.TRI ══════════ -->
+    <EntréeLexicale identifiant="1inctri">
+      <Lemme>
+        <ReprésentationDeForme langue="num">dōtōl</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">tōlgēn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">tēlēn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">jēlēt</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">tēlēj</ReprésentationDeForme>
+        <FormePhonétique langue="num">ⁿdʊtʊl</FormePhonétique>
+        <FormePhonétique langue="drg">tʊlɣɪn</FormePhonétique>
+        <FormePhonétique langue="kro">tɪlɪn</FormePhonétique>
+        <FormePhonétique langue="olr">ʧɪlɪt</FormePhonétique>
+        <FormePhonétique langue="lkn">t(ʃ)ɪlɪt(ʃ)</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*kita=tolu</Forme>
+          <Glose langue="eng">first person inclusive trial</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*kiⁿda-tolu</Forme>
+          <Glose langue="eng">first person inclusive trial</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1inctriⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1INC.TRI — first person inclusive trial independent pronoun</Glose>
+        <gloss>1INC.TRI</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1INC.TRI — first person inclusive trial independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 1EXC.TRI ══════════ -->
+    <EntréeLexicale identifiant="1exctri">
+      <Lemme>
+        <ReprésentationDeForme langue="num">kamatōl</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">tōlkma</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">kēlkama</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">kēlkama</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">tēlēmä</ReprésentationDeForme>
+        <FormePhonétique langue="num">kamatʊl</FormePhonétique>
+        <FormePhonétique langue="drg">tʊlkma</FormePhonétique>
+        <FormePhonétique langue="kro">kɪlkama</FormePhonétique>
+        <FormePhonétique langue="olr">kɪlkama</FormePhonétique>
+        <FormePhonétique langue="lkn">tɪlɪmæ</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*ka[m]i=tolu</Forme>
+          <Glose langue="eng">first person exclusive trial</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*Kama-tolu</Forme>
+          <Glose langue="eng">first person exclusive trial</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1exctriⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1EXC.TRI — first person exclusive trial independent pronoun</Glose>
+        <gloss>1EXC.TRI</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1EXC.TRI — first person exclusive trial independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 2TRI ══════════ -->
+    <EntréeLexicale identifiant="2tri">
+      <Lemme>
+        <ReprésentationDeForme langue="num">kōmtōl</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">tōlkmi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">kēlkimi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">kēlkimi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">tēlēmu</ReprésentationDeForme>
+        <FormePhonétique langue="num">kʊmtʊl</FormePhonétique>
+        <FormePhonétique langue="drg">tʊlkmi</FormePhonétique>
+        <FormePhonétique langue="kro">kɪlkimi</FormePhonétique>
+        <FormePhonétique langue="olr">kɪlkimi</FormePhonétique>
+        <FormePhonétique langue="lkn">tɪlɪmu</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*kamiu=tolu</Forme>
+          <Glose langue="eng">second person trial</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*Kamu-tolu</Forme>
+          <Glose langue="eng">second person trial</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="2triⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">2TRI — second person trial independent pronoun</Glose>
+        <gloss>2TRI</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">2TRI — second person trial independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 3TRI ══════════ -->
+    <EntréeLexicale identifiant="3tri">
+      <Lemme>
+        <ReprésentationDeForme langue="num">rōtōl</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">tōlnēr</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">tēlēr</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">tēlēy</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">tēlēē</ReprésentationDeForme>
+        <FormePhonétique langue="num">rʊtʊl</FormePhonétique>
+        <FormePhonétique langue="drg">tʊlnɪr</FormePhonétique>
+        <FormePhonétique langue="kro">tɪlɪr</FormePhonétique>
+        <FormePhonétique langue="olr">tɪlɪj</FormePhonétique>
+        <FormePhonétique langue="lkn">tɪlɪː</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*[k]ira=tolu</Forme>
+          <Glose langue="eng">third person trial</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*[i]ra-tolu</Forme>
+          <Glose langue="eng">third person trial</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="3triⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">3TRI — third person trial independent pronoun</Glose>
+        <gloss>3TRI</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">3TRI — third person trial independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 1INC.PL ══════════ -->
+    <EntréeLexicale identifiant="1incpl">
+      <Lemme>
+        <ReprésentationDeForme langue="num">gin</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">gēn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">gēn</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">gēj</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">gēj</ReprésentationDeForme>
+        <FormePhonétique langue="num">ɣin</FormePhonétique>
+        <FormePhonétique langue="drg">ɣɪn</FormePhonétique>
+        <FormePhonétique langue="kro">ɣɪn</FormePhonétique>
+        <FormePhonétique langue="olr">ɣɪʧ</FormePhonétique>
+        <FormePhonétique langue="lkn">ɣɪʧ</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*kita</Forme>
+          <Glose langue="eng">first person inclusive plural</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*kiⁿda</Forme>
+          <Glose langue="eng">first person inclusive plural</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1incplⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1INC.PL — first person inclusive plural independent pronoun</Glose>
+        <gloss>1INC.PL</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1INC.PL — first person inclusive plural independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 1EXC.PL ══════════ -->
+    <EntréeLexicale identifiant="1excpl">
+      <Lemme>
+        <ReprésentationDeForme langue="num">kama</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">kma</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">kama</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">kama</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">gamä</ReprésentationDeForme>
+        <FormePhonétique langue="num">kama</FormePhonétique>
+        <FormePhonétique langue="drg">kma</FormePhonétique>
+        <FormePhonétique langue="kro">kama</FormePhonétique>
+        <FormePhonétique langue="olr">kama</FormePhonétique>
+        <FormePhonétique langue="lkn">ɣamæ</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*ka[m]i</Forme>
+          <Glose langue="eng">first person exclusive plural</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*Kama[m]i</Forme>
+          <Glose langue="eng">first person exclusive plural</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="1excplⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">1EXC.PL — first person exclusive plural independent pronoun</Glose>
+        <gloss>1EXC.PL</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">1EXC.PL — first person exclusive plural independent pronoun</ReprésentationDeTexte>
+        </Définition>
+      </Sens>
+    </EntréeLexicale>
+
+    <!-- ══════════ PRONOUN — 2PL ══════════ -->
+    <EntréeLexicale identifiant="2pl">
+      <Lemme>
+        <ReprésentationDeForme langue="num">kimi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="drg">kmi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="kro">kimi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="olr">kimi</ReprésentationDeForme>
+        <ReprésentationDeForme langue="lkn">gamu</ReprésentationDeForme>
+        <FormePhonétique langue="num">kimi</FormePhonétique>
+        <FormePhonétique langue="drg">kmi</FormePhonétique>
+        <FormePhonétique langue="kro">kimi</FormePhonétique>
+        <FormePhonétique langue="olr">kimi</FormePhonétique>
+        <FormePhonétique langue="lkn">ɣamu</FormePhonétique>
+      </Lemme>
+      <ClasseGrammaticale>pro.</ClasseGrammaticale>
+      <DomaineSémantique>Grammar</DomaineSémantique>
+      <Étymologie>
+        <Étymon>
+          <Langue>POc</Langue>
+          <Forme>*kamiu</Forme>
+          <Glose langue="eng">second person plural</Glose>
+        </Étymon>
+        <Étymon>
+          <Langue>PTB</Langue>
+          <Forme>*Kamiu</Forme>
+          <Glose langue="eng">second person plural</Glose>
+        </Étymon>
+      </Étymologie>
+      <Sens identifiant="2plⓢ1">
+        <NuméroDeSens>1</NuméroDeSens>
+        <Glose langue="eng">2PL — second person plural independent pronoun</Glose>
+        <gloss>2PL</gloss>
+        <Définition>
+          <ReprésentationDeTexte langue="eng">2PL — second person plural independent pronoun</ReprésentationDeTexte>
+        </Définition>
       </Sens>
     </EntréeLexicale>
 
