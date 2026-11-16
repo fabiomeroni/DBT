@@ -651,3 +651,58 @@ a.gloss-link:hover { color: var(--gold); border-bottom-style: solid; }
 .bk-table { width: 100%; }
 .bk-x { border: none; background: none; cursor: pointer; font-size: 0.95rem; }
 .bk-wait { color: var(--ink-light); font-size: 0.82rem; }
+
+/* ── Settings dialog (settings.js) ── */
+.em-input {
+  font-family:'EB Garamond',serif; font-size:1rem;
+  border:none; border-bottom:1.5px solid var(--border);
+  background:transparent; outline:none; padding:2px 0;
+  color:var(--ink); transition:border-color 0.15s; width:100%;
+}
+.em-input:focus { border-bottom-color:var(--gold); }
+/* ── Settings dialog ── */
+.st-h { font-family: 'EB Garamond', serif; font-size: 1.1rem; font-weight: 500; margin: 0.2rem 0 0.3rem; color: var(--ink); }
+.st-top { display: flex; align-items: flex-end; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 0.6rem; font-family: 'Crimson Pro', serif; font-size: 0.85rem; color: var(--ink-light); }
+.st-top label { display: flex; flex-direction: column; gap: 2px; }
+.st-check { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.st-table { border-collapse: collapse; width: 100%; font-family: 'Crimson Pro', serif; }
+.st-table th { position: sticky; top: 0; background: #f0e8d8; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-light); text-align: left; padding: 4px 8px; font-weight: 600; }
+.st-table td { padding: 2px 6px; border-bottom: 1px solid var(--border-lt); }
+.st-table tr.st-shared td { background: #fbf4e2; }
+.st-table input.em-input { font-size: 1.05rem; padding: 1px 2px; }
+.st-table select { font-family: 'Crimson Pro', serif; font-size: 0.85rem; border: 1px solid var(--border); border-radius: 3px; background: white; }
+.st-table .st-del { background: none; border: none; color: #c06060; cursor: pointer; font-size: 0.8rem; }
+.st-table .st-del:hover { color: #922810; }
+.st-actions { display: flex; gap: 0.6rem; margin: 0.6rem 0; }
+.st-try { background: #faf6ef; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem 0.8rem 0.6rem;
+  font-family: 'Crimson Pro', serif; font-size: 0.85rem; color: var(--ink-light); }
+.st-try > div { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap; }
+.st-try input.em-input { width: 9rem; font-size: 1.05rem; }
+.st-out { font-family: 'EB Garamond', serif; font-size: 1.25rem; color: var(--ink); min-width: 6rem; }
+
+.st-colors { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.45rem 1rem; margin-bottom: 0.5rem; }
+.st-color { display: flex; align-items: center; gap: 0.4rem; font-family: 'Crimson Pro', serif; }
+.st-color label { min-width: 3.4rem; font-weight: 600; font-size: 0.95rem; }
+.st-color input[type=color] { width: 36px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: none; cursor: pointer; }
+.st-color input.em-input { width: 5.6rem; font-family: 'Source Code Pro', monospace; font-size: 0.8rem; }
+.st-color input.em-input.bad { border-bottom-color: #c0392b; color: #c0392b; }
+.st-color button { background: none; border: none; color: var(--ink-light); cursor: pointer; font-size: 0.85rem; }
+.st-color button:hover { color: var(--ink); }
+
+.st-pw { margin-top: 0.9rem; font-family: 'Crimson Pro', serif; }
+.st-pw summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--ink); }
+.st-pw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.5rem 1rem; margin: 0.5rem 0; }
+.st-pw-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--ink-light); }
+.st-actions .fn-col-add, #settings-modal .fn-col-add { font-family: 'Crimson Pro', serif; font-size: 0.8rem; color: var(--gold); background: none; border: 1px dashed var(--gold); border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+#settings-modal .fn-col-add:hover { background: #f5edd8; }
+#st-try-ipa-in, #st-try-ipa, .ipa-from { font-family: var(--font-ipa); }
+
+/* ── Orthography / IPA switch (display.js) ── */
+.script-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-right: 0.5rem; vertical-align: middle; }
+.script-switch button { font-family: 'Crimson Pro', serif; font-size: 0.78rem; background: transparent; color: var(--ink-light); border: none; padding: 3px 9px; cursor: pointer; }
+.script-switch button + button { border-left: 1px solid var(--border); }
+.script-switch button.active { background: var(--gold); color: #fff; }
+/* shown in IPA: the headword is the IPA, so the [IPA] beside it would only repeat it */
+.script-ipa .ipa-wrap { display: none; }
+.script-ipa :is(.ex-cell, .cite-form-cell, .cite-fn-form, .chip-form, .lx-form, .tx-form, .tx-word-form, .fn-form-cell, .entry-headword, .sg-hw, .hw-index a, .idiome_lang, .cc-left, .cc-match, .cc-right, [data-vern]) { font-family: var(--font-ipa), 'EB Garamond', serif; }
