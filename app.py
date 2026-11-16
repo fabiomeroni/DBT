@@ -3427,6 +3427,17 @@ def dictionary_settings_test():
     c = _compile_corr(cfg)
     return jsonify({'ipa': _orth_to_ipa(data.get('orth', ''), c), 'orth': _ipa_to_orth(data.get('ipa', ''), c)})
 
+@app.route('/api/ipa/convert', methods=['POST'])
+def ipa_convert():
+    """The site-wide Orthography / IPA switch: {texts: [orthographic text, …]} -> {ipa: [the same texts in IPA, …]}, by the table of the Settings.
+    Open to every visitor (it only converts what the visitor sends, and keeps nothing)."""
+    data = request.get_json(silent=True) or {}
+    texts = data.get('texts')
+    if not isinstance(texts, list) or len(texts) > 3000 or any(not isinstance(t, str) or len(t) > 2000 for t in texts):
+        return jsonify({'error': 'Send up to 3000 texts of at most 2000 characters.'}), 400
+    c = _corr()
+    return jsonify({'ipa': [_orth_to_ipa(t, c) for t in texts]})
+
 def _ortho_collect(tree, strict=False):
     """The Lemme forms of the dictionary that are written in IPA: (changes, already-fine, entries)."""
     changes, kept, total = [], 0, 0
@@ -4614,7 +4625,7 @@ def project_js():
     force). Loaded first, like /colors.js. The pages build their language lists from it."""
     colors = _colors_current()
     pub = {'id': PROJECT.get('id', ''), 'name': PROJECT['name'], 'headwordLanguage': PROJECT['headwordLanguage'],
-           'recordings': PROJECT['recordings'],
+           'recordings': PROJECT['recordings'], 'orthographyName': _DEFAULT_CORR['name'],
            'languages': [{'code': l['code'], 'name': l['name'], 'abbr': l['abbr'], 'color': colors[l['code']],
                           'aliases': l['aliases']} for l in _LANGS]}
     js = ('window.DBT_PROJECT=' + json.dumps(pub, ensure_ascii=False) + ';\n'
